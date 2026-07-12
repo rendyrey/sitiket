@@ -11,6 +11,11 @@ SiTIKET is an event discovery and ticket-purchasing product. The current reposit
 - Cross-stack work: read both references.
 - Do not scan the large legacy `src/core` library unless the task needs an existing component from it.
 
+Repository skills are available under `.agents/skills`:
+
+- `$develop-sitiket-frontend` for frontend implementation and refactoring.
+- `$develop-sitiket-backend` for APIs and backend domain behavior.
+
 ## Repository map
 
 - `src/app`: Next.js routes; keep these thin.

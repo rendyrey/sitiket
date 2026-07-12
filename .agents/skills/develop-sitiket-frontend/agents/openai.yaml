@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop SiTIKET Frontend"
+  short_description: "Build reusable SiTIKET frontend features"
+  default_prompt: "Use $develop-sitiket-frontend to implement a maintainable SiTIKET frontend feature."

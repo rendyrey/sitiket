@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop SiTIKET Backend"
+  short_description: "Build safe SiTIKET backend capabilities"
+  default_prompt: "Use $develop-sitiket-backend to implement a safe SiTIKET API capability."
