@@ -1,5 +1,14 @@
 ## Isomorphic Starter Template
 
+This non-monorepo starter includes the complete reusable component library from
+the Isomorphic template under `src/core`.
+
+For component discovery, imports, props references, providers, hooks, and source
+links, start with the [Component Library Guide](./docs/components/README.md).
+
+For framework decisions, architecture, integrations, environment variables, and
+development workflows, start with the [Tech Stack Documentation](./docs/tech-stack/README.md).
+
 First, run the development server:
 
 ```bash
