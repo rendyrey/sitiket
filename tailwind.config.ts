@@ -20,6 +20,9 @@ const config: Config = {
     },
     extend: {
       colors: {
+        lime: "#b6ff00",
+        ink: "#0a0a0a",
+        paper: "#f1f1ee",
         gray: {
           0: "rgb(var(--gray-0) / <alpha-value>)",
           50: "rgb(var(--gray-50) / <alpha-value>)",
