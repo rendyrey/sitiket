@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import CheckoutForm from "@/components/site/checkout-form";
+import { CheckoutForm } from "@/features/checkout/components";
 import { getEvent } from "@/data/events";
 
 export default async function CheckoutPage({ params }: { params: Promise<{ slug: string }> }) {
