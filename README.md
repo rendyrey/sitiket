@@ -9,6 +9,8 @@ links, start with the [Component Library Guide](./docs/components/README.md).
 For framework decisions, architecture, integrations, environment variables, and
 development workflows, start with the [Tech Stack Documentation](./docs/tech-stack/README.md).
 
+SiTIKET product UI is mobile-first. New components must work without overlap or page-level horizontal scrolling at 320px before breakpoint variants enhance the tablet and desktop layouts. See [Frontend reference](./FRONTEND.md) for the responsive requirements and verification widths.
+
 First, run the development server:
 
 ```bash

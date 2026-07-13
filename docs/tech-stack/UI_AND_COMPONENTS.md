@@ -23,20 +23,22 @@ The active theme provider disables system-theme detection and starts from `siteC
 
 Inter is the body font and Lexend Deca is used for headings. Both load through `next/font` in `src/app/fonts.ts` and expose CSS variables through the root layout.
 
+Application UI uses a mobile-first strategy. Unprefixed utilities define the complete 320px phone experience; breakpoint-prefixed utilities progressively enhance it. Do not make mobile a late override of a desktop layout. Primary navigation and content must reflow without overlap or page-level horizontal scrolling. Horizontal scrolling should be limited to intentional, bounded controls such as filter chips.
+
 The breakpoint set extends Tailwind with:
 
-| Name | Width |
-| --- | ---: |
-| `xs` | 480px |
-| `sm` | 640px |
-| `md` | 768px |
-| `lg` | 1024px |
-| `xl` | 1280px |
+| Name  |  Width |
+| ----- | -----: |
+| `xs`  |  480px |
+| `sm`  |  640px |
+| `md`  |  768px |
+| `lg`  | 1024px |
+| `xl`  | 1280px |
 | `2xl` | 1536px |
 | `3xl` | 1920px |
 | `4xl` | 2560px |
 
-The Hydrogen layout becomes a fixed-sidebar dashboard at `xl` and above.
+When adding or changing product UI, verify 320px, 375px, 768px, and a desktop width. Include open navigation, long labels/content, touch targets, and decorative absolute elements or shadows in the check.
 
 ## Component discovery
 
@@ -45,9 +47,9 @@ Start at the [component catalog](../components/INDEX.md). It indexes 366 compone
 Typical imports:
 
 ```tsx
-import WidgetCard from '@core/components/cards/widget-card';
-import { DatePicker } from '@core/ui/datepicker';
-import SimpleBar from '@core/ui/simplebar';
+import WidgetCard from "@core/components/cards/widget-card";
+import { DatePicker } from "@core/ui/datepicker";
+import SimpleBar from "@core/ui/simplebar";
 ```
 
 After changing component files, update the generated references:
@@ -65,6 +67,6 @@ When building a new UI:
 1. Search the catalog by concept and props type.
 2. Prefer composition of existing primitives.
 3. Reuse semantic tokens and responsive breakpoints.
-4. Mark the component as client-only only when interaction requires it.
-5. Keep domain-specific wrappers outside low-level `src/core/ui`.
-
+4. Start with the 320px layout and add larger breakpoint enhancements only after the phone layout is robust.
+5. Mark the component as client-only only when interaction requires it.
+6. Keep domain-specific wrappers outside low-level `src/core/ui`.

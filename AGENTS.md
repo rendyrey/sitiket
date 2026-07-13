@@ -31,12 +31,15 @@ Repository skills are available under `.agents/skills`:
 ## Global rules
 
 1. Preserve the black, off-white, and neon-lime visual language unless requirements change.
-2. Prefer extending existing primitives/features over duplicating markup.
-3. Keep framework concerns in routes, domain UI in features, and generic UI in `components/ui`.
-4. Use strict types; do not use `any` without a documented boundary reason.
-5. Do not add dependencies when the installed stack can solve the task.
-6. Do not claim real auth, payment, inventory, or persistence behavior until it exists and is tested.
-7. Preserve unrelated user changes.
+2. Build frontend UI mobile-first. The unprefixed layout must work at 320px; add `xs:`, `sm:`, `md:`, and larger variants only as progressive enhancements.
+3. Never rely on clipped page overflow to hide a layout bug. Navigation, headings, controls, cards, tables, and decorative effects must wrap, scroll within an intentional region, or reflow without overlapping at phone widths.
+4. Keep interactive controls at least 44px high/wide where practical, and verify keyboard access and visible focus alongside touch use.
+5. Prefer extending existing primitives/features over duplicating markup.
+6. Keep framework concerns in routes, domain UI in features, and generic UI in `components/ui`.
+7. Use strict types; do not use `any` without a documented boundary reason.
+8. Do not add dependencies when the installed stack can solve the task.
+9. Do not claim real auth, payment, inventory, or persistence behavior until it exists and is tested.
+10. Preserve unrelated user changes.
 
 ## Required verification
 
@@ -46,5 +49,7 @@ Frontend changes:
 pnpm type:check
 pnpm build
 ```
+
+Also inspect affected routes at 320px, 375px, 768px, and a desktop width. Check the mobile menu and any horizontal lists in their open/interactive states, and confirm there is no page-level horizontal overflow.
 
 Backend changes: add/run relevant tests when a test runner exists; at minimum verify the server starts and affected endpoints manually. Never use real payment credentials in development.

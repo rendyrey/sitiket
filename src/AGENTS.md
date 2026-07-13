@@ -12,3 +12,7 @@ Applies to everything under `src/`. Read root `AGENTS.md` and `FRONTEND.md`; the
 - Use Next.js `Link` and `Image`; keep accessibility labels, semantic elements, and responsive behavior.
 - Follow the existing Tailwind tokens (`lime`, `ink`, `paper`) and shared classes in `app/globals.css`.
 - Do not move new product code into legacy `core/`.
+- Treat unprefixed Tailwind classes as the 320px phone layout. Add breakpoint-prefixed classes only to enhance that working baseline; do not start from a desktop composition and patch it downward.
+- Reflow dense rows into stacks or wrapping layouts on phones. Use bounded horizontal scrolling only for controls such as filter chips, never for primary navigation or whole-page content.
+- Keep phone controls touch-friendly (44px minimum where practical), protect long text with `min-w-0`, wrapping, or truncation where appropriate, and keep decorative offsets/shadows inside the viewport.
+- Before finishing frontend work, inspect affected routes at 320px, 375px, 768px, and desktop widths, including open menus and interactive states. Confirm there is no page-level horizontal overflow or overlap.

@@ -26,8 +26,10 @@ Build frontend changes without weakening the repository's feature boundaries or 
 5. Export a feature's public API from its local `components/index.ts`; avoid cross-feature private imports.
 6. Default to Server Components. Add `"use client"` at the smallest state, event-handler, or browser-API boundary.
 7. Pass typed data into presentational components. Keep fetching out of display components.
-8. Preserve responsive behavior, keyboard access, semantic HTML, labels, alt text, and visible focus.
-9. Reuse Tailwind tokens `ink`, `paper`, and `lime`, plus shared classes in `src/app/globals.css`.
+8. Implement the 320px mobile layout first with unprefixed Tailwind classes. Add breakpoint variants only after navigation, type, content, controls, and decorative effects fit without overlap or page-level horizontal overflow.
+9. Stack or wrap dense phone layouts, keep touch targets at least 44px where practical, and use bounded horizontal scrolling only for intentional controls such as filter chips.
+10. Preserve keyboard access, semantic HTML, labels, alt text, and visible focus while adapting interactions for touch.
+11. Reuse Tailwind tokens `ink`, `paper`, and `lime`, plus shared classes in `src/app/globals.css`.
 
 ## Preserve product boundaries
 
@@ -45,4 +47,4 @@ pnpm type:check
 pnpm build
 ```
 
-Also exercise changed interactive states and both mobile and desktop layouts when browser tooling is available.
+Also exercise changed interactive states at 320px, 375px, 768px, and a desktop width when browser tooling is available. Open mobile menus, inspect long content, and confirm the document has no horizontal overflow.

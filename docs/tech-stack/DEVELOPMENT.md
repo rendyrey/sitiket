@@ -15,26 +15,26 @@ No Node version file or `packageManager` field is committed, so contributors sho
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm dev` | Start the Next.js development server |
-| `pnpm build` | Create and validate a production build |
-| `pnpm start` | Serve the production build |
-| `pnpm type:check` | Run strict TypeScript checking without emitting files |
-| `pnpm lint` | Run the configured Next.js/ESLint lint command |
-| `pnpm format` | Format the repository and sort Tailwind classes |
-| `pnpm docs:components` | Regenerate the component catalog |
-| `ANALYZE=true pnpm build` | Build with the bundle analyzer enabled |
-| `pnpm clean` | Remove `.next` and `node_modules` |
+| Command                   | Purpose                                               |
+| ------------------------- | ----------------------------------------------------- |
+| `pnpm dev`                | Start the Next.js development server                  |
+| `pnpm build`              | Create and validate a production build                |
+| `pnpm start`              | Serve the production build                            |
+| `pnpm type:check`         | Run strict TypeScript checking without emitting files |
+| `pnpm lint`               | Run the configured Next.js/ESLint lint command        |
+| `pnpm format`             | Format the repository and sort Tailwind classes       |
+| `pnpm docs:components`    | Regenerate the component catalog                      |
+| `ANALYZE=true pnpm build` | Build with the bundle analyzer enabled                |
+| `pnpm clean`              | Remove `.next` and `node_modules`                     |
 
 ## Environment variables
 
 Variables referenced directly by repository code or configuration:
 
-| Variable | Exposure | Purpose |
-| --- | --- | --- |
-| `NEXT_PUBLIC_GOOGLE_MAP_API_KEY` | Browser-visible | Google Maps component API key |
-| `ANALYZE` | Build-time | Enables bundle analysis when set to `true` |
+| Variable                         | Exposure        | Purpose                                    |
+| -------------------------------- | --------------- | ------------------------------------------ |
+| `NEXT_PUBLIC_GOOGLE_MAP_API_KEY` | Browser-visible | Google Maps component API key              |
+| `ANALYZE`                        | Build-time      | Enables bundle analysis when set to `true` |
 
 The committed `.env` is empty. Use `.env.local` for developer-specific values; it is ignored by Git. UploadThing and any future auth/email integrations also require provider credentials, but this repository does not currently define a validated environment schema for them.
 
@@ -45,7 +45,8 @@ The committed `.env` is empty. Use `.env.local` for developer-specific values; i
 3. Search `docs/components/INDEX.md` for reusable UI.
 4. Extract interactive sections into focused client components.
 5. Add route constants to `src/config/routes.ts` when navigation needs them.
-6. Verify responsive behavior inside the Hydrogen layout.
+6. Build the unprefixed 320px layout first, then add tablet and desktop breakpoint enhancements.
+7. Verify the route at 320px, 375px, 768px, and a desktop width, including open navigation and interactive states.
 
 ## Adding a reusable component
 
@@ -67,6 +68,8 @@ pnpm build
 
 Also exercise affected routes and interactions in a browser. This repository does not currently configure automated tests; important business behavior should gain a test framework as it is introduced rather than relying only on build checks.
 
+Responsive verification must include page-level overflow and overlap checks at 320px, 375px, 768px, and desktop widths. A build passing is not evidence that a component is mobile-safe.
+
 ## Production checklist
 
 - Replace UploadThing's fake authentication middleware.
@@ -75,4 +78,3 @@ Also exercise affected routes and interactions in a browser. This repository doe
 - Confirm remote image hosts if external Next Image sources are introduced.
 - Add automated tests for critical flows.
 - Review dependency security and upgrade notices before deployment.
-

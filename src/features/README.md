@@ -10,3 +10,5 @@ Each directory owns one business capability and keeps its UI composition close t
 Route files under `src/app` should remain thin: load route data, handle framework concerns such as metadata and `notFound`, then compose feature components.
 
 Generic primitives belong in `src/components/ui`. Site-wide chrome and brand elements belong in `src/components/site`. Domain components should not be moved into either shared directory until they are genuinely useful across features.
+
+Feature UI is mobile-first: the base component must be complete and usable at 320px, while breakpoint variants progressively add columns, spacing, and desktop-only presentation. Dense feature rows should stack or wrap on phones, long domain content must not force page-level overflow, and interactive controls should remain touch-friendly.

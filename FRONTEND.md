@@ -57,8 +57,16 @@ Checkout state belongs to the checkout feature. The displayed total is a preview
 - Brand colors: `ink` (`#0a0a0a`), `paper` (`#f1f1ee`), `lime` (`#b6ff00`).
 - Reuse shared CSS component classes from `src/app/globals.css`.
 - Keep uppercase editorial headings, hard borders, squared controls, and bold spacing.
-- All changes must remain usable on mobile and desktop.
+- Mobile is the baseline, not a desktop reduction. Write the unprefixed Tailwind classes for a 320px viewport, then add breakpoint variants to enhance the layout as space becomes available.
+- Prefer one-column flow, wrapping, and full-width actions on phones. Introduce multi-column grids and persistent desktop navigation only at the first breakpoint where their content fits comfortably.
+- Horizontal scrolling is allowed only for a clearly bounded control such as filter chips. Site navigation and content must never overlap, escape their section, or create page-level horizontal scrolling.
+- Use fluid or stepped typography for editorial headings, constrain decorative absolute elements and shadows, and test long event names, prices, labels, and localized content.
+- Keep touch targets at least 44px where practical. Do not remove keyboard focus, semantic labels, or screen-reader context while adapting an interaction for touch.
 - Preserve keyboard access, visible focus, labels, alt text, and semantic HTML.
+
+## Responsive verification
+
+For every UI change, exercise the affected route at 320px, 375px, 768px, and at least one desktop width. Verify navigation in both closed and open states, wrapping and overflow, text zoom/long content where relevant, and sticky or absolute elements near viewport edges. A production build alone does not prove responsive correctness.
 
 ## Component conventions
 

@@ -6,7 +6,10 @@ type EventPosterProps = {
   event: EventItem;
 };
 
-export default function EventPoster({ className = "", event }: EventPosterProps) {
+export default function EventPoster({
+  className = "",
+  event,
+}: EventPosterProps) {
   if (event.image) {
     return (
       <div className={`relative overflow-hidden bg-black ${className}`}>
@@ -14,7 +17,7 @@ export default function EventPoster({ className = "", event }: EventPosterProps)
           fill
           src={event.image}
           alt={`${event.title} poster`}
-          sizes="(max-width: 768px) 100vw, 33vw"
+          sizes="(max-width: 1023px) 100vw, 33vw"
           className="object-cover"
         />
       </div>
@@ -29,7 +32,9 @@ export default function EventPoster({ className = "", event }: EventPosterProps)
       <div className="poster-grid" />
       <span className="poster-kicker">SiTIKET presents</span>
       <div className="poster-title">
-        {event.title.split(" ").map((word) => <span key={word}>{word}</span>)}
+        {event.title.split(" ").map((word) => (
+          <span key={word}>{word}</span>
+        ))}
       </div>
       <span className="poster-number">{event.date.slice(0, 2)}</span>
       <span className="poster-city">{event.city} / 2026</span>
