@@ -2,7 +2,7 @@
 
 ## Stack
 
-- Next.js 15 App Router, React 19, TypeScript 5.8
+- Next.js 16 App Router, React 19.2, TypeScript 5.8
 - Tailwind CSS 3.4
 - Next fonts: Inter for body text, Lexend Deca for display text
 - Package manager: pnpm
