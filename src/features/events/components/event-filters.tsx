@@ -1,30 +1,26 @@
 import Link from "next/link";
+import type { TaxonomyItem } from "@/lib/api/types";
 
-export const eventCategories = [
-  "All",
-  "Music",
-  "Community",
-  "Lifestyle",
-  "Comedy",
-  "Conference",
-] as const;
+type EventFiltersProps = {
+  activeCategory?: string;
+  categories: TaxonomyItem[];
+};
 
-export default function EventFilters({ activeCategory }: { activeCategory?: string }) {
+export default function EventFilters({ activeCategory, categories }: EventFiltersProps) {
   return (
     <div className="flex gap-2 overflow-x-auto pb-3" aria-label="Filter events by category">
-      {eventCategories.map((category) => {
-        const isAll = category === "All";
-        const isActive = isAll
-          ? !activeCategory
-          : activeCategory?.toLowerCase() === category.toLowerCase();
-
+      <Link href="/events" className={`filter-chip ${!activeCategory ? "filter-chip-active" : ""}`}>
+        All
+      </Link>
+      {categories.map((category) => {
+        const isActive = activeCategory?.toLowerCase() === category.slug.toLowerCase();
         return (
           <Link
-            key={category}
-            href={isAll ? "/events" : `/events?category=${category.toLowerCase()}`}
+            key={category.id}
+            href={`/events?category=${category.slug}`}
             className={`filter-chip ${isActive ? "filter-chip-active" : ""}`}
           >
-            {category}
+            {category.name}
           </Link>
         );
       })}

@@ -1,4 +1,3 @@
-import { events } from "@/data/events";
 import {
   CategoryStrip,
   FeaturedEvents,
@@ -6,13 +5,17 @@ import {
   HomeHero,
   HowItWorks,
 } from "@/features/home/components";
+import { listPublicEvents, toEventItemsWithDetails } from "@/features/events/lib/api";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const { events } = await listPublicEvents({ pageSize: 4 });
+  const items = await toEventItemsWithDetails(events);
+
   return (
     <>
-      <HomeHero featuredEvent={events[1]} />
+      <HomeHero featuredEvent={items[0]} />
       <CategoryStrip />
-      <FeaturedEvents events={events.slice(0, 3)} />
+      <FeaturedEvents events={items.slice(0, 3)} />
       <HowItWorks />
       <HomeCta />
     </>

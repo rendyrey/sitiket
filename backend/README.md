@@ -1,14 +1,18 @@
-# SiTIKET API scaffold
+# SiTIKET API
 
-This directory is the starting surface for the future Node.js/Express backend. It includes health, event, and order route boundaries but deliberately has no persistence, authentication, inventory reservation, or payment logic yet.
+The SiTIKET backend: a separate ESM Node.js/Express API backed by MySQL. Implements the full v1 domain from [../docs/business/](../docs/business/README.md) — auth, events, checkout, manual payment verification, QR ticketing, and gate check-in.
 
-## Start locally
+See [../BACKEND.md](../BACKEND.md) for the full reference (setup, structure, API surface, invariants, known gaps).
+
+## Quick start
 
 ```bash
-cd backend
 npm install
-cp .env.example .env
+cp .env.example .env   # fill in GOOGLE_CLIENT_ID
+npm run db:up
+npm run db:migrate
+npm run db:seed
 npm run dev
 ```
 
-The API defaults to `http://localhost:4000`. Before production, add request validation, a database layer, authentication, rate limiting, inventory locking, payment webhooks, and automated tests.
+API listens on `http://localhost:4000` by default.

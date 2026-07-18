@@ -1,16 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import ActionLink from "@/components/ui/action-link";
 import { mainNavigation } from "@/config/navigation";
+import { useSession } from "@/features/auth/lib/use-session";
 import Logo from "./logo";
 import { MenuIcon, TicketIcon } from "./icons";
 
+const dashboardHrefForRole = (role: string) => (role === "super_admin" ? "/dashboard/super-admin" : "/dashboard/admin");
+
 export default function SiteHeader() {
   const pathname = usePathname();
+  const router = useRouter();
+  const user = useSession();
   const [open, setOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setOpen(false);
+    router.push("/");
+    router.refresh();
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b-4 border-lime bg-ink text-white">
@@ -30,14 +42,30 @@ export default function SiteHeader() {
             </Link>
           ))}
         </nav>
-        <div className="hidden items-center gap-3 lg:flex">
-          <ActionLink href="/login" variant="ghost">
-            Sign in
-          </ActionLink>
-          <ActionLink href="/events" variant="lime">
-            <TicketIcon className="h-4 w-4" /> Buy ticket
-          </ActionLink>
-        </div>
+        {user ? (
+          <div className="hidden items-center gap-5 lg:flex">
+            {user.role !== "user" && (
+              <Link href={dashboardHrefForRole(user.role)} className="nav-link">
+                Dashboard
+              </Link>
+            )}
+            <Link href="/account" className="nav-link">
+              My tickets
+            </Link>
+            <button type="button" onClick={handleSignOut} className="button button-ghost">
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <div className="hidden items-center gap-3 lg:flex">
+            <ActionLink href="/login" variant="ghost">
+              Sign in
+            </ActionLink>
+            <ActionLink href="/events" variant="lime">
+              <TicketIcon className="h-4 w-4" /> Buy ticket
+            </ActionLink>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => setOpen(!open)}
@@ -68,21 +96,51 @@ export default function SiteHeader() {
                 {link.label}
               </Link>
             ))}
-            <Link
-              href="/login"
-              onClick={() => setOpen(false)}
-              className="py-3 text-lg font-bold uppercase text-lime"
-            >
-              Sign in
-            </Link>
-            <ActionLink
-              href="/events"
-              variant="lime"
-              className="mt-2 w-full"
-              onClick={() => setOpen(false)}
-            >
-              <TicketIcon className="h-4 w-4" /> Buy ticket
-            </ActionLink>
+            {user ? (
+              <>
+                {user.role !== "user" && (
+                  <Link
+                    href={dashboardHrefForRole(user.role)}
+                    onClick={() => setOpen(false)}
+                    className="border-b border-white/10 py-3 text-lg font-bold uppercase text-lime"
+                  >
+                    Dashboard
+                  </Link>
+                )}
+                <Link
+                  href="/account"
+                  onClick={() => setOpen(false)}
+                  className="border-b border-white/10 py-3 text-lg font-bold uppercase"
+                >
+                  My tickets
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="py-3 text-left text-lg font-bold uppercase text-lime"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  onClick={() => setOpen(false)}
+                  className="py-3 text-lg font-bold uppercase text-lime"
+                >
+                  Sign in
+                </Link>
+                <ActionLink
+                  href="/events"
+                  variant="lime"
+                  className="mt-2 w-full"
+                  onClick={() => setOpen(false)}
+                >
+                  <TicketIcon className="h-4 w-4" /> Buy ticket
+                </ActionLink>
+              </>
+            )}
           </nav>
         </div>
       )}

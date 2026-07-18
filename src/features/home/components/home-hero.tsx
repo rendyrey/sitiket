@@ -7,7 +7,7 @@ import { EventPoster } from "@/features/events/components";
 export default function HomeHero({
   featuredEvent,
 }: {
-  featuredEvent: EventItem;
+  featuredEvent?: EventItem;
 }) {
   return (
     <section className="hero-section">
@@ -38,7 +38,7 @@ export default function HomeHero({
             </ActionLink>
           </div>
         </div>
-        <FeaturedArtwork event={featuredEvent} />
+        {featuredEvent && <FeaturedArtwork event={featuredEvent} />}
       </div>
     </section>
   );

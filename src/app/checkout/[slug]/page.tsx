@@ -1,14 +1,21 @@
 import { notFound } from "next/navigation";
 import { CheckoutForm } from "@/features/checkout/components";
-import { getEvent } from "@/data/events";
+import { getEventBySlug, listEventImages, listPublicTicketTypes } from "@/features/events/lib/api";
+import { toEventItem } from "@/features/events/lib/to-event-item";
+import { getCurrentUser } from "@/lib/session";
 
-export default async function CheckoutPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const event = getEvent((await params).slug);
+export default async function CheckoutPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const event = await getEventBySlug(slug);
   if (!event) notFound();
+
+  const [ticketTypes, images, user] = await Promise.all([
+    listPublicTicketTypes(event.id),
+    listEventImages(event.id),
+    getCurrentUser(),
+  ]);
+  const item = toEventItem(event, ticketTypes, images);
+
   return (
     <div className="bg-paper py-10 sm:py-20">
       <div className="site-container">
@@ -17,10 +24,15 @@ export default async function CheckoutPage({
           GET YOUR TICKET.
         </h1>
         <p className="mt-4 max-w-xl text-black/50">
-          You’re a few details away from {event.title}.
+          You’re a few details away from {item.title}.
         </p>
         <div className="mt-8 sm:mt-10">
-          <CheckoutForm event={event} />
+          <CheckoutForm
+            event={item}
+            eventId={event.id}
+            ticketTypes={ticketTypes}
+            prefill={user ? { name: user.name, email: user.email, phone: user.phone ?? "" } : null}
+          />
         </div>
       </div>
     </div>

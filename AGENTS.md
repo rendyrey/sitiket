@@ -2,13 +2,14 @@
 
 ## Purpose
 
-SiTIKET is an event discovery and ticket-purchasing product. The current repository contains a production-buildable Next.js frontend and an isolated Express API scaffold. Checkout, authentication, persistence, inventory, and payments are UI/placeholders only unless a task explicitly implements them.
+SiTIKET is an event discovery and ticket-purchasing product. The repository contains a production-buildable Next.js frontend and an Express/MySQL backend, and the frontend is wired to the real backend API end-to-end: Google Sign-In, public event browsing, real multi-ticket-type checkout with atomic inventory reservation, manual bank-transfer payment verification (guest OTP, proof upload), QR tickets, gate check-in scanning, an Admin dashboard (events/images/ticket-types/promo-codes/staff/bank-accounts/orders/payments/refunds), and a Super Admin dashboard (taxonomy/admin-applications/users). See `BACKEND.md` § _Known gaps_ and `FRONTEND.md` § _Responsive verification_ for what's still stubbed or unverified (real email delivery, a payment gateway, automated tests, per-breakpoint visual passes on the dashboards).
 
 ## Read only what you need
 
 - Frontend work: read `FRONTEND.md` and `src/AGENTS.md`.
 - Backend work: read `BACKEND.md` and `backend/AGENTS.md`.
 - Cross-stack work: read both references.
+- Database/business-domain work (schema, roles, payment, check-in flows): read `docs/business/README.md`.
 - Do not scan the large legacy `src/core` library unless the task needs an existing component from it.
 
 Repository skills are available under `.agents/skills`:
@@ -18,15 +19,17 @@ Repository skills are available under `.agents/skills`:
 
 ## Repository map
 
-- `src/app`: Next.js routes; keep these thin.
-- `src/features`: business feature modules (`auth`, `checkout`, `events`, `home`).
-- `src/components/ui`: generic reusable primitives.
+- `src/app`: Next.js routes (including `/dashboard/admin`, `/dashboard/super-admin`, `/dashboard/scan`) and Route Handlers (`api/auth/*` — the session-cookie BFF); keep route files thin.
+- `src/features`: business feature modules (`auth`, `events`, `checkout`, `orders`, `account`, `admin`, `super-admin`, `scanner`, `home`) — each with `components/` and a `lib/` of `api.ts` (server reads) + `actions.ts` (Server Action writes).
+- `src/lib`: cross-feature server plumbing — `api/client.ts` (backend fetch wrapper), `api/types.ts` + `api/normalize.ts` (wire types, see the comment block at its top before adding an entity), `session.ts` (current-user resolution), `env.ts`/`public-env.ts`.
+- `src/components/ui`: generic reusable primitives, including `dashboard-shell.tsx` (Admin/Super Admin sidebar layout).
 - `src/components/site`: SiTIKET-wide layout and brand components.
-- `src/data/events.ts`: temporary mock event source and domain type.
+- `src/data/events.ts`: `EventItem` type + `formatPrice` (still used); the mock `events` array/`getEvent` are unused now that events come from the API.
 - `src/config`: shared configuration such as navigation.
 - `public`: local static assets.
-- `backend`: separate future Node.js/Express API package.
-- `src/core`: inherited Isomorphic template library, not the default location for new SiTIKET code.
+- `backend`: separate Node.js/Express + MySQL API implementing the v1 domain — see `BACKEND.md`.
+- `docs/business`: business/product overview and database design — implemented by `backend` and consumed end-to-end by the frontend.
+- `src/core`: inherited Isomorphic template library, not the default location for new SiTIKET code — not reused by the dashboard shell either (see FRONTEND.md § _Design conventions_).
 
 ## Global rules
 
