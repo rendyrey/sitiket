@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
 import { inviteEventStaffAction, removeEventStaffAction } from "@/features/admin/lib/actions";
 import type { EventStaff } from "@/lib/api/types";
@@ -34,22 +35,39 @@ export default function StaffManager({ eventId, staff }: { eventId: string; staf
     router.refresh();
   };
 
+  const columns: DataTableColumn<EventStaff>[] = [
+    {
+      key: "name",
+      header: "Name",
+      sortAccessor: (member) => (member.userName ?? member.userId).toLowerCase(),
+      searchAccessor: (member) => `${member.userName ?? ""} ${member.userEmail ?? ""}`,
+      render: (member) => <span className="font-black uppercase">{member.userName ?? member.userId}</span>,
+    },
+    {
+      key: "email",
+      header: "Email",
+      sortAccessor: (member) => (member.userEmail ?? "").toLowerCase(),
+      render: (member) => <span className="text-black/40">{member.userEmail} · scanner</span>,
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (member) => (
+        <button type="button" onClick={() => void handleRemove(member.id)} className="text-xs font-black uppercase text-red-600 hover:underline">
+          Remove
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        {staff.length === 0 && <p className="text-sm text-black/50">No gate staff invited yet.</p>}
-        {staff.map((member) => (
-          <div key={member.id} className="flex flex-wrap items-center justify-between gap-4 border-2 border-ink bg-white p-4">
-            <div className="min-w-0">
-              <p className="font-black uppercase">{member.userName ?? member.userId}</p>
-              <p className="text-xs text-black/40">{member.userEmail} · scanner</p>
-            </div>
-            <button type="button" onClick={() => void handleRemove(member.id)} className="text-xs font-black uppercase text-red-600 hover:underline">
-              Remove
-            </button>
-          </div>
-        ))}
-      </div>
+      {staff.length === 0 ? (
+        <p className="text-sm text-black/50">No gate staff invited yet.</p>
+      ) : (
+        <DataTable columns={columns} data={staff} getRowKey={(member) => member.id} searchPlaceholder="Search staff…" />
+      )}
 
       <div className="border-2 border-ink bg-white p-5 sm:p-7">
         <span className="tag">Invite gate staff</span>

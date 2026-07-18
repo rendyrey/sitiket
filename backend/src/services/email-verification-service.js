@@ -1,5 +1,6 @@
 import { randomInt } from "node:crypto";
 import { env } from "../config/env.js";
+import { sendMail } from "../config/mailer.js";
 import * as emailVerificationsRepository from "../repositories/email-verifications-repository.js";
 import * as ordersRepository from "../repositories/orders-repository.js";
 import { badRequest, notFound } from "../utils/http-error.js";
@@ -9,11 +10,9 @@ import { badRequest, notFound } from "../utils/http-error.js";
  * "prevent a false email from receiving the ticket" requirement before an
  * order can proceed to payment. See docs/business/DATABASE_DESIGN.md §4.8.
  *
- * No real email provider is wired up yet (backend has no SMTP/Resend
- * integration — see BACKEND.md) — this logs the OTP server-side and, only
- * outside production, also returns it in the response so the guest
- * checkout flow is genuinely testable end-to-end. Replace with a real send
- * before this can be called production-ready.
+ * Sends through SMTP when configured (see config/mailer.js); otherwise logs
+ * the OTP server-side and, only outside production, also returns it in the
+ * response so the guest checkout flow stays testable without SMTP set up.
  *
  * @param {string} orderId
  * @param {string} email
@@ -25,8 +24,17 @@ export const requestGuestOtp = async (orderId, email) => {
 
   await emailVerificationsRepository.create({ email, purpose: "guest_checkout", orderId, code, expiresAt });
 
-  // eslint-disable-next-line no-console
-  console.log(`[email-verification] OTP for order ${orderId} (${email}): ${code} (expires ${expiresAt.toISOString()})`);
+  const sent = await sendMail({
+    to: email,
+    subject: `Your SiTIKET verification code: ${code}`,
+    text: `Your verification code is ${code}. It expires in ${env.GUEST_EMAIL_OTP_TTL_MINUTES} minutes.`,
+    html: `<p>Your verification code is <strong>${code}</strong>.</p><p>It expires in ${env.GUEST_EMAIL_OTP_TTL_MINUTES} minutes.</p>`,
+  });
+
+  if (!sent) {
+    // eslint-disable-next-line no-console
+    console.log(`[email-verification] OTP for order ${orderId} (${email}): ${code} (expires ${expiresAt.toISOString()})`);
+  }
 
   return env.NODE_ENV === "production" ? {} : { devCode: code };
 };

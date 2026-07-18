@@ -40,8 +40,12 @@ export default function CheckoutForm({ event, eventId, prefill, ticketTypes }: C
       setError("Select at least one ticket.");
       return;
     }
-    if (!attendee.name.trim() || !attendee.email.trim() || !attendee.phone.trim()) {
-      setError("Fill in your name, email, and phone number.");
+    if (!attendee.name.trim() || !attendee.email.trim()) {
+      setError("Fill in your name and email.");
+      return;
+    }
+    if (!attendee.phone.trim()) {
+      setError("Add your phone number to continue.");
       return;
     }
 

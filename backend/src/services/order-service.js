@@ -9,6 +9,7 @@ import { calculateDiscount, validateForOrder as validatePromoCodeForOrder } from
 import * as promoCodesRepository from "../repositories/promo-codes-repository.js";
 import * as eventsRepository from "../repositories/events-repository.js";
 import { requestGuestOtp } from "./email-verification-service.js";
+import { notifyOrderCancelled, notifyOrderExpired } from "./notification-service.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
 import { badRequest, conflict, forbidden, notFound } from "../utils/http-error.js";
 
@@ -211,6 +212,12 @@ const releaseOrder = async (order, status) => {
     }
     await ordersRepository.updateStatus(order.id, status, trx);
   });
+
+  if (status === "cancelled") {
+    await notifyOrderCancelled(order);
+  } else {
+    await notifyOrderExpired(order);
+  }
 };
 
 /**

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
 import { createTaxonomyAction, updateTaxonomyAction, type TaxonomyResource } from "@/features/super-admin/lib/actions";
 import type { TaxonomyItem } from "@/lib/api/types";
@@ -44,26 +45,48 @@ export default function TaxonomyManager({ items, resource }: { items: TaxonomyIt
     router.refresh();
   };
 
+  const columns: DataTableColumn<TaxonomyItem>[] = [
+    {
+      key: "name",
+      header: "Name",
+      sortAccessor: (item) => item.name.toLowerCase(),
+      searchAccessor: (item) => item.name,
+      render: (item) => <span className="font-black uppercase">{item.name}</span>,
+    },
+    {
+      key: "slug",
+      header: "Slug",
+      sortAccessor: (item) => item.slug,
+      searchAccessor: (item) => item.slug,
+      render: (item) => <span className="text-black/40">/{item.slug}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "right",
+      sortAccessor: (item) => (item.isActive ? 0 : 1),
+      render: (item) => (
+        <button
+          type="button"
+          disabled={pending === item.id}
+          onClick={() => void handleToggleActive(item)}
+          className={`button ${item.isActive ? "button-dark" : "button-lime"} disabled:opacity-50`}
+        >
+          {item.isActive ? "Active" : "Inactive"}
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        {items.map((item) => (
-          <div key={item.id} className="flex flex-wrap items-center justify-between gap-4 border-2 border-ink bg-white p-4">
-            <div>
-              <p className="font-black uppercase">{item.name}</p>
-              <p className="text-xs text-black/40">/{item.slug}</p>
-            </div>
-            <button
-              type="button"
-              disabled={pending === item.id}
-              onClick={() => void handleToggleActive(item)}
-              className={`button ${item.isActive ? "button-dark" : "button-lime"} disabled:opacity-50`}
-            >
-              {item.isActive ? "Active" : "Inactive"}
-            </button>
-          </div>
-        ))}
-      </div>
+      <DataTable
+        columns={columns}
+        data={items}
+        getRowKey={(item) => item.id}
+        searchPlaceholder="Search categories…"
+        emptyMessage="No categories yet — add one below."
+      />
 
       <div className="border-2 border-ink bg-white p-5 sm:p-7">
         <span className="tag">Add category</span>

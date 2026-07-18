@@ -57,6 +57,9 @@ export const list = async ({ page = 1, pageSize = 20, role, status } = {}) => {
   return { rows, total: Number(total), page, pageSize };
 };
 
+/** @param {"user" | "admin" | "super_admin"} role */
+export const listByRole = (role) => db(TABLE).where({ role });
+
 /**
  * @param {string} id
  * @param {"user" | "admin" | "super_admin"} role

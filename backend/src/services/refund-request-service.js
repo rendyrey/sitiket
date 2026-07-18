@@ -5,6 +5,7 @@ import * as refundRequestsRepository from "../repositories/refund-requests-repos
 import * as ticketsRepository from "../repositories/tickets-repository.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
 import { conflict, forbidden, notFound } from "../utils/http-error.js";
+import { notifyRefundStatus } from "./notification-service.js";
 
 /**
  * Files a manual, status-tracked refund request for a paid order — no
@@ -27,6 +28,7 @@ export const request = async (orderId, identity, reason) => {
 
   const refundRequest = await refundRequestsRepository.create({ orderId, requestedBy: identity.userId, reason });
   await ordersRepository.updateStatus(orderId, "refund_requested");
+  await notifyRefundStatus(order, "requested");
   return refundRequest;
 };
 
@@ -51,12 +53,13 @@ const loadForReview = async (refundRequestId, reviewer) => {
  * @param {string} [notes]
  */
 export const approve = async (refundRequestId, reviewer, notes) => {
-  const { refundRequest } = await loadForReview(refundRequestId, reviewer);
+  const { refundRequest, order } = await loadForReview(refundRequestId, reviewer);
   if (refundRequest.status !== "requested") {
     throw conflict("ALREADY_DECIDED", `Refund request is already "${refundRequest.status}"`);
   }
 
   await refundRequestsRepository.decide(refundRequestId, { status: "approved", processedBy: reviewer.sub, notes });
+  await notifyRefundStatus(order, "approved", notes);
   return refundRequestsRepository.findById(refundRequestId);
 };
 
@@ -73,6 +76,7 @@ export const reject = async (refundRequestId, reviewer, notes) => {
 
   await refundRequestsRepository.decide(refundRequestId, { status: "rejected", processedBy: reviewer.sub, notes });
   await ordersRepository.updateStatus(order.id, "refund_rejected");
+  await notifyRefundStatus(order, "rejected", notes);
   return refundRequestsRepository.findById(refundRequestId);
 };
 
@@ -96,6 +100,7 @@ export const markCompleted = async (refundRequestId, reviewer, notes) => {
     await ticketsRepository.voidIssuedTicketsForOrder(order.id, trx);
   });
 
+  await notifyRefundStatus(order, "completed", notes);
   return refundRequestsRepository.findById(refundRequestId);
 };
 

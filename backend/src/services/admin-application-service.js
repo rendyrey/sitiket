@@ -1,6 +1,7 @@
 import { db } from "../config/db.js";
 import * as adminApplicationsRepository from "../repositories/admin-applications-repository.js";
 import * as usersRepository from "../repositories/users-repository.js";
+import { notifyAdminApplicationDecision, notifyAdminApplicationSubmitted } from "./notification-service.js";
 import { conflict, notFound } from "../utils/http-error.js";
 
 /**
@@ -21,7 +22,9 @@ export const apply = async (userId, input) => {
     throw conflict("APPLICATION_PENDING", "A pending application already exists for this account");
   }
 
-  return adminApplicationsRepository.create({ userId, ...input });
+  const application = await adminApplicationsRepository.create({ userId, ...input });
+  await notifyAdminApplicationSubmitted(application, user);
+  return application;
 };
 
 /** @param {{ status?: "pending" | "approved" | "rejected", page?: number, pageSize?: number }} filters */
@@ -44,7 +47,10 @@ export const approve = async (applicationId, reviewerId, reviewNotes) => {
     await usersRepository.updateRole(application.user_id, "admin", trx);
   });
 
-  return adminApplicationsRepository.findById(applicationId);
+  const decided = await adminApplicationsRepository.findById(applicationId);
+  const applicant = await usersRepository.findById(application.user_id);
+  await notifyAdminApplicationDecision(decided, applicant, "approved");
+  return decided;
 };
 
 /**
@@ -60,5 +66,9 @@ export const reject = async (applicationId, reviewerId, reviewNotes) => {
   }
 
   await adminApplicationsRepository.decide(applicationId, { status: "rejected", reviewedBy: reviewerId, reviewNotes });
-  return adminApplicationsRepository.findById(applicationId);
+
+  const decided = await adminApplicationsRepository.findById(applicationId);
+  const applicant = await usersRepository.findById(application.user_id);
+  await notifyAdminApplicationDecision(decided, applicant, "rejected");
+  return decided;
 };

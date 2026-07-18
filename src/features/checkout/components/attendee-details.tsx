@@ -14,6 +14,8 @@ type AttendeeDetailsProps = {
 };
 
 export default function AttendeeDetails({ disabled = false, onChange, values }: AttendeeDetailsProps) {
+  const phoneMissing = !values.phone.trim();
+
   return (
     <CheckoutPanel step="02" title="Your details">
       <div className="mt-7 grid gap-5 sm:grid-cols-2">
@@ -46,12 +48,20 @@ export default function AttendeeDetails({ disabled = false, onChange, values }: 
           autoComplete="tel"
           placeholder="+62 812 3456 7890"
           value={values.phone}
-          disabled={disabled}
           onChange={(event) => onChange({ ...values, phone: event.target.value })}
           required
         />
       </div>
-      {disabled && <p className="mt-4 text-xs font-semibold text-black/40">Signed in — using your account details.</p>}
+      {disabled && (
+        <p className="mt-4 text-xs font-semibold text-black/40">
+          Signed in — name and email locked to your account.
+        </p>
+      )}
+      {disabled && phoneMissing && (
+        <p className="mt-3 border-2 border-amber-500/60 bg-amber-500/10 p-3 text-xs font-semibold text-amber-700">
+          Your account has no phone number on file — add one below to continue.
+        </p>
+      )}
     </CheckoutPanel>
   );
 }

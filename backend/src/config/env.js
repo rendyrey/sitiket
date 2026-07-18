@@ -25,6 +25,15 @@ const envSchema = z.object({
 
   ORDER_PAYMENT_HOLD_MINUTES: z.coerce.number().int().positive().default(60),
   GUEST_EMAIL_OTP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
+
+  // Optional: outgoing SMTP for the guest-checkout OTP email. Unset in dev,
+  // the OTP just logs server-side (and echoes in the response) instead.
+  SMTP_HOST: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  SMTP_PORT: z.coerce.number().int().positive().default(465),
+  SMTP_SECURE: z.preprocess((value) => value === undefined ? "true" : value, z.enum(["true", "false"])).transform((value) => value === "true"),
+  SMTP_USER: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  SMTP_PASSWORD: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  SMTP_FROM: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
 });
 
 const parsed = envSchema.safeParse(process.env);

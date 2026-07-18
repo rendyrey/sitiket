@@ -4,6 +4,7 @@ import * as ordersRepository from "../repositories/orders-repository.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
 import { conflict, forbidden, notFound } from "../utils/http-error.js";
 import { resolveForEvent as resolveBankAccountForEvent } from "./bank-account-service.js";
+import { notifyOrderPaid, notifyPaymentProofRejected } from "./notification-service.js";
 import { issueTicketsForOrder } from "./ticket-service.js";
 
 const AWAITING_PAYMENT_STATUSES = ["pending_payment", "awaiting_verification"];
@@ -64,10 +65,12 @@ export const reviewProof = async (paymentId, reviewer, decision, reviewerNotes) 
 
   if (decision === "approved") {
     await ordersRepository.updateStatus(order.id, "paid");
-    await issueTicketsForOrder(order.id);
+    const tickets = await issueTicketsForOrder(order.id);
+    await notifyOrderPaid(order, tickets);
   } else {
     // Buyer may correct and re-submit while the order hasn't expired.
     await ordersRepository.updateStatus(order.id, "pending_payment");
+    await notifyPaymentProofRejected(order, reviewerNotes);
   }
 
   return orderPaymentsRepository.findById(paymentId);

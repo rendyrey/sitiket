@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
 import { createPromoCodeAction, updatePromoCodeAction } from "@/features/admin/lib/actions";
 import type { DiscountType, PromoCode } from "@/lib/api/types";
@@ -43,29 +44,51 @@ export default function PromoCodeManager({ eventId, promoCodes }: { eventId: str
     router.refresh();
   };
 
+  const columns: DataTableColumn<PromoCode>[] = [
+    {
+      key: "code",
+      header: "Code",
+      sortAccessor: (promoCode) => promoCode.code.toLowerCase(),
+      searchAccessor: (promoCode) => promoCode.code,
+      render: (promoCode) => <span className="font-black uppercase">{promoCode.code}</span>,
+    },
+    {
+      key: "discount",
+      header: "Discount",
+      sortAccessor: (promoCode) => promoCode.discountValue,
+      render: (promoCode) =>
+        promoCode.discountType === "percentage" ? `${promoCode.discountValue}% off` : `Rp ${promoCode.discountValue} off`,
+    },
+    {
+      key: "usage",
+      header: "Usage",
+      sortAccessor: (promoCode) => promoCode.usedCount / promoCode.maxUses,
+      render: (promoCode) => `${promoCode.usedCount}/${promoCode.maxUses} used`,
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "right",
+      sortAccessor: (promoCode) => (promoCode.isActive ? 0 : 1),
+      render: (promoCode) => (
+        <button
+          type="button"
+          onClick={() => void handleToggleActive(promoCode)}
+          className={`button ${promoCode.isActive ? "button-dark" : "button-lime"}`}
+        >
+          {promoCode.isActive ? "Active" : "Inactive"}
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        {promoCodes.length === 0 && <p className="text-sm text-black/50">No promo codes yet — add one below.</p>}
-        {promoCodes.map((promoCode) => (
-          <div key={promoCode.id} className="flex flex-wrap items-center justify-between gap-4 border-2 border-ink bg-white p-4">
-            <div className="min-w-0">
-              <p className="font-black uppercase">{promoCode.code}</p>
-              <p className="text-xs text-black/40">
-                {promoCode.discountType === "percentage" ? `${promoCode.discountValue}% off` : `Rp ${promoCode.discountValue} off`} ·{" "}
-                {promoCode.usedCount}/{promoCode.maxUses} used
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void handleToggleActive(promoCode)}
-              className={`button ${promoCode.isActive ? "button-dark" : "button-lime"}`}
-            >
-              {promoCode.isActive ? "Active" : "Inactive"}
-            </button>
-          </div>
-        ))}
-      </div>
+      {promoCodes.length === 0 ? (
+        <p className="text-sm text-black/50">No promo codes yet — add one below.</p>
+      ) : (
+        <DataTable columns={columns} data={promoCodes} getRowKey={(promoCode) => promoCode.id} searchPlaceholder="Search promo codes…" />
+      )}
 
       <div className="border-2 border-ink bg-white p-5 sm:p-7">
         <span className="tag">Add promo code</span>

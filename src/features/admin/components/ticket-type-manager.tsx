@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatPrice } from "@/data/events";
+import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
 import { createTicketTypeAction, updateTicketTypeAction } from "@/features/admin/lib/actions";
 import type { TaxonomyItem, TicketType } from "@/lib/api/types";
@@ -46,29 +47,58 @@ export default function TicketTypeManager({ categories, eventId, ticketTypes }: 
     router.refresh();
   };
 
+  const categoryName = (ticketType: TicketType) =>
+    categories.find((category) => category.id === ticketType.categoryId)?.name ?? "Uncategorized";
+
+  const columns: DataTableColumn<TicketType>[] = [
+    {
+      key: "name",
+      header: "Name",
+      sortAccessor: (ticketType) => ticketType.name.toLowerCase(),
+      searchAccessor: (ticketType) => `${ticketType.name} ${categoryName(ticketType)}`,
+      render: (ticketType) => (
+        <div className="min-w-0">
+          <p className="truncate font-black uppercase">{ticketType.name}</p>
+          <p className="text-xs text-black/40">{categoryName(ticketType)}</p>
+        </div>
+      ),
+    },
+    {
+      key: "price",
+      header: "Price",
+      sortAccessor: (ticketType) => ticketType.price,
+      render: (ticketType) => formatPrice(ticketType.price),
+    },
+    {
+      key: "sold",
+      header: "Sold",
+      sortAccessor: (ticketType) => ticketType.quantitySold / ticketType.quantityTotal,
+      render: (ticketType) => `${ticketType.quantitySold}/${ticketType.quantityTotal}`,
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "right",
+      sortAccessor: (ticketType) => (ticketType.isActive ? 0 : 1),
+      render: (ticketType) => (
+        <button
+          type="button"
+          onClick={() => void handleToggleActive(ticketType)}
+          className={`button ${ticketType.isActive ? "button-dark" : "button-lime"}`}
+        >
+          {ticketType.isActive ? "Active" : "Inactive"}
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        {ticketTypes.length === 0 && <p className="text-sm text-black/50">No ticket types yet — add one below.</p>}
-        {ticketTypes.map((ticketType) => (
-          <div key={ticketType.id} className="flex flex-wrap items-center justify-between gap-4 border-2 border-ink bg-white p-4">
-            <div className="min-w-0">
-              <p className="font-black uppercase">{ticketType.name}</p>
-              <p className="text-xs text-black/40">
-                {categories.find((category) => category.id === ticketType.categoryId)?.name ?? "Uncategorized"} ·{" "}
-                {formatPrice(ticketType.price)} · {ticketType.quantitySold}/{ticketType.quantityTotal} sold
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void handleToggleActive(ticketType)}
-              className={`button ${ticketType.isActive ? "button-dark" : "button-lime"}`}
-            >
-              {ticketType.isActive ? "Active" : "Inactive"}
-            </button>
-          </div>
-        ))}
-      </div>
+      {ticketTypes.length === 0 ? (
+        <p className="text-sm text-black/50">No ticket types yet — add one below.</p>
+      ) : (
+        <DataTable columns={columns} data={ticketTypes} getRowKey={(ticketType) => ticketType.id} searchPlaceholder="Search ticket types…" />
+      )}
 
       <div className="border-2 border-ink bg-white p-5 sm:p-7">
         <span className="tag">Add ticket type</span>
