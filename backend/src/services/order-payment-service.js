@@ -3,7 +3,10 @@ import * as orderPaymentsRepository from "../repositories/order-payments-reposit
 import * as ordersRepository from "../repositories/orders-repository.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
 import { conflict, forbidden, notFound } from "../utils/http-error.js";
-import { resolveForEvent as resolveBankAccountForEvent } from "./bank-account-service.js";
+import {
+  resolveForEvent as resolveBankAccountForEvent,
+  resolveAllForEvent as resolveAllBankAccountsForEvent,
+} from "./bank-account-service.js";
 import { notifyOrderPaid, notifyPaymentProofRejected } from "./notification-service.js";
 import { issueTicketsForOrder } from "./ticket-service.js";
 
@@ -92,12 +95,19 @@ export const getPaymentInstructions = async (orderId, identity) => {
   if (!isOwnOrder) throw forbidden("NOT_ORDER_OWNER", "You do not have access to this order");
 
   const event = await eventsRepository.findById(order.event_id);
-  const bankAccount = await resolveBankAccountForEvent(event);
+  const [recommended, bankAccounts] = await Promise.all([
+    resolveBankAccountForEvent(event),
+    resolveAllBankAccountsForEvent(event),
+  ]);
 
   return {
-    bankName: bankAccount.bank_name,
-    accountNumber: bankAccount.account_number,
-    accountHolderName: bankAccount.account_holder_name,
+    bankAccounts: bankAccounts.map((account) => ({
+      id: account.id,
+      bankName: account.bank_name,
+      accountNumber: account.account_number,
+      accountHolderName: account.account_holder_name,
+      isRecommended: account.id === recommended.id,
+    })),
     amount: order.total_amount,
   };
 };

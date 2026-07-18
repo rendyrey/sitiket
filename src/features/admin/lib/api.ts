@@ -12,6 +12,7 @@ import type {
   BankAccount,
   Event,
   EventStaff,
+  ListEventOrdersQuery,
   ListEventsQuery,
   Order,
   OrderPayment,
@@ -66,8 +67,19 @@ export const listBankAccounts = async (): Promise<BankAccount[]> => {
 
 // ---- Orders / payments / refunds for an event ----
 
-/** Server-only. Buyers for one event — no `items`/`tickets` embedded (see BACKEND.md). */
-export const listEventOrders = (eventId: string): Promise<Order[]> => apiFetch<Order[]>(`/api/events/${eventId}/orders`);
+/**
+ * Server-only. Buyers for one event, paginated/filterable — no
+ * `items`/`tickets` embedded (see BACKEND.md). Backs the admin orders table's
+ * server-side search/filter/sort/pagination so a large event never ships its
+ * full order list to the browser.
+ */
+export const listEventOrders = async (
+  eventId: string,
+  query?: ListEventOrdersQuery,
+): Promise<{ orders: Order[]; meta: ApiPageMeta }> => {
+  const { data, meta } = await apiFetchPage<Order>(`/api/events/${eventId}/orders`, { query });
+  return { orders: data, meta };
+};
 
 export const listOrderPayments = async (orderId: string): Promise<OrderPayment[]> => {
   const raw = await apiFetch<RawOrderPayment[]>(`/api/orders/${orderId}/payments`);

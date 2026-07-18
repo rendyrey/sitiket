@@ -73,3 +73,9 @@ export const updateRole = (id, role, executor = db) =>
  * @param {"active" | "suspended"} status
  */
 export const updateStatus = (id, status) => db(TABLE).where({ id }).update({ status, updated_at: new Date() });
+
+/**
+ * @param {string} id
+ * @param {string} phone
+ */
+export const updatePhone = (id, phone) => db(TABLE).where({ id }).update({ phone, updated_at: new Date() });

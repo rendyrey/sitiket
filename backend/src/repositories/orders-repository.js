@@ -12,8 +12,45 @@ export const findById = (id, executor = db) => executor(TABLE).where({ id }).fir
 /** @param {string} userId */
 export const listByUser = (userId) => db(TABLE).where({ user_id: userId }).orderBy("created_at", "desc");
 
-/** @param {string} eventId */
-export const listByEvent = (eventId) => db(TABLE).where({ event_id: eventId }).orderBy("created_at", "desc");
+const SORT_COLUMNS = { createdAt: "created_at", buyerName: "buyer_name" };
+
+/**
+ * Paginated, filterable listing for the admin orders table — keeps a
+ * thousands-of-orders event from ever loading its full order list into the
+ * browser (search/status/sort all run in SQL).
+ * @param {string} eventId
+ * @param {object} [filters]
+ * @param {string} [filters.search] - matches buyer name or email
+ * @param {string} [filters.status]
+ * @param {"createdAt" | "buyerName"} [filters.sortBy]
+ * @param {"asc" | "desc"} [filters.sortDir]
+ * @param {number} [filters.page]
+ * @param {number} [filters.pageSize]
+ */
+export const listByEvent = async (
+  eventId,
+  { search, status, sortBy = "createdAt", sortDir = "desc", page = 1, pageSize = 20 } = {},
+) => {
+  const applyFilters = (query) => {
+    query.where("event_id", eventId);
+    if (status) query.andWhere("status", status);
+    if (search) {
+      query.andWhere((builder) => {
+        builder.whereILike("buyer_name", `%${search}%`).orWhereILike("buyer_email", `%${search}%`);
+      });
+    }
+    return query;
+  };
+
+  const [{ total }] = await applyFilters(db(TABLE)).count({ total: "id" });
+
+  const rows = await applyFilters(db(TABLE))
+    .orderBy(SORT_COLUMNS[sortBy] ?? "created_at", sortDir)
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  return { rows, total: Number(total), page, pageSize };
+};
 
 /**
  * Sums ticket quantities a buyer already holds for an event across orders

@@ -47,6 +47,9 @@ export const createOrder = async (requester, input) => {
     const user = await usersRepository.findById(requester.sub);
     buyerUserId = user.id;
     buyerEmail = user.email;
+    if (input.buyerPhone && input.buyerPhone !== user.phone) {
+      await usersRepository.updatePhone(user.id, input.buyerPhone);
+    }
   }
 
   const requestedQuantity = input.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -187,12 +190,13 @@ export const listMyOrders = (userId) => ordersRepository.listByUser(userId);
 /**
  * @param {string} eventId
  * @param {{ sub: string, role: string }} requester
+ * @param {object} [filters] - see repositories/orders-repository.js `listByEvent`
  */
-export const listOrdersForEvent = async (eventId, requester) => {
+export const listOrdersForEvent = async (eventId, requester, filters) => {
   const event = await eventsRepository.findById(eventId);
   if (!event) throw notFound("EVENT_NOT_FOUND", "Event not found");
   assertEventOwnerOrSuperAdmin(event, requester);
-  return ordersRepository.listByEvent(eventId);
+  return ordersRepository.listByEvent(eventId, filters);
 };
 
 /**

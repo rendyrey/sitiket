@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import toast from "react-hot-toast";
 import { formatPrice } from "@/data/events";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
@@ -26,7 +27,9 @@ export default function TicketTypeManager({ categories, eventId, ticketTypes }: 
   const handleCreate = async () => {
     setError(null);
     if (!name.trim() || !categoryId || price < 0 || quantityTotal <= 0) {
-      setError("Fill in a name, category, price, and quantity greater than 0.");
+      const message = "Fill in a name, category, price, and quantity greater than 0.";
+      setError(message);
+      toast.error(message);
       return;
     }
     setSubmitting(true);
@@ -34,6 +37,7 @@ export default function TicketTypeManager({ categories, eventId, ticketTypes }: 
     setSubmitting(false);
     if (!result.ok) {
       setError(result.message);
+      toast.error(result.message);
       return;
     }
     setName("");
@@ -103,10 +107,17 @@ export default function TicketTypeManager({ categories, eventId, ticketTypes }: 
       <div className="border-2 border-ink bg-white p-5 sm:p-7">
         <span className="tag">Add ticket type</span>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <FormField label="Name" name="ticketTypeName" value={name} onChange={(e) => setName(e.target.value)} placeholder="Early Bird" />
+          <FormField
+            required
+            label="Name *"
+            name="ticketTypeName"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Early Bird"
+          />
           <label className="field-label">
-            Category
-            <select className="text-field mt-2" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            Category *
+            <select required className="text-field mt-2" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -115,7 +126,8 @@ export default function TicketTypeManager({ categories, eventId, ticketTypes }: 
             </select>
           </label>
           <FormField
-            label="Price (IDR)"
+            required
+            label="Price (IDR) *"
             name="price"
             type="number"
             min={0}
@@ -123,7 +135,8 @@ export default function TicketTypeManager({ categories, eventId, ticketTypes }: 
             onChange={(e) => setPrice(Number(e.target.value))}
           />
           <FormField
-            label="Quantity"
+            required
+            label="Quantity *"
             name="quantityTotal"
             type="number"
             min={1}

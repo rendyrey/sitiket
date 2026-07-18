@@ -1,21 +1,23 @@
 import { env } from "../config/env.js";
-import { sendMail } from "../config/mailer.js";
+import { enqueueEmail } from "./email-job-service.js";
 import * as usersRepository from "../repositories/users-repository.js";
 
-const orderUrl = (orderId) => `${env.FRONTEND_URL}/orders/${orderId}`;
+const orderUrl = (orderId, email) => `${env.FRONTEND_URL}/orders/${orderId}?email=${encodeURIComponent(email)}`;
 
 /**
- * Fire-and-log wrapper around `sendMail` — a notification failing to send
- * must never fail the state change it's attached to (a payment approval,
- * a refund decision, etc. already committed by the time we notify).
+ * Fire-and-log wrapper around `enqueueEmail` — a notification failing to
+ * queue must never fail the state change it's attached to (a payment
+ * approval, a refund decision, etc. already committed by the time we
+ * notify). The actual SMTP send happens later, off the request, via the
+ * `email_jobs` background worker.
  * @param {{ to: string, subject: string, text: string, html?: string }} message
  */
 const notify = async (message) => {
   try {
-    await sendMail(message);
+    await enqueueEmail(message);
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error(`[notification] failed to send "${message.subject}" to ${message.to}:`, error.message);
+    console.error(`[notification] failed to queue "${message.subject}" to ${message.to}:`, error.message);
   }
 };
 
@@ -68,8 +70,8 @@ export const notifyOrderPaid = async (order, tickets) => {
   await notify({
     to: order.buyer_email,
     subject: "Your payment was confirmed — here are your tickets",
-    text: `Hi ${order.buyer_name}, your payment for order ${order.id} was confirmed.\n\nYour tickets:\n${codeList}\n\nView them at ${orderUrl(order.id)}`,
-    html: `<p>Hi ${order.buyer_name}, your payment for order <strong>${order.id}</strong> was confirmed.</p><p>Your tickets:</p><ul>${tickets.map((ticket) => `<li>${ticket.ticket_type_name}: <strong>${ticket.ticket_code}</strong></li>`).join("")}</ul><p><a href="${orderUrl(order.id)}">View your tickets</a></p>`,
+    text: `Hi ${order.buyer_name}, your payment for order ${order.id} was confirmed.\n\nYour tickets:\n${codeList}\n\nView them at ${orderUrl(order.id, order.buyer_email)}`,
+    html: `<p>Hi ${order.buyer_name}, your payment for order <strong>${order.id}</strong> was confirmed.</p><p>Your tickets:</p><ul>${tickets.map((ticket) => `<li>${ticket.ticket_type_name}: <strong>${ticket.ticket_code}</strong></li>`).join("")}</ul><p><a href="${orderUrl(order.id, order.buyer_email)}">View your tickets</a></p>`,
   });
 };
 
@@ -82,8 +84,8 @@ export const notifyPaymentProofRejected = async (order, reviewerNotes) => {
   await notify({
     to: order.buyer_email,
     subject: `Payment proof rejected for order ${order.id}`,
-    text: `Hi ${order.buyer_name}, the payment proof you submitted for order ${order.id} was rejected.${reviewerNotes ? ` Reason: ${reviewerNotes}` : ""} Please upload a new proof at ${orderUrl(order.id)}`,
-    html: `<p>Hi ${order.buyer_name}, the payment proof you submitted for order <strong>${order.id}</strong> was rejected.</p>${reviewerNotes ? `<p>Reason: ${reviewerNotes}</p>` : ""}<p><a href="${orderUrl(order.id)}">Upload a new proof</a></p>`,
+    text: `Hi ${order.buyer_name}, the payment proof you submitted for order ${order.id} was rejected.${reviewerNotes ? ` Reason: ${reviewerNotes}` : ""} Please upload a new proof at ${orderUrl(order.id, order.buyer_email)}`,
+    html: `<p>Hi ${order.buyer_name}, the payment proof you submitted for order <strong>${order.id}</strong> was rejected.</p>${reviewerNotes ? `<p>Reason: ${reviewerNotes}</p>` : ""}<p><a href="${orderUrl(order.id, order.buyer_email)}">Upload a new proof</a></p>`,
   });
 };
 

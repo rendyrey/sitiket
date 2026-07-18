@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import toast from "react-hot-toast";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
 import { inviteEventStaffAction, removeEventStaffAction } from "@/features/admin/lib/actions";
@@ -16,7 +17,9 @@ export default function StaffManager({ eventId, staff }: { eventId: string; staf
   const handleInvite = async () => {
     setError(null);
     if (!email.trim()) {
-      setError("Enter the email of someone who has already signed in to SiTIKET with Google.");
+      const message = "Enter the email of someone who has already signed in to SiTIKET with Google.";
+      setError(message);
+      toast.error(message);
       return;
     }
     setSubmitting(true);
@@ -24,6 +27,7 @@ export default function StaffManager({ eventId, staff }: { eventId: string; staf
     setSubmitting(false);
     if (!result.ok) {
       setError(result.message);
+      toast.error(result.message);
       return;
     }
     setEmail("");
@@ -75,7 +79,15 @@ export default function StaffManager({ eventId, staff }: { eventId: string; staf
           The person must have already signed in with Google at least once — there is no separate scanner credential.
         </p>
         <div className="mt-4">
-          <FormField label="Email" name="staffEmail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="usher@example.com" />
+          <FormField
+            required
+            label="Email *"
+            name="staffEmail"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="usher@example.com"
+          />
         </div>
         {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
         <button type="button" onClick={() => void handleInvite()} disabled={submitting} className="button button-dark mt-5 disabled:opacity-50">

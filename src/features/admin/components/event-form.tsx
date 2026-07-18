@@ -2,12 +2,53 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import toast from "react-hot-toast";
+import cn from "@/utils/class-names";
 import FormField from "@/components/ui/form-field";
 import { createEventAction, updateEventAction } from "@/features/admin/lib/actions";
-import type { BankAccount, CreateEventRequest, Event, MeetingPlatform, TaxonomyItem } from "@/lib/api/types";
+import type { BankAccount, CreateEventRequest, Event, MeetingPlatform, TaxonomyItem, ValidationIssue } from "@/lib/api/types";
 
 /** `datetime-local` inputs need `"YYYY-MM-DDTHH:mm"`; ISO strings round-trip fine through `Date`. */
 const toDateTimeLocal = (iso?: string) => (iso ? new Date(iso).toISOString().slice(0, 16) : "");
+
+/** Field order used to pick which errored field to scroll/focus first. */
+const FIELD_ORDER = [
+  "name",
+  "description",
+  "categoryId",
+  "startDate",
+  "endDate",
+  "meetingUrl",
+  "contactPersonName",
+  "contactPersonEmail",
+  "contactPersonPhone",
+] as const;
+
+const isValidUrl = (value: string) => {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Maps the backend's raw Zod issues (`ActionResult.details`) to `{ fieldName: message }`. */
+const fieldErrorsFromDetails = (details: unknown): Record<string, string> => {
+  if (!Array.isArray(details)) return {};
+  const errors: Record<string, string> = {};
+  for (const issue of details as ValidationIssue[]) {
+    const key = issue?.path?.[0];
+    if (typeof key === "string" && !errors[key]) errors[key] = issue.message;
+  }
+  return errors;
+};
+
+const focusField = (key: string) => {
+  const el = document.getElementById(key);
+  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (el instanceof HTMLElement) el.focus({ preventScroll: true });
+};
 
 type EventFormProps = {
   bankAccounts: BankAccount[];
@@ -40,23 +81,45 @@ export default function EventForm({ bankAccounts, categories, event }: EventForm
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const set = <K extends keyof typeof values>(key: K, value: (typeof values)[K]) =>
+  const set = <K extends keyof typeof values>(key: K, value: (typeof values)[K]) => {
     setValues((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => {
+      if (!current[key as string]) return current;
+      const next = { ...current };
+      delete next[key as string];
+      return next;
+    });
+  };
+
+  const validate = (): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    if (!values.name.trim()) errors.name = "Event name is required.";
+    if (!values.description.trim()) errors.description = "Description is required.";
+    if (!values.categoryId) errors.categoryId = "Category is required.";
+    if (!values.startDate) errors.startDate = "Start date/time is required.";
+    if (!values.endDate) errors.endDate = "End date/time is required.";
+    if (values.startDate && values.endDate && new Date(values.endDate) < new Date(values.startDate)) {
+      errors.endDate = "End must be on or after the start.";
+    }
+    if (values.meetingUrl.trim() && !isValidUrl(values.meetingUrl.trim())) {
+      errors.meetingUrl = "Enter a valid URL, e.g. https://zoom.us/j/...";
+    }
+    if (!values.contactPersonName.trim()) errors.contactPersonName = "Contact name is required.";
+    if (!values.contactPersonEmail.trim()) errors.contactPersonEmail = "Contact email is required.";
+    if (!values.contactPersonPhone.trim()) errors.contactPersonPhone = "Contact phone is required.";
+    return errors;
+  };
 
   const handleSubmit = async () => {
     setError(null);
 
-    if (!values.name.trim() || !values.description.trim() || !values.categoryId) {
-      setError("Name, description, and category are required.");
-      return;
-    }
-    if (!values.startDate || !values.endDate) {
-      setError("Start and end date/time are required.");
-      return;
-    }
-    if (!values.contactPersonName.trim() || !values.contactPersonEmail.trim() || !values.contactPersonPhone.trim()) {
-      setError("Contact person name, email, and phone are required.");
+    const validationErrors = validate();
+    setFieldErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) {
+      toast.error("Fix the highlighted fields before saving.");
+      focusField(FIELD_ORDER.find((key) => validationErrors[key])!);
       return;
     }
 
@@ -85,9 +148,21 @@ export default function EventForm({ bankAccounts, categories, event }: EventForm
     setSubmitting(false);
 
     if (!result.ok) {
-      setError(result.message);
+      const backendErrors = fieldErrorsFromDetails(result.details);
+      if (Object.keys(backendErrors).length > 0) {
+        setFieldErrors(backendErrors);
+        toast.error("Fix the highlighted fields before saving.");
+        const firstKey = FIELD_ORDER.find((key) => backendErrors[key]);
+        if (firstKey) focusField(firstKey);
+      } else {
+        setError(result.message);
+        toast.error(result.message);
+      }
       return;
     }
+
+    setFieldErrors({});
+    toast.success(isEdit ? "Event details updated." : "Event created.");
     router.push(`/dashboard/admin/events/${result.data.slug}`);
     router.refresh();
   };
@@ -95,20 +170,50 @@ export default function EventForm({ bankAccounts, categories, event }: EventForm
   return (
     <div className="space-y-6">
       <Section title="Basics">
-        <FormField wrapperClassName="sm:col-span-2" label="Event name" name="name" value={values.name} onChange={(e) => set("name", e.target.value)} />
+        <FormField
+          required
+          wrapperClassName="sm:col-span-2"
+          label="Event name *"
+          name="name"
+          value={values.name}
+          onChange={(e) => set("name", e.target.value)}
+          error={fieldErrors.name}
+        />
         <label className="field-label sm:col-span-2">
-          Description
-          <textarea className="text-field mt-2 h-32 py-3" value={values.description} onChange={(e) => set("description", e.target.value)} />
+          Description *
+          <textarea
+            required
+            id="description"
+            className={cn("text-field mt-2 h-32 py-3", fieldErrors.description && "!border-red-500")}
+            value={values.description}
+            onChange={(e) => set("description", e.target.value)}
+          />
+          {fieldErrors.description && (
+            <span className="mt-1.5 block text-xs font-semibold normal-case tracking-normal text-red-600">
+              {fieldErrors.description}
+            </span>
+          )}
         </label>
         <label className="field-label">
-          Category
-          <select className="text-field mt-2" value={values.categoryId} onChange={(e) => set("categoryId", e.target.value)}>
+          Category *
+          <select
+            required
+            id="categoryId"
+            className={cn("text-field mt-2", fieldErrors.categoryId && "!border-red-500")}
+            value={values.categoryId}
+            onChange={(e) => set("categoryId", e.target.value)}
+          >
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
               </option>
             ))}
           </select>
+          {fieldErrors.categoryId && (
+            <span className="mt-1.5 block text-xs font-semibold normal-case tracking-normal text-red-600">
+              {fieldErrors.categoryId}
+            </span>
+          )}
         </label>
         <FormField
           label="Max tickets per buyer"
@@ -121,8 +226,24 @@ export default function EventForm({ bankAccounts, categories, event }: EventForm
       </Section>
 
       <Section title="Date & time">
-        <FormField label="Starts" name="startDate" type="datetime-local" value={values.startDate} onChange={(e) => set("startDate", e.target.value)} />
-        <FormField label="Ends" name="endDate" type="datetime-local" value={values.endDate} onChange={(e) => set("endDate", e.target.value)} />
+        <FormField
+          required
+          label="Starts *"
+          name="startDate"
+          type="datetime-local"
+          value={values.startDate}
+          onChange={(e) => set("startDate", e.target.value)}
+          error={fieldErrors.startDate}
+        />
+        <FormField
+          required
+          label="Ends *"
+          name="endDate"
+          type="datetime-local"
+          value={values.endDate}
+          onChange={(e) => set("endDate", e.target.value)}
+          error={fieldErrors.endDate}
+        />
       </Section>
 
       <Section title="Location">
@@ -131,7 +252,13 @@ export default function EventForm({ bankAccounts, categories, event }: EventForm
         <FormField wrapperClassName="sm:col-span-2" label="Address" name="address" value={values.address} onChange={(e) => set("address", e.target.value)} />
         <FormField label="Province" name="province" value={values.province} onChange={(e) => set("province", e.target.value)} />
         <FormField label="Country" name="country" value={values.country} onChange={(e) => set("country", e.target.value)} />
-        <FormField label="Meeting URL (online events)" name="meetingUrl" value={values.meetingUrl} onChange={(e) => set("meetingUrl", e.target.value)} />
+        <FormField
+          label="Meeting URL (online events)"
+          name="meetingUrl"
+          value={values.meetingUrl}
+          onChange={(e) => set("meetingUrl", e.target.value)}
+          error={fieldErrors.meetingUrl}
+        />
         <label className="field-label">
           Meeting platform
           <select
@@ -148,15 +275,31 @@ export default function EventForm({ bankAccounts, categories, event }: EventForm
       </Section>
 
       <Section title="Contact person">
-        <FormField label="Name" name="contactPersonName" value={values.contactPersonName} onChange={(e) => set("contactPersonName", e.target.value)} />
         <FormField
-          label="Email"
+          required
+          label="Name *"
+          name="contactPersonName"
+          value={values.contactPersonName}
+          onChange={(e) => set("contactPersonName", e.target.value)}
+          error={fieldErrors.contactPersonName}
+        />
+        <FormField
+          required
+          label="Email *"
           name="contactPersonEmail"
           type="email"
           value={values.contactPersonEmail}
           onChange={(e) => set("contactPersonEmail", e.target.value)}
+          error={fieldErrors.contactPersonEmail}
         />
-        <FormField label="Phone" name="contactPersonPhone" value={values.contactPersonPhone} onChange={(e) => set("contactPersonPhone", e.target.value)} />
+        <FormField
+          required
+          label="Phone *"
+          name="contactPersonPhone"
+          value={values.contactPersonPhone}
+          onChange={(e) => set("contactPersonPhone", e.target.value)}
+          error={fieldErrors.contactPersonPhone}
+        />
       </Section>
 
       <Section title="Payout">

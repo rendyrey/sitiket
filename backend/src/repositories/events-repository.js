@@ -13,6 +13,24 @@ const withCategory = (query) =>
     );
 
 /**
+ * Adds `tickets_sold`/`revenue` columns via correlated subqueries over paid
+ * orders, instead of a join + GROUP BY (which would need every `event_categories`
+ * column re-declared under MySQL's ONLY_FULL_GROUP_BY).
+ */
+const withSalesStats = (query) => {
+  const paidOrderItems = () =>
+    db("order_items")
+      .join("orders", "orders.id", "order_items.order_id")
+      .where("orders.status", "paid")
+      .whereRaw("orders.event_id = events.id");
+
+  return query.select(
+    db.raw(`COALESCE((${paidOrderItems().sum({ total: "order_items.quantity" }).toString()}), 0) as tickets_sold`),
+    db.raw(`COALESCE((${paidOrderItems().sum({ total: "order_items.subtotal" }).toString()}), 0) as revenue`),
+  );
+};
+
+/**
  * @param {string} id
  * @param {import("knex").Knex} [executor]
  */
@@ -29,6 +47,7 @@ export const findBySlug = (slug) => withCategory(db(TABLE)).where("events.slug",
  * @param {string} [filters.status]
  * @param {string} [filters.ownerId]
  * @param {boolean} [filters.publicOnly] - restrict to status=published AND is_visible=true (the default, unauthenticated catalog view)
+ * @param {boolean} [filters.includeSalesStats] - adds `tickets_sold`/`revenue` from paid orders (owner-facing views only)
  * @param {number} [filters.page]
  * @param {number} [filters.pageSize]
  */
@@ -39,6 +58,7 @@ export const list = async ({
   status,
   ownerId,
   publicOnly = false,
+  includeSalesStats = false,
   page = 1,
   pageSize = 20,
 } = {}) => {
@@ -56,10 +76,10 @@ export const list = async ({
     db(TABLE).leftJoin("event_categories", "event_categories.id", "events.category_id"),
   ).count({ total: "events.id" });
 
-  const rows = await applyFilters(withCategory(db(TABLE)))
-    .orderBy("events.start_date", "asc")
-    .limit(pageSize)
-    .offset((page - 1) * pageSize);
+  let query = applyFilters(withCategory(db(TABLE)));
+  if (includeSalesStats) query = withSalesStats(query);
+
+  const rows = await query.orderBy("events.start_date", "asc").limit(pageSize).offset((page - 1) * pageSize);
 
   return { rows, total: Number(total), page, pageSize };
 };

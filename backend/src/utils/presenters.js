@@ -43,6 +43,9 @@ export const toPublicEvent = (event) => ({
   contactPersonPhone: event.contact_person_phone,
   bankAccountId: event.bank_account_id,
   maxTicketsPerUser: event.max_tickets_per_user,
+  // Only present when the repository query was run with `includeSalesStats` (owner-facing listings).
+  ticketsSold: event.tickets_sold !== undefined ? Number(event.tickets_sold) : undefined,
+  revenue: event.revenue !== undefined ? Number(event.revenue) : undefined,
   createdAt: event.created_at,
   updatedAt: event.updated_at,
 });

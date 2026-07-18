@@ -47,8 +47,12 @@ export const cancel = async (request, response) => {
   response.status(200).json({ data: toPublicOrder(order) });
 };
 
-/** GET /api/events/:eventId/orders — event owner/super_admin, buyer list for one event. */
+/** GET /api/events/:eventId/orders — event owner/super_admin, paginated/filterable buyer list for one event. */
 export const listForEvent = async (request, response) => {
-  const orders = await orderService.listOrdersForEvent(request.params.eventId, request.user);
-  response.status(200).json({ data: orders.map(toPublicOrder) });
+  const { rows, total, page, pageSize } = await orderService.listOrdersForEvent(
+    request.params.eventId,
+    request.user,
+    request.query,
+  );
+  response.status(200).json({ data: rows.map(toPublicOrder), meta: { total, page, pageSize } });
 };

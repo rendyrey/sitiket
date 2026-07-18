@@ -47,3 +47,17 @@ export const resolveForEvent = async (event) => {
 
   return account;
 };
+
+/**
+ * Lists every payout account the event's organizer has configured, so a
+ * buyer can choose which one to transfer to instead of only ever seeing the
+ * single account `resolveForEvent` picks.
+ * @param {{ owner_id: string }} event
+ */
+export const resolveAllForEvent = async (event) => {
+  const accounts = await bankAccountsRepository.listByOwner(event.owner_id);
+  if (accounts.length === 0) {
+    throw conflict("EVENT_OWNER_NO_BANK_ACCOUNT", "This event's organizer has not set up a payout bank account yet");
+  }
+  return accounts;
+};

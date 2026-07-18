@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import toast from "react-hot-toast";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
 import { createBankAccountAction, updateBankAccountAction } from "@/features/admin/lib/actions";
@@ -18,7 +19,9 @@ export default function BankAccountManager({ accounts }: { accounts: BankAccount
   const handleCreate = async () => {
     setError(null);
     if (!bankName.trim() || !accountNumber.trim() || !accountHolderName.trim()) {
-      setError("Fill in all fields.");
+      const message = "Fill in all fields.";
+      setError(message);
+      toast.error(message);
       return;
     }
     setSubmitting(true);
@@ -30,6 +33,7 @@ export default function BankAccountManager({ accounts }: { accounts: BankAccount
     setSubmitting(false);
     if (!result.ok) {
       setError(result.message);
+      toast.error(result.message);
       return;
     }
     setBankName("");
@@ -98,11 +102,25 @@ export default function BankAccountManager({ accounts }: { accounts: BankAccount
       <div className="border-2 border-ink bg-white p-5 sm:p-7">
         <span className="tag">Add bank account</span>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <FormField label="Bank name" name="bankName" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="BCA" />
-          <FormField label="Account number" name="accountNumber" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} />
           <FormField
+            required
+            label="Bank name *"
+            name="bankName"
+            value={bankName}
+            onChange={(e) => setBankName(e.target.value)}
+            placeholder="BCA"
+          />
+          <FormField
+            required
+            label="Account number *"
+            name="accountNumber"
+            value={accountNumber}
+            onChange={(e) => setAccountNumber(e.target.value)}
+          />
+          <FormField
+            required
             wrapperClassName="sm:col-span-2"
-            label="Account holder name"
+            label="Account holder name *"
             name="accountHolderName"
             value={accountHolderName}
             onChange={(e) => setAccountHolderName(e.target.value)}

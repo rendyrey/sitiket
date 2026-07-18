@@ -109,7 +109,8 @@ export const setEventVisibility = async (eventId, requester, isVisible) => {
 export const listPublicEvents = (filters) => eventsRepository.list({ ...filters, publicOnly: true });
 
 /** @param {string} ownerId */
-export const listMyEvents = (ownerId, filters) => eventsRepository.list({ ...filters, ownerId });
+export const listMyEvents = (ownerId, filters) =>
+  eventsRepository.list({ ...filters, ownerId, includeSalesStats: true });
 
 /**
  * @param {string} slug

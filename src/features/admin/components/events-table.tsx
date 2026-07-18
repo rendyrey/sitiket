@@ -4,6 +4,7 @@ import Link from "next/link";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import EventStatusBadge from "./event-status-badge";
 import { formatEventDate } from "@/features/events/lib/format";
+import { formatPrice } from "@/data/events";
 import type { Event } from "@/lib/api/types";
 
 export default function EventsTable({ events }: { events: Event[] }) {
@@ -28,6 +29,18 @@ export default function EventsTable({ events }: { events: Event[] }) {
       header: "Date",
       sortAccessor: (event) => new Date(event.startDate).getTime(),
       render: (event) => formatEventDate(event.startDate),
+    },
+    {
+      key: "ticketsSold",
+      header: "Sold",
+      sortAccessor: (event) => event.ticketsSold ?? 0,
+      align: "right",
+      render: (event) => (
+        <div>
+          <p className="font-black">{event.ticketsSold ?? 0}</p>
+          <p className="text-xs text-black/40">{formatPrice(event.revenue ?? 0)}</p>
+        </div>
+      ),
     },
     {
       key: "status",

@@ -23,3 +23,24 @@ export const verifyGuestOtpSchema = z.object({
 export const guestOrderLookupQuerySchema = z.object({
   email: z.string().email(),
 });
+
+/** `GET /api/events/:eventId/orders` — server-side search/filter/sort/pagination so the admin orders table never loads the full list into the browser. */
+export const listEventOrdersQuerySchema = z.object({
+  search: z.string().max(255).optional(),
+  status: z
+    .enum([
+      "pending_payment",
+      "awaiting_verification",
+      "paid",
+      "expired",
+      "cancelled",
+      "refund_requested",
+      "refunded",
+      "refund_rejected",
+    ])
+    .optional(),
+  sortBy: z.enum(["createdAt", "buyerName"]).optional(),
+  sortDir: z.enum(["asc", "desc"]).optional(),
+  page: z.coerce.number().int().positive().optional(),
+  pageSize: z.coerce.number().int().positive().max(100).optional(),
+});

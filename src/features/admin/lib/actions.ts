@@ -11,6 +11,7 @@ import {
   toRefundRequest,
   toTicketType,
 } from "@/lib/api/normalize";
+import { listEventOrders, listOrderPayments, listOrderRefundRequests } from "@/features/admin/lib/api";
 import type {
   CreateBankAccountRequest,
   CreateEventRequest,
@@ -19,6 +20,7 @@ import type {
   Event,
   EventStatus,
   InviteEventStaffRequest,
+  ListEventOrdersQuery,
   RawBankAccount,
   RawEventImage,
   RawEventStaff,
@@ -143,5 +145,22 @@ export async function completeRefundAction(refundRequestId: string, notes?: stri
   return toActionResult(
     () => apiFetch<RawRefundRequest>(`/api/refund-requests/${refundRequestId}/complete`, { method: "POST", body: { notes } }),
     toRefundRequest,
+  );
+}
+
+// ---- Orders (admin orders table) ----
+
+/** Called directly from the client on every search/filter/sort/page change — keeps the orders table AJAX-driven. */
+export async function listEventOrdersAction(eventId: string, query?: ListEventOrdersQuery) {
+  return toActionResult(() => listEventOrders(eventId, query));
+}
+
+/** Lazily fetched only when a row is expanded — payment proofs + refund requests for one order. */
+export async function getOrderReviewAction(orderId: string) {
+  return toActionResult(() =>
+    Promise.all([listOrderPayments(orderId), listOrderRefundRequests(orderId)]).then(([payments, refundRequests]) => ({
+      payments,
+      refundRequests,
+    })),
   );
 }

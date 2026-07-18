@@ -95,6 +95,10 @@ export interface Event {
   /** `null` means "resolve to the owner's default BankAccount at checkout time". */
   bankAccountId: Uuid | null;
   maxTicketsPerUser: number;
+  /** Tickets from `paid` orders. Only populated on owner-facing listings (e.g. the admin dashboard). */
+  ticketsSold?: number;
+  /** Gross revenue (pre-discount) from `paid` orders. Only populated on owner-facing listings. */
+  revenue?: number;
   createdAt: IsoDateTimeString;
   updatedAt: IsoDateTimeString;
 }
@@ -398,11 +402,19 @@ export interface TaxonomyItem {
   updatedAt: IsoDateTimeString;
 }
 
-/** `GET /orders/:orderId/payments/instructions` — where + how much a buyer should transfer. */
-export interface PaymentInstructions {
+/** One payout account a buyer may transfer to, as surfaced by the payment instructions endpoint. */
+export interface PaymentInstructionsBankAccount {
+  id: string;
   bankName: string;
   accountNumber: string;
   accountHolderName: string;
+  /** True for the organizer's default (or event-overridden) account. */
+  isRecommended: boolean;
+}
+
+/** `GET /orders/:orderId/payments/instructions` — where + how much a buyer should transfer. */
+export interface PaymentInstructions {
+  bankAccounts: PaymentInstructionsBankAccount[];
   amount: RupiahAmount;
 }
 
@@ -420,6 +432,12 @@ export interface ApiErrorBody {
   code: string;
   message: string;
   details?: unknown;
+}
+
+/** One Zod issue as returned by the backend's `validate` middleware in `error.details`. */
+export interface ValidationIssue {
+  path: (string | number)[];
+  message: string;
 }
 
 // ============================================================================
@@ -497,6 +515,17 @@ export interface ListEventsQuery {
   city?: string;
   search?: string;
   status?: EventStatus;
+  page?: number;
+  pageSize?: number;
+}
+
+/** `GET /api/events/:eventId/orders` — server-side search/filter/sort/pagination for the admin orders table. */
+export interface ListEventOrdersQuery {
+  /** Matches buyer name or email. */
+  search?: string;
+  status?: OrderStatus;
+  sortBy?: "createdAt" | "buyerName";
+  sortDir?: "asc" | "desc";
   page?: number;
   pageSize?: number;
 }

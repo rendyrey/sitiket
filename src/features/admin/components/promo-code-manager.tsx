@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import toast from "react-hot-toast";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
 import { createPromoCodeAction, updatePromoCodeAction } from "@/features/admin/lib/actions";
@@ -19,11 +20,15 @@ export default function PromoCodeManager({ eventId, promoCodes }: { eventId: str
   const handleCreate = async () => {
     setError(null);
     if (!code.trim() || discountValue <= 0 || maxUses <= 0) {
-      setError("Fill in a code, a positive discount value, and a positive usage limit.");
+      const message = "Fill in a code, a positive discount value, and a positive usage limit.";
+      setError(message);
+      toast.error(message);
       return;
     }
     if (discountType === "percentage" && discountValue > 100) {
-      setError("A percentage discount cannot exceed 100.");
+      const message = "A percentage discount cannot exceed 100.";
+      setError(message);
+      toast.error(message);
       return;
     }
     setSubmitting(true);
@@ -31,6 +36,7 @@ export default function PromoCodeManager({ eventId, promoCodes }: { eventId: str
     setSubmitting(false);
     if (!result.ok) {
       setError(result.message);
+      toast.error(result.message);
       return;
     }
     setCode("");
@@ -94,21 +100,28 @@ export default function PromoCodeManager({ eventId, promoCodes }: { eventId: str
         <span className="tag">Add promo code</span>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <FormField
-            label="Code"
+            required
+            label="Code *"
             name="code"
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
             placeholder="EARLYBIRD10"
           />
           <label className="field-label">
-            Discount type
-            <select className="text-field mt-2" value={discountType} onChange={(e) => setDiscountType(e.target.value as DiscountType)}>
+            Discount type *
+            <select
+              required
+              className="text-field mt-2"
+              value={discountType}
+              onChange={(e) => setDiscountType(e.target.value as DiscountType)}
+            >
               <option value="percentage">Percentage</option>
               <option value="fixed_amount">Fixed amount (IDR)</option>
             </select>
           </label>
           <FormField
-            label={discountType === "percentage" ? "Discount (%)" : "Discount (IDR)"}
+            required
+            label={discountType === "percentage" ? "Discount (%) *" : "Discount (IDR) *"}
             name="discountValue"
             type="number"
             min={0}
@@ -116,7 +129,8 @@ export default function PromoCodeManager({ eventId, promoCodes }: { eventId: str
             onChange={(e) => setDiscountValue(Number(e.target.value))}
           />
           <FormField
-            label="Usage limit"
+            required
+            label="Usage limit *"
             name="maxUses"
             type="number"
             min={1}
