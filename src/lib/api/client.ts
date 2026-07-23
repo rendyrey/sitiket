@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers as nextHeaders } from "next/headers";
 import { env } from "@/lib/env";
 import { SESSION_COOKIE_NAME } from "@/lib/session-cookie";
 import { ApiError } from "./errors";
@@ -47,6 +47,29 @@ export const apiRequest = async <TResponse = unknown>(
 
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
+
+  // Forward the real client IP to the backend. Every backend call is made
+  // server-to-server (this Next.js server -> backend at 127.0.0.1), so without
+  // this the backend sees the loopback address and its per-IP rate limiters
+  // (authLimiter on sign-in, writeLimiter on orders/check-in) would bucket
+  // every visitor together. nginx sets X-Real-IP / X-Forwarded-For on the
+  // inbound request; we relay that single client IP onward. Wrapped in
+  // try/catch because `nextHeaders()` throws outside a request scope (e.g. at
+  // build time), where there is no client IP to forward.
+  try {
+    const incoming = await nextHeaders();
+    // Prefer X-Real-IP (nginx sets it to the untrusted $remote_addr, so it is
+    // not client-spoofable); fall back to the last X-Forwarded-For entry, which
+    // is the address our own nginx appended. Example: "1.2.3.4".
+    const forwardedFor = incoming.get("x-forwarded-for");
+    const clientIp = incoming.get("x-real-ip") ?? forwardedFor?.split(",").pop()?.trim();
+    if (clientIp) {
+      headers["X-Forwarded-For"] = clientIp;
+      headers["X-Real-IP"] = clientIp;
+    }
+  } catch {
+    // No request scope (build/prerender) — nothing to forward.
+  }
 
   let body: BodyInit | undefined;
   if (options.formData) {
