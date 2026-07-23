@@ -25,8 +25,11 @@ import { ticketRouter } from "./routes/tickets.js";
 import { userRouter } from "./routes/users.js";
 
 export const app = express();
+// Trust exactly one reverse proxy: Nginx
+app.set('trust proxy', 1);
 
 app.use(cors({ origin: env.FRONTEND_URL }));
+
 app.use(express.json());
 app.use("/uploads", express.static(env.UPLOAD_DIR));
 
