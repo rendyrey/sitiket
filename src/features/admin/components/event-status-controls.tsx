@@ -5,12 +5,10 @@ import { useState } from "react";
 import { changeEventStatusAction, setEventVisibilityAction } from "@/features/admin/lib/actions";
 import type { Event, EventStatus } from "@/lib/api/types";
 
-const NEXT_STATUSES: Record<EventStatus, EventStatus[]> = {
-  draft: ["published", "cancelled"],
-  published: ["completed", "cancelled"],
-  cancelled: [],
-  completed: [],
-};
+// Status can move freely between any of the four values (no one-way state
+// machine — the backend accepts any transition). Example: from "completed"
+// the admin can go back to "published".
+const ALL_STATUSES: EventStatus[] = ["draft", "published", "cancelled", "completed"];
 
 export default function EventStatusControls({ event }: { event: Event }) {
   const router = useRouter();
@@ -41,7 +39,8 @@ export default function EventStatusControls({ event }: { event: Event }) {
     router.refresh();
   };
 
-  const nextStatuses = NEXT_STATUSES[event.status];
+  // Every status except the one the event is already in.
+  const nextStatuses = ALL_STATUSES.filter((status) => status !== event.status);
 
   return (
     <div className="border-2 border-ink bg-white p-5 sm:p-7">
@@ -58,7 +57,6 @@ export default function EventStatusControls({ event }: { event: Event }) {
             Move to {status}
           </button>
         ))}
-        {nextStatuses.length === 0 && <span className="text-sm text-black/40">No further status changes available.</span>}
       </div>
       <div className="mt-5 flex items-center gap-3 border-t border-black/10 pt-5">
         <button

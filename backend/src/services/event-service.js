@@ -2,15 +2,8 @@ import { eventCategoriesRepository } from "../repositories/event-categories-repo
 import * as bankAccountsRepository from "../repositories/bank-accounts-repository.js";
 import * as eventsRepository from "../repositories/events-repository.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
-import { badRequest, conflict, notFound } from "../utils/http-error.js";
+import { badRequest, notFound } from "../utils/http-error.js";
 import { slugify } from "../utils/slugify.js";
-
-const ALLOWED_STATUS_TRANSITIONS = {
-  draft: ["published", "cancelled"],
-  published: ["completed", "cancelled"],
-  cancelled: [],
-  completed: [],
-};
 
 /**
  * Generates a unique slug from the event name, appending a short suffix on
@@ -83,10 +76,9 @@ export const changeEventStatus = async (eventId, requester, nextStatus) => {
   if (!event) throw notFound("EVENT_NOT_FOUND", "Event not found");
   assertEventOwnerOrSuperAdmin(event, requester);
 
-  if (!ALLOWED_STATUS_TRANSITIONS[event.status]?.includes(nextStatus)) {
-    throw conflict("INVALID_STATUS_TRANSITION", `Cannot move an event from "${event.status}" to "${nextStatus}"`);
-  }
-
+  // Status may move freely between any of the four valid statuses (the schema
+  // restricts nextStatus to draft|published|cancelled|completed). No one-way
+  // state machine — e.g. completed can go back to published.
   await eventsRepository.updateStatus(eventId, nextStatus);
   return eventsRepository.findById(eventId);
 };
