@@ -60,6 +60,9 @@ export default function OrderDetail({ payments, refundRequests, onChanged }: Ord
               </a>
               <div className="min-w-0 flex-1">
                 <span className="text-xs font-bold uppercase">{payment.status}</span>
+                <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-black/40">
+                  {payment.method === "qris" ? "QRIS" : "Bank transfer"}
+                </span>
                 {payment.transferNote && <p className="mt-1 truncate text-xs text-black/50">{payment.transferNote}</p>}
               </div>
               {payment.status === "pending_review" && (

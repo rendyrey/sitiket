@@ -3,25 +3,38 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import FormField from "@/components/ui/form-field";
+import type { PaymentMethod } from "@/lib/api/types";
 import { submitPaymentProofAction } from "../lib/actions";
 
-export default function PaymentProofForm({ guestEmail, orderId }: { guestEmail?: string; orderId: string }) {
+type PaymentProofFormProps = {
+  guestEmail?: string;
+  orderId: string;
+  /** Which methods the instructions offered — the radio only shows when there's a real choice. */
+  hasBankTransfer: boolean;
+  hasQris: boolean;
+};
+
+export default function PaymentProofForm({ guestEmail, hasBankTransfer, hasQris, orderId }: PaymentProofFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [method, setMethod] = useState<PaymentMethod>(hasBankTransfer ? "bank_transfer" : "qris");
   const [transferNote, setTransferNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const showMethodChoice = hasBankTransfer && hasQris;
 
   const handleSubmit = async () => {
     setError(null);
     const file = fileInputRef.current?.files?.[0];
     if (!file) {
-      setError("Attach a screenshot or photo of your transfer receipt.");
+      setError("Attach a screenshot or photo of your payment receipt.");
       return;
     }
 
     const formData = new FormData();
     formData.append("proof", file);
+    formData.append("method", method);
     if (transferNote.trim()) formData.append("transferNote", transferNote.trim());
     if (guestEmail) formData.append("guestEmail", guestEmail);
 
@@ -37,16 +50,43 @@ export default function PaymentProofForm({ guestEmail, orderId }: { guestEmail?:
 
   return (
     <div className="border-2 border-ink bg-white p-5 sm:p-7">
-      <span className="tag">Upload proof of transfer</span>
+      <span className="tag">Upload proof of payment</span>
       <div className="mt-5 space-y-4">
+        {showMethodChoice && (
+          <fieldset>
+            <legend className="field-label">How did you pay?</legend>
+            <div className="mt-2 flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <input
+                  type="radio"
+                  name="method"
+                  checked={method === "bank_transfer"}
+                  onChange={() => setMethod("bank_transfer")}
+                  className="border-black text-black focus:ring-lime"
+                />
+                Bank transfer
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <input
+                  type="radio"
+                  name="method"
+                  checked={method === "qris"}
+                  onChange={() => setMethod("qris")}
+                  className="border-black text-black focus:ring-lime"
+                />
+                QRIS
+              </label>
+            </div>
+          </fieldset>
+        )}
         <label className="field-label">
-          Transfer receipt (JPEG, PNG, or WEBP)
+          Payment receipt (JPEG, PNG, or WEBP)
           <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="text-field h-auto py-3" />
         </label>
         <FormField
           label="Note (optional)"
           name="transferNote"
-          placeholder="E.g. transferred from BCA mobile banking"
+          placeholder={method === "qris" ? "E.g. paid via GoPay" : "E.g. transferred from BCA mobile banking"}
           value={transferNote}
           onChange={(event) => setTransferNote(event.target.value)}
         />

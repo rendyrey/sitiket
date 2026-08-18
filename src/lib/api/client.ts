@@ -5,7 +5,7 @@ import { ApiError } from "./errors";
 import type { ApiPageMeta } from "./types";
 
 export interface ApiRequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** JSON-serializable request body. Mutually exclusive with `formData`. */
   body?: unknown;
   /** multipart/form-data body (event image / payment proof uploads). */

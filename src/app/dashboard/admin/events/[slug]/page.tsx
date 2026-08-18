@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import EventForm from "@/features/admin/components/event-form";
 import EventStatusControls from "@/features/admin/components/event-status-controls";
 import EventTabs from "@/features/admin/components/event-tabs";
-import { listBankAccounts } from "@/features/admin/lib/api";
+import { getMyQrisConfig, listBankAccounts } from "@/features/admin/lib/api";
 import { getEventBySlug, listEventCategories } from "@/features/events/lib/api";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -18,7 +18,11 @@ export default async function AdminEventDetailPage({ params }: Props) {
   const event = await getEventBySlug(slug);
   if (!event) notFound();
 
-  const [categories, bankAccounts] = await Promise.all([listEventCategories(), listBankAccounts()]);
+  const [categories, bankAccounts, qrisConfig] = await Promise.all([
+    listEventCategories(),
+    listBankAccounts(),
+    getMyQrisConfig(),
+  ]);
 
   return (
     <div>
@@ -28,7 +32,7 @@ export default async function AdminEventDetailPage({ params }: Props) {
       </div>
       <div className="mt-8 max-w-3xl space-y-6">
         <EventStatusControls event={event} />
-        <EventForm event={event} categories={categories} bankAccounts={bankAccounts} />
+        <EventForm event={event} categories={categories} bankAccounts={bankAccounts} qrisConfig={qrisConfig} />
       </div>
     </div>
   );

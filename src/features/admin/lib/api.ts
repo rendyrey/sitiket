@@ -3,7 +3,9 @@ import {
   toBankAccount,
   toEventStaff,
   toOrderPayment,
+  toOrganizerEmailConfig,
   toPromoCode,
+  toQrisConfig,
   toRefundRequest,
   toTicketType,
 } from "@/lib/api/normalize";
@@ -16,11 +18,15 @@ import type {
   ListEventsQuery,
   Order,
   OrderPayment,
+  OrganizerEmailConfig,
   PromoCode,
+  QrisConfig,
   RawBankAccount,
   RawEventStaffWithUser,
   RawOrderPayment,
+  RawOrganizerEmailConfig,
   RawPromoCode,
+  RawQrisConfig,
   RawRefundRequest,
   RawRefundRequestWithOrderContext,
   RawTicketType,
@@ -63,6 +69,22 @@ export const listEventStaff = async (eventId: string): Promise<EventStaff[]> => 
 export const listBankAccounts = async (): Promise<BankAccount[]> => {
   const raw = await apiFetch<RawBankAccount[]>("/api/bank-accounts");
   return raw.map(toBankAccount);
+};
+
+// ---- QRIS config ----
+
+/** Server-only. The signed-in admin's QRIS code, or `null` if not set up. */
+export const getMyQrisConfig = async (): Promise<QrisConfig | null> => {
+  const raw = await apiFetch<RawQrisConfig | null>("/api/qris-config");
+  return raw ? toQrisConfig(raw) : null;
+};
+
+// ---- Organizer email config ----
+
+/** Server-only. The signed-in admin's outbound email config (password never included), or `null`. */
+export const getMyEmailConfig = async (): Promise<OrganizerEmailConfig | null> => {
+  const raw = await apiFetch<RawOrganizerEmailConfig | null>("/api/email-config");
+  return raw ? toOrganizerEmailConfig(raw) : null;
 };
 
 // ---- Orders / payments / refunds for an event ----

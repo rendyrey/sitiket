@@ -7,7 +7,9 @@ import {
   toEventImage,
   toEventStaff,
   toOrderPayment,
+  toOrganizerEmailConfig,
   toPromoCode,
+  toQrisConfig,
   toRefundRequest,
   toTicketType,
 } from "@/lib/api/normalize";
@@ -25,9 +27,12 @@ import type {
   RawEventImage,
   RawEventStaff,
   RawOrderPayment,
+  RawOrganizerEmailConfig,
   RawPromoCode,
+  RawQrisConfig,
   RawRefundRequest,
   RawTicketType,
+  SaveEmailConfigRequest,
   UpdateBankAccountRequest,
   UpdateEventRequest,
   UpdatePromoCodeRequest,
@@ -107,6 +112,27 @@ export async function createBankAccountAction(input: CreateBankAccountRequest) {
 
 export async function updateBankAccountAction(bankAccountId: string, input: UpdateBankAccountRequest) {
   return toActionResult(() => apiFetch<RawBankAccount>(`/api/bank-accounts/${bankAccountId}`, { method: "PATCH", body: input }), toBankAccount);
+}
+
+// ---- QRIS config ----
+
+/** `formData` must contain `merchantName`, plus a `qrisImage` file field (optional when only renaming). */
+export async function saveQrisConfigAction(formData: FormData) {
+  return toActionResult(() => apiFetch<RawQrisConfig>("/api/qris-config", { method: "PUT", formData }), toQrisConfig);
+}
+
+export async function removeQrisConfigAction() {
+  return toActionResult(() => apiFetch<{ removed: boolean }>("/api/qris-config", { method: "DELETE" }));
+}
+
+// ---- Organizer email config ----
+
+/** The backend live-verifies the SMTP credentials before saving — a slow round-trip is expected. */
+export async function saveEmailConfigAction(input: SaveEmailConfigRequest) {
+  return toActionResult(
+    () => apiFetch<RawOrganizerEmailConfig>("/api/email-config", { method: "PUT", body: input }),
+    toOrganizerEmailConfig,
+  );
 }
 
 // ---- Payment review ----

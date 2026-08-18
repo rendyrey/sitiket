@@ -5,8 +5,9 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import cn from "@/utils/class-names";
 import FormField from "@/components/ui/form-field";
+import Link from "next/link";
 import { createEventAction, updateEventAction } from "@/features/admin/lib/actions";
-import type { BankAccount, CreateEventRequest, Event, MeetingPlatform, TaxonomyItem, ValidationIssue } from "@/lib/api/types";
+import type { BankAccount, CreateEventRequest, Event, MeetingPlatform, QrisConfig, TaxonomyItem, ValidationIssue } from "@/lib/api/types";
 
 /** `datetime-local` inputs need `"YYYY-MM-DDTHH:mm"`; ISO strings round-trip fine through `Date`. */
 const toDateTimeLocal = (iso?: string) => (iso ? new Date(iso).toISOString().slice(0, 16) : "");
@@ -54,9 +55,11 @@ type EventFormProps = {
   bankAccounts: BankAccount[];
   categories: TaxonomyItem[];
   event?: Event;
+  /** The owner's QRIS code, or `null` — the QRIS toggle is locked until one exists. */
+  qrisConfig: QrisConfig | null;
 };
 
-export default function EventForm({ bankAccounts, categories, event }: EventFormProps) {
+export default function EventForm({ bankAccounts, categories, event, qrisConfig }: EventFormProps) {
   const router = useRouter();
   const isEdit = Boolean(event);
 
@@ -77,6 +80,7 @@ export default function EventForm({ bankAccounts, categories, event }: EventForm
     contactPersonEmail: event?.contactPersonEmail ?? "",
     contactPersonPhone: event?.contactPersonPhone ?? "",
     bankAccountId: event?.bankAccountId ?? "",
+    qrisEnabled: event?.qrisEnabled ?? false,
     maxTicketsPerUser: event?.maxTicketsPerUser ?? 10,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -140,6 +144,7 @@ export default function EventForm({ bankAccounts, categories, event }: EventForm
       contactPersonEmail: values.contactPersonEmail.trim(),
       contactPersonPhone: values.contactPersonPhone.trim(),
       bankAccountId: values.bankAccountId || undefined,
+      qrisEnabled: values.qrisEnabled,
       maxTicketsPerUser: values.maxTicketsPerUser,
     };
 
@@ -319,6 +324,27 @@ export default function EventForm({ bankAccounts, categories, event }: EventForm
             </span>
           )}
         </label>
+        <div className="sm:col-span-2">
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={values.qrisEnabled}
+              disabled={!qrisConfig}
+              onChange={(e) => set("qrisEnabled", e.target.checked)}
+              className="border-black text-black focus:ring-lime disabled:opacity-40"
+            />
+            Accept QRIS payments{qrisConfig ? ` (${qrisConfig.merchantName})` : ""}
+          </label>
+          {!qrisConfig && (
+            <span className="mt-2 block text-xs font-semibold text-black/50">
+              Upload your QRIS code under{" "}
+              <Link href="/dashboard/admin/qris" className="underline">
+                QRIS
+              </Link>{" "}
+              first to enable this.
+            </span>
+          )}
+        </div>
       </Section>
 
       {error && <p className="border-2 border-red-500/60 bg-red-500/5 p-4 text-sm font-semibold text-red-700">{error}</p>}

@@ -45,6 +45,8 @@ export type OrderStatus =
   | "refunded"
   | "refund_rejected";
 export type OrderPaymentStatus = "pending_review" | "approved" | "rejected";
+export type PaymentMethod = "bank_transfer" | "qris";
+export type EmailProvider = "gmail" | "custom";
 export type RefundStatus = "requested" | "approved" | "rejected" | "completed";
 export type TicketStatus = "issued" | "used" | "void";
 export type CheckInResult = "success" | "duplicate" | "invalid" | "expired";
@@ -94,6 +96,8 @@ export interface Event {
   contactPersonPhone: string;
   /** `null` means "resolve to the owner's default BankAccount at checkout time". */
   bankAccountId: Uuid | null;
+  /** Buyers may pay by scanning the organizer's QRIS code (requires the owner's QrisConfig). */
+  qrisEnabled: boolean;
   maxTicketsPerUser: number;
   /** Tickets from `paid` orders. Only populated on owner-facing listings (e.g. the admin dashboard). */
   ticketsSold?: number;
@@ -240,7 +244,9 @@ export interface RawPromoCode {
 export interface RawOrderPayment {
   id: Uuid;
   order_id: Uuid;
-  bank_account_id: Uuid;
+  /** `null` for QRIS payments — there is no payout bank account involved. */
+  bank_account_id: Uuid | null;
+  method: PaymentMethod;
   amount: RupiahAmount;
   proof_image_url: string;
   transfer_note: string | null;
@@ -268,6 +274,35 @@ export interface RawRefundRequest {
 export interface RawRefundRequestWithOrderContext extends RawRefundRequest {
   event_id: Uuid;
   total_amount: RupiahAmount;
+}
+
+/** The organizer's static QRIS code — one per owner, `GET/PUT/DELETE /qris-config`. */
+export interface RawQrisConfig {
+  id: Uuid;
+  owner_id: Uuid;
+  merchant_name: string;
+  qris_image_url: string;
+  created_at: IsoDateTimeString;
+  updated_at: IsoDateTimeString;
+}
+
+/**
+ * The organizer's outbound SMTP identity — one per owner, `GET/PUT
+ * /email-config`. The stored password never leaves the backend; rows arrive
+ * with `smtp_password_encrypted` already stripped.
+ */
+export interface RawOrganizerEmailConfig {
+  id: Uuid;
+  owner_id: Uuid;
+  provider: EmailProvider;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_secure: MysqlRawBoolean;
+  from_email: string;
+  from_name: string | null;
+  verified_at: IsoDateTimeString | null;
+  created_at: IsoDateTimeString;
+  updated_at: IsoDateTimeString;
 }
 
 export interface RawTaxonomy {
@@ -365,7 +400,9 @@ export interface PromoCode {
 export interface OrderPayment {
   id: Uuid;
   orderId: Uuid;
-  bankAccountId: Uuid;
+  /** `null` for QRIS payments. */
+  bankAccountId: Uuid | null;
+  method: PaymentMethod;
   amount: RupiahAmount;
   proofImageUrl: string;
   transferNote: string | null;
@@ -392,6 +429,29 @@ export interface RefundRequest {
   totalAmount?: RupiahAmount;
 }
 
+export interface QrisConfig {
+  id: Uuid;
+  ownerId: Uuid;
+  merchantName: string;
+  qrisImageUrl: string;
+  createdAt: IsoDateTimeString;
+  updatedAt: IsoDateTimeString;
+}
+
+export interface OrganizerEmailConfig {
+  id: Uuid;
+  ownerId: Uuid;
+  provider: EmailProvider;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  fromEmail: string;
+  fromName: string | null;
+  verifiedAt: IsoDateTimeString | null;
+  createdAt: IsoDateTimeString;
+  updatedAt: IsoDateTimeString;
+}
+
 export interface TaxonomyItem {
   id: Uuid;
   name: string;
@@ -412,9 +472,19 @@ export interface PaymentInstructionsBankAccount {
   isRecommended: boolean;
 }
 
-/** `GET /orders/:orderId/payments/instructions` — where + how much a buyer should transfer. */
+/** The organizer's QRIS code as surfaced to a buyer by the payment instructions endpoint. */
+export interface PaymentInstructionsQris {
+  merchantName: string;
+  /** Backend-relative path (`/uploads/...`) — resolve with `toAssetUrl` before rendering. */
+  qrisImageUrl: string;
+}
+
+/** `GET /orders/:orderId/payments/instructions` — every way a buyer can pay + how much. */
 export interface PaymentInstructions {
+  /** May be empty when the organizer only accepts QRIS. */
   bankAccounts: PaymentInstructionsBankAccount[];
+  /** `null` unless the event enabled QRIS and the organizer has a QRIS code. */
+  qris: PaymentInstructionsQris | null;
   amount: RupiahAmount;
 }
 
@@ -504,10 +574,29 @@ export interface CreateEventRequest {
   contactPersonEmail: string;
   contactPersonPhone: string;
   bankAccountId?: Uuid;
+  /** Requires the owner to have a QrisConfig — the backend rejects it otherwise (`QRIS_CONFIG_MISSING`). */
+  qrisEnabled?: boolean;
   maxTicketsPerUser?: number;
 }
 
 export type UpdateEventRequest = Partial<CreateEventRequest>;
+
+/**
+ * `PUT /email-config`. Gmail rows carry no host/port — the backend applies
+ * its Gmail preset (smtp.gmail.com:465). The backend live-verifies the
+ * credentials before saving (`EMAIL_CONFIG_VERIFICATION_FAILED` on failure).
+ */
+export type SaveEmailConfigRequest =
+  | { provider: "gmail"; email: string; password: string; fromName?: string }
+  | {
+      provider: "custom";
+      email: string;
+      password: string;
+      fromName?: string;
+      host: string;
+      port: number;
+      secure?: boolean;
+    };
 
 export interface ListEventsQuery {
   /** An `event_categories.slug`, not an id. */

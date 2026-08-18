@@ -25,7 +25,10 @@ const minPrice = (ticketTypes: TicketType[]): number => (ticketTypes.length ? Ma
  * `src/data/events.ts` mocks to the real API.
  */
 export const toEventItem = (event: Event, ticketTypes: TicketType[], images: EventImage[]): EventItem => {
-  const poster = images.find((image) => image.isPoster);
+  // Prefer the designated poster, but fall back to the first uploaded image —
+  // the poster flag requires an exact Instagram resolution, so many organizers
+  // only ever have gallery images and the cards/hero rendered no artwork at all.
+  const poster = images.find((image) => image.isPoster) ?? images[0];
 
   return {
     slug: event.slug,

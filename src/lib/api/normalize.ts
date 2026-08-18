@@ -4,14 +4,18 @@ import type {
   EventImage,
   EventStaff,
   OrderPayment,
+  OrganizerEmailConfig,
   PromoCode,
+  QrisConfig,
   RawAdminApplication,
   RawBankAccount,
   RawEventImage,
   RawEventStaff,
   RawEventStaffWithUser,
   RawOrderPayment,
+  RawOrganizerEmailConfig,
   RawPromoCode,
+  RawQrisConfig,
   RawRefundRequest,
   RawRefundRequestWithOrderContext,
   RawTaxonomy,
@@ -103,10 +107,34 @@ export const toPromoCode = (raw: RawPromoCode): PromoCode => ({
   updatedAt: raw.updated_at,
 });
 
+export const toQrisConfig = (raw: RawQrisConfig): QrisConfig => ({
+  id: raw.id,
+  ownerId: raw.owner_id,
+  merchantName: raw.merchant_name,
+  qrisImageUrl: raw.qris_image_url,
+  createdAt: raw.created_at,
+  updatedAt: raw.updated_at,
+});
+
+export const toOrganizerEmailConfig = (raw: RawOrganizerEmailConfig): OrganizerEmailConfig => ({
+  id: raw.id,
+  ownerId: raw.owner_id,
+  provider: raw.provider,
+  smtpHost: raw.smtp_host,
+  smtpPort: raw.smtp_port,
+  smtpSecure: raw.smtp_secure === 1,
+  fromEmail: raw.from_email,
+  fromName: raw.from_name,
+  verifiedAt: raw.verified_at,
+  createdAt: raw.created_at,
+  updatedAt: raw.updated_at,
+});
+
 export const toOrderPayment = (raw: RawOrderPayment): OrderPayment => ({
   id: raw.id,
   orderId: raw.order_id,
   bankAccountId: raw.bank_account_id,
+  method: raw.method,
   amount: raw.amount,
   proofImageUrl: raw.proof_image_url,
   transferNote: raw.transfer_note,

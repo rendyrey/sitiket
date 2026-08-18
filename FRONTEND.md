@@ -18,14 +18,16 @@ Public:
 - `/events`: event catalog, real category filters, search
 - `/events/[slug]`: event details
 - `/checkout/[slug]`: real checkout — multiple ticket types, promo code, guest or signed-in
-- `/orders/[id]` (+ `?email=` for guests): order status — guest OTP verify, bank-transfer instructions, payment-proof upload, QR tickets, refund request
+- `/orders/[id]` (+ `?email=` for guests): order status — guest OTP verify, payment instructions (bank transfer and/or the organizer's QRIS code, per what the event offers), payment-proof upload with a paid-by method choice, QR tickets, refund request
 - `/login`: Google Sign-In
 
 Signed-in:
 - `/account`: purchase history, "my tickets" (QR codes), apply-for-Admin form
 
 Admin (event owner), under `/dashboard/admin`:
-- `/dashboard/admin`, `/events/new`, `/events/[slug]` (+ `/images`, `/ticket-types`, `/promo-codes`, `/staff`, `/orders`), `/bank-accounts`, `/refunds`
+- `/dashboard/admin`, `/events/new`, `/events/[slug]` (+ `/images`, `/ticket-types`, `/promo-codes`, `/staff`, `/orders`), `/bank-accounts`, `/qris`, `/email-settings`, `/refunds`
+- `/qris`: upload/replace the owner's static QRIS code (one per owner); each event then opts in via the "Accept QRIS payments" toggle on its Details form (backend rejects enabling without a config — `QRIS_CONFIG_MISSING`)
+- `/email-settings`: the owner's outbound SMTP identity (Gmail preset needs only email + Google App Password; custom providers spell out host/port/TLS). Saving live-verifies the credentials. **Required before creating events** — `/events/new` blocks with a link here when `GET /api/email-config` returns null (backend enforces it too with 409 `EMAIL_CONFIG_REQUIRED`)
 
 Super Admin, under `/dashboard/super-admin`:
 - `/dashboard/super-admin` (applications), `/users`, `/event-categories`, `/ticket-categories`
@@ -76,6 +78,7 @@ Avoid premature abstraction: extract repeated behavior or a clear standalone res
 - **All backend reads**: a Server Component calls a feature's `lib/api.ts`, which calls `lib/api/client.ts` (`apiFetch`/`apiFetchPage`) — this reads the session cookie automatically and throws `ApiError` on a non-2xx response. Never fetch the backend directly from a Client Component.
 - **All backend writes**: a Client Component calls a feature's `lib/actions.ts` Server Action directly (not via `<form action>`) and branches on the returned `{ ok: true, data } | { ok: false, message }` (see `lib/api/action-result.ts`), then calls `router.refresh()` on success to re-fetch fresh server data.
 - **Wire-shape gotcha**: only 4 backend entities (User, Event, Order, Ticket) are camelCase with real booleans; the rest are raw snake_case rows with `0/1` for booleans. `lib/api/normalize.ts` converts each into a clean camelCase type of the same name — see the comment block at the top of `lib/api/types.ts` before adding a new entity.
+- **Event artwork**: `features/events/lib/to-event-item.ts` prefers the designated poster image but falls back to the first uploaded image — organizers rarely have an exact-resolution poster, and cards/hero must still show artwork. Backend-relative `/uploads/...` paths always resolve through `toAssetUrl` (`lib/public-env.ts`), which is also why `NEXT_PUBLIC_API_ORIGIN` must be the real public origin at build time.
 - Checkout/order totals are always the backend's numbers (`Order.totalAmount`, etc.) — the checkout form computes a client-side subtotal for display only; the authoritative total (incl. any promo discount) comes back from `POST /api/orders`.
 
 ## Design conventions

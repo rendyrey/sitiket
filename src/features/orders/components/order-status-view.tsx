@@ -29,11 +29,18 @@ export default function OrderStatusView({ guestEmail, isGuest, order, paymentIns
               <BankTransferInstructions instructions={paymentInstructions} />
             ) : (
               <p className="border-2 border-red-500/60 bg-red-500/5 p-5 text-sm font-semibold text-red-700">
-                The organizer hasn&apos;t set up a payout account yet — please check back shortly or contact them
+                The organizer hasn&apos;t set up a payment method yet — please check back shortly or contact them
                 directly.
               </p>
             )}
-            {paymentInstructions && <PaymentProofForm orderId={order.id} guestEmail={guestEmail} />}
+            {paymentInstructions && (
+              <PaymentProofForm
+                orderId={order.id}
+                guestEmail={guestEmail}
+                hasBankTransfer={paymentInstructions.bankAccounts.length > 0}
+                hasQris={paymentInstructions.qris !== null}
+              />
+            )}
           </>
         )}
 
