@@ -46,6 +46,8 @@ Backend `/var/www/sitiket/backend/.env`:
 
 - `FRONTEND_URL=https://sitiket.com` — CORS origin + the base for links in
   buyer emails.
+- `GOOGLE_CLIENT_SECRET` — required for the organizer "Connect Gmail" flow
+  (OAuth code exchange). Same OAuth client as `GOOGLE_CLIENT_ID`.
 - `EMAIL_CONFIG_SECRET` — key for encrypting organizer SMTP passwords at rest
   (≥16 chars; falls back to deriving from `JWT_SECRET` when unset, but set it
   explicitly in production).
@@ -87,6 +89,26 @@ sudo certbot --nginx -d sitiket.com -d www.sitiket.com --redirect
 Certbot rewrites the nginx site config in place (adds the 443 blocks +
 HTTP→HTTPS redirects) and installs auto-renewal. The legacy
 `sitiket.rendy.link` cert renews independently.
+
+## Google OAuth (sign-in + Connect Gmail)
+
+One Google Cloud OAuth client serves both Google Sign-In and the organizer
+"Connect Gmail" email flow. Console requirements (Google Cloud Console →
+APIs & Services → Credentials / OAuth consent screen):
+
+- **Authorized JavaScript origins**: every origin the sign-in button runs on —
+  `https://sitiket.com`, plus `http://localhost:3000` for dev.
+- **Authorized redirect URIs** (Connect Gmail):
+  `https://sitiket.com/api/auth/google-mail/callback`, plus
+  `http://localhost:3000/api/auth/google-mail/callback` for dev.
+- **Consent screen scopes**: add `.../auth/gmail.send` ("Send email on your
+  behalf"). It is a *sensitive* scope — while the app is unverified, organizers
+  see Google's "unverified app" warning and must click *Advanced → continue*,
+  and Google caps grants at 100 users. Submitting the app for brand
+  verification removes the warning.
+- **Publishing status must be "In production"**, not "Testing" — in Testing
+  mode Google expires refresh tokens after 7 days, which would silently break
+  organizer email until they reconnect.
 
 ## Uploads
 

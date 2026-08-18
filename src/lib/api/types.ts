@@ -287,19 +287,23 @@ export interface RawQrisConfig {
 }
 
 /**
- * The organizer's outbound SMTP identity — one per owner, `GET/PUT
- * /email-config`. The stored password never leaves the backend; rows arrive
- * with `smtp_password_encrypted` already stripped.
+ * The organizer's outbound email identity — one per owner. Gmail rows are
+ * OAuth-connected ("Connect Gmail", `google_connected: 1`, no SMTP fields);
+ * custom rows carry a full SMTP config. Stored credentials never leave the
+ * backend — rows arrive with password/refresh-token already stripped.
  */
 export interface RawOrganizerEmailConfig {
   id: Uuid;
   owner_id: Uuid;
   provider: EmailProvider;
-  smtp_host: string;
-  smtp_port: number;
+  /** `null` on OAuth-connected Gmail rows. */
+  smtp_host: string | null;
+  smtp_port: number | null;
   smtp_secure: MysqlRawBoolean;
   from_email: string;
   from_name: string | null;
+  /** 1 when the row sends through a connected Google account (Gmail API). */
+  google_connected: MysqlRawBoolean;
   verified_at: IsoDateTimeString | null;
   created_at: IsoDateTimeString;
   updated_at: IsoDateTimeString;
@@ -442,11 +446,14 @@ export interface OrganizerEmailConfig {
   id: Uuid;
   ownerId: Uuid;
   provider: EmailProvider;
-  smtpHost: string;
-  smtpPort: number;
+  /** `null` on OAuth-connected Gmail rows. */
+  smtpHost: string | null;
+  smtpPort: number | null;
   smtpSecure: boolean;
   fromEmail: string;
   fromName: string | null;
+  /** True when the row sends through a connected Google account (Gmail API). */
+  googleConnected: boolean;
   verifiedAt: IsoDateTimeString | null;
   createdAt: IsoDateTimeString;
   updatedAt: IsoDateTimeString;
@@ -582,21 +589,19 @@ export interface CreateEventRequest {
 export type UpdateEventRequest = Partial<CreateEventRequest>;
 
 /**
- * `PUT /email-config`. Gmail rows carry no host/port — the backend applies
- * its Gmail preset (smtp.gmail.com:465). The backend live-verifies the
+ * `PUT /email-config` — custom SMTP only; Gmail connects via OAuth through
+ * `/api/auth/google-mail/start` instead. The backend live-verifies the
  * credentials before saving (`EMAIL_CONFIG_VERIFICATION_FAILED` on failure).
  */
-export type SaveEmailConfigRequest =
-  | { provider: "gmail"; email: string; password: string; fromName?: string }
-  | {
-      provider: "custom";
-      email: string;
-      password: string;
-      fromName?: string;
-      host: string;
-      port: number;
-      secure?: boolean;
-    };
+export interface SaveEmailConfigRequest {
+  provider: "custom";
+  email: string;
+  password: string;
+  fromName?: string;
+  host: string;
+  port: number;
+  secure?: boolean;
+}
 
 export interface ListEventsQuery {
   /** An `event_categories.slug`, not an id. */

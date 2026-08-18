@@ -27,7 +27,7 @@ Signed-in:
 Admin (event owner), under `/dashboard/admin`:
 - `/dashboard/admin`, `/events/new`, `/events/[slug]` (+ `/images`, `/ticket-types`, `/promo-codes`, `/staff`, `/orders`), `/bank-accounts`, `/qris`, `/email-settings`, `/refunds`
 - `/qris`: upload/replace the owner's static QRIS code (one per owner); each event then opts in via the "Accept QRIS payments" toggle on its Details form (backend rejects enabling without a config — `QRIS_CONFIG_MISSING`)
-- `/email-settings`: the owner's outbound SMTP identity (Gmail preset needs only email + Google App Password; custom providers spell out host/port/TLS). Saving live-verifies the credentials. **Required before creating events** — `/events/new` blocks with a link here when `GET /api/email-config` returns null (backend enforces it too with 409 `EMAIL_CONFIG_REQUIRED`)
+- `/email-settings`: the owner's outbound email identity. Gmail is one click — "Connect Gmail" runs a Google OAuth round-trip (`/api/auth/google-mail/start` → Google consent → `/api/auth/google-mail/callback`, CSRF-protected by an httpOnly state cookie) and the backend stores an encrypted refresh token; other providers fill in SMTP host/port/TLS, live-verified on save. **Required before creating events** — `/events/new` blocks with a link here when `GET /api/email-config` returns null (backend enforces it too with 409 `EMAIL_CONFIG_REQUIRED`)
 
 Super Admin, under `/dashboard/super-admin`:
 - `/dashboard/super-admin` (applications), `/users`, `/event-categories`, `/ticket-categories`

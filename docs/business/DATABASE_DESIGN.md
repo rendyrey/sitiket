@@ -397,7 +397,7 @@ Every buyer-facing email (guest OTP, ticket delivery, proof rejection, cancel/ex
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `owner_id` | uuid FK → `users.id`, not null, **unique** | One config per organizer; ON DELETE CASCADE. |
-| `provider` | enum `email_provider` (`gmail`, `custom`) | `gmail` rows are saved with the predefined Gmail preset (smtp.gmail.com:465, TLS) — the organizer only supplies address + Google App Password. `custom` rows carry the full host/port/secure the organizer entered. |
+| `provider` | enum `email_provider` (`gmail`, `custom`) | `gmail` rows are OAuth-connected ("Connect Gmail"): `google_refresh_token_encrypted` holds the AES-encrypted refresh token and the SMTP columns are NULL — delivery goes through the Gmail API (`gmail.send` scope). Legacy `gmail` rows created with an App Password still carry SMTP columns and deliver over SMTP. `custom` rows carry the full host/port/secure the organizer entered. |
 | `smtp_host` / `smtp_port` / `smtp_secure` | text / integer / boolean | Stored resolved (preset applied at save time) so the send path never branches on provider. |
 | `from_email` | text, not null | The organizer's sending address — also the SMTP username. |
 | `from_name` | text, nullable | Optional display name for the `From:` header. |

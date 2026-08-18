@@ -16,6 +16,10 @@ const envSchema = z.object({
   // blocking every other endpoint from booting before Google OAuth is set up.
   // Preprocessed because an unset .env value arrives as "" here, not undefined.
   GOOGLE_CLIENT_ID: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  // Optional: required only for the "Connect Gmail" organizer email flow —
+  // the OAuth code exchange needs the client secret (same OAuth client as
+  // GOOGLE_CLIENT_ID, with the /api/auth/google-mail/callback redirect URI).
+  GOOGLE_CLIENT_SECRET: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_EXPIRES_IN: z.string().default("7d"),
 

@@ -125,6 +125,7 @@ export const toOrganizerEmailConfig = (raw: RawOrganizerEmailConfig): OrganizerE
   smtpSecure: raw.smtp_secure === 1,
   fromEmail: raw.from_email,
   fromName: raw.from_name,
+  googleConnected: raw.google_connected === 1,
   verifiedAt: raw.verified_at,
   createdAt: raw.created_at,
   updatedAt: raw.updated_at,

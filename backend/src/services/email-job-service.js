@@ -1,4 +1,5 @@
 import { getOrganizerTransport, organizerFromHeader, sendMail, transporter } from "../config/mailer.js";
+import { sendViaGmail } from "../config/gmail-mailer.js";
 import * as emailJobsRepository from "../repositories/email-jobs-repository.js";
 import * as organizerEmailConfigsRepository from "../repositories/organizer-email-configs-repository.js";
 
@@ -41,7 +42,13 @@ const deliverJob = async (job) => {
   if (job.owner_id) {
     const config = await organizerEmailConfigsRepository.findByOwner(job.owner_id);
     if (config) {
-      await getOrganizerTransport(config).sendMail({ from: organizerFromHeader(config), ...message });
+      // OAuth-connected Gmail delivers over the Gmail API; SMTP rows (custom
+      // providers + legacy gmail App Passwords) keep using nodemailer.
+      if (config.google_refresh_token_encrypted) {
+        await sendViaGmail(config, { from: organizerFromHeader(config), ...message });
+      } else {
+        await getOrganizerTransport(config).sendMail({ from: organizerFromHeader(config), ...message });
+      }
       return;
     }
     // eslint-disable-next-line no-console
