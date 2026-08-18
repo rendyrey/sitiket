@@ -637,7 +637,14 @@ export interface CreateTicketTypeRequest {
   saleEndAt?: string;
 }
 
-export type UpdateTicketTypeRequest = Partial<CreateTicketTypeRequest & { isActive: boolean }>;
+export type UpdateTicketTypeRequest = Partial<
+  Omit<CreateTicketTypeRequest, "saleStartAt" | "saleEndAt"> & {
+    /** `null` clears the bound; `undefined`/absent leaves it unchanged. */
+    saleStartAt: string | null;
+    saleEndAt: string | null;
+    isActive: boolean;
+  }
+>;
 
 export interface CreatePromoCodeRequest {
   code: string;

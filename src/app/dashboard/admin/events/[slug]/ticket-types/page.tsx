@@ -18,7 +18,13 @@ export default async function AdminEventTicketTypesPage({ params }: { params: Pr
         <EventTabs slug={slug} activeSegment="/ticket-types" />
       </div>
       <div className="mt-8 max-w-3xl">
-        <TicketTypeManager eventId={event.id} ticketTypes={ticketTypes} categories={categories} />
+        <TicketTypeManager
+          eventId={event.id}
+          eventStartAt={event.startDate}
+          eventEndAt={event.endDate}
+          ticketTypes={ticketTypes}
+          categories={categories}
+        />
       </div>
     </div>
   );
