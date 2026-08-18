@@ -20,6 +20,7 @@ Public:
 - `/checkout/[slug]`: real checkout — multiple ticket types, promo code, guest or signed-in
 - `/orders/[id]` (+ `?email=` for guests): order status — guest OTP verify, payment instructions (bank transfer and/or the organizer's QRIS code, per what the event offers), payment-proof upload with a paid-by method choice, QR tickets, refund request
 - `/login`: Google Sign-In
+- `/privacy-policy`, `/terms-of-service`: legal pages (footer-linked; the privacy policy carries the Google API Limited Use disclosure required for OAuth consent-screen branding/verification)
 
 Signed-in:
 - `/account`: purchase history, "my tickets" (QR codes), apply-for-Admin form
