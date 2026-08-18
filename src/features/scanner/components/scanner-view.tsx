@@ -1,5 +1,6 @@
 "use client";
 
+import jsQR from "jsqr";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { scanTicketAction } from "../lib/actions";
 import type { CheckInResult, Ticket } from "@/lib/api/types";
@@ -34,13 +35,17 @@ export default function ScannerView() {
   const [result, setResult] = useState<{ result: CheckInResult; ticket: Ticket | null } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanningRef = useRef(false);
   const submittingRef = useRef(false);
   const [cameraSupported, setCameraSupported] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
 
   useEffect(() => {
-    setCameraSupported(typeof window !== "undefined" && "BarcodeDetector" in window && Boolean(navigator.mediaDevices));
+    // Camera scanning works wherever getUserMedia does — decoding uses the native
+    // BarcodeDetector when present (Android Chrome) and falls back to jsQR
+    // everywhere it isn't (iOS Safari, Firefox), so iPhones can scan too.
+    setCameraSupported(typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia));
   }, []);
 
   const handleScan = useCallback(
@@ -68,10 +73,38 @@ export default function ScannerView() {
     setCameraActive(false);
   }, []);
 
+  /** Decode a QR from the current video frame, natively where possible, else via jsQR on a canvas. */
+  const decodeFrame = useCallback(
+    async (video: HTMLVideoElement, detector: InstanceType<NonNullable<Window["BarcodeDetector"]>> | null): Promise<string | null> => {
+      if (detector) {
+        const codes = await detector.detect(video);
+        return codes.length > 0 ? codes[0].rawValue : null;
+      }
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (!width || !height) return null; // metadata not ready yet — try again next frame
+      let canvas = canvasRef.current;
+      if (!canvas) {
+        canvas = document.createElement("canvas");
+        canvasRef.current = canvas;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) return null;
+      context.drawImage(video, 0, 0, width, height);
+      const { data } = context.getImageData(0, 0, width, height);
+      return jsQR(data, width, height, { inversionAttempts: "dontInvert" })?.data ?? null;
+    },
+    [],
+  );
+
   const startCamera = async () => {
     setError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
       if (!videoRef.current) return;
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
@@ -79,20 +112,26 @@ export default function ScannerView() {
       scanningRef.current = true;
 
       const BarcodeDetectorCtor = window.BarcodeDetector;
-      if (!BarcodeDetectorCtor) return;
-      const detector = new BarcodeDetectorCtor({ formats: ["qr_code"] });
+      const detector = BarcodeDetectorCtor ? new BarcodeDetectorCtor({ formats: ["qr_code"] }) : null;
+      let lastScan = 0;
 
       const tick = async () => {
         if (!scanningRef.current || !videoRef.current) return;
-        try {
-          const codes = await detector.detect(videoRef.current);
-          if (codes.length > 0 && !submittingRef.current) {
-            stopCamera();
-            await handleScan(codes[0].rawValue);
-            return;
+        // jsQR decodes a full frame on the main thread, so throttle it to ~8/sec;
+        // the native detector is cheap enough to run every frame.
+        const now = performance.now();
+        if (detector || now - lastScan > 120) {
+          lastScan = now;
+          try {
+            const value = await decodeFrame(videoRef.current, detector);
+            if (value && !submittingRef.current) {
+              stopCamera();
+              await handleScan(value);
+              return;
+            }
+          } catch {
+            // Transient detection error — keep scanning.
           }
-        } catch {
-          // Transient detection error — keep scanning.
         }
         requestAnimationFrame(() => void tick());
       };
