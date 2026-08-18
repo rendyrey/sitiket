@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { formatPrice } from "@/data/events";
 import type { PaymentInstructions } from "@/lib/api/types";
 import { toAssetUrl } from "@/lib/public-env";
@@ -31,13 +30,12 @@ export default function BankTransferInstructions({ instructions }: { instruction
             {hasBankAccounts && (
               <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">Or pay with QRIS</span>
             )}
-            <div className="relative mx-auto mt-3 aspect-square w-full max-w-[260px] bg-white">
-              <Image
+            <div className="mt-3 flex justify-center bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element -- QRIS is a scannable payment code with a variable aspect ratio (the standard printout is portrait). A raw <img> sizes to the code's natural ratio without a fixed box, and avoids next/image re-encoding a dense QR. */}
+              <img
                 src={toAssetUrl(instructions.qris.qrisImageUrl)}
                 alt={`QRIS code for ${instructions.qris.merchantName}`}
-                fill
-                sizes="260px"
-                className="object-contain"
+                className="block h-auto max-h-[460px] w-auto max-w-full"
               />
             </div>
             <p className="mt-3 text-center text-xs font-bold uppercase tracking-widest text-black/60">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { removeEventImageAction, uploadEventImageAction } from "@/features/admin/lib/actions";
 import type { EventImage } from "@/lib/api/types";
+import { normalizeImageForUpload } from "@/lib/image/normalize-image";
 import { toAssetUrl } from "@/lib/public-env";
 
 export default function ImageManager({ eventId, images }: { eventId: string; images: EventImage[] }) {
@@ -22,11 +23,11 @@ export default function ImageManager({ eventId, images }: { eventId: string; ima
       return;
     }
 
+    setSubmitting(true);
     const formData = new FormData();
-    formData.append("image", file);
+    formData.append("image", await normalizeImageForUpload(file));
     formData.append("isPoster", isPoster ? "true" : "false");
 
-    setSubmitting(true);
     const result = await uploadEventImageAction(eventId, formData);
     setSubmitting(false);
 
@@ -66,7 +67,7 @@ export default function ImageManager({ eventId, images }: { eventId: string; ima
       <div className="border-2 border-ink bg-white p-5 sm:p-7">
         <span className="tag">Upload image</span>
         <div className="mt-5 space-y-4">
-          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="text-field h-auto py-3" />
+          <input ref={fileInputRef} type="file" accept="image/*" className="text-field h-auto py-3" />
           <label className="flex items-center gap-2 text-sm font-semibold">
             <input type="checkbox" checked={isPoster} onChange={(e) => setIsPoster(e.target.checked)} className="border-black text-black focus:ring-lime" />
             Set as poster (must be exactly 1080×1080 or 1080×1920 — Instagram feed/story size)

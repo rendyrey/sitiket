@@ -2,7 +2,7 @@ import { Router } from "express";
 import * as orderPaymentController from "../controllers/order-payment-controller.js";
 import { optionalAuth, requireAuth } from "../middleware/auth.js";
 import { writeLimiter } from "../middleware/rate-limit.js";
-import { imageUpload } from "../middleware/upload.js";
+import { singleImageUpload } from "../middleware/upload.js";
 import { validate } from "../middleware/validate.js";
 import { getPaymentInstructionsQuerySchema, submitPaymentProofSchema } from "../schemas/order-payment-schemas.js";
 
@@ -20,7 +20,7 @@ orderPaymentNestedRouter.post(
   "/",
   writeLimiter,
   optionalAuth,
-  imageUpload.single("proof"),
+  singleImageUpload("proof"),
   validate(submitPaymentProofSchema),
   orderPaymentController.submit,
 );

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import FormField from "@/components/ui/form-field";
+import { normalizeImageForUpload } from "@/lib/image/normalize-image";
 import type { PaymentMethod } from "@/lib/api/types";
 import { submitPaymentProofAction } from "../lib/actions";
 
@@ -32,13 +33,13 @@ export default function PaymentProofForm({ guestEmail, hasBankTransfer, hasQris,
       return;
     }
 
+    setSubmitting(true);
     const formData = new FormData();
-    formData.append("proof", file);
+    formData.append("proof", await normalizeImageForUpload(file));
     formData.append("method", method);
     if (transferNote.trim()) formData.append("transferNote", transferNote.trim());
     if (guestEmail) formData.append("guestEmail", guestEmail);
 
-    setSubmitting(true);
     const result = await submitPaymentProofAction(orderId, formData);
     setSubmitting(false);
     if (!result.ok) {
@@ -80,8 +81,8 @@ export default function PaymentProofForm({ guestEmail, hasBankTransfer, hasQris,
           </fieldset>
         )}
         <label className="field-label">
-          Payment receipt (JPEG, PNG, or WEBP)
-          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="text-field h-auto py-3" />
+          Payment receipt (photo or screenshot)
+          <input ref={fileInputRef} type="file" accept="image/*" className="text-field h-auto py-3" />
         </label>
         <FormField
           label="Note (optional)"

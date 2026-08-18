@@ -1,7 +1,7 @@
 import { Router } from "express";
 import * as eventImageController from "../controllers/event-image-controller.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
-import { imageUpload } from "../middleware/upload.js";
+import { singleImageUpload } from "../middleware/upload.js";
 import { validate } from "../middleware/validate.js";
 import { uploadEventImageSchema } from "../schemas/event-image-schemas.js";
 
@@ -15,7 +15,7 @@ eventImageRouter.post(
   "/",
   requireAuth,
   requireRole("admin", "super_admin"),
-  imageUpload.single("image"),
+  singleImageUpload("image"),
   validate(uploadEventImageSchema),
   eventImageController.upload,
 );

@@ -1,8 +1,46 @@
 import { env } from "../config/env.js";
 import { enqueueEmail } from "./email-job-service.js";
 import * as usersRepository from "../repositories/users-repository.js";
+import {
+  button,
+  escapeHtml,
+  infoPanel,
+  paragraph,
+  renderBrandedEmail,
+  ticketPanel,
+} from "../utils/email-template.js";
 
 const orderUrl = (orderId, email) => `${env.FRONTEND_URL}/orders/${orderId}?email=${encodeURIComponent(email)}`;
+
+const SPAM_FOOTNOTE = "Not in your inbox? Check your spam or promotions folder, and add us to your contacts so future tickets arrive.";
+
+/** Readable event date in WIB (the primary market timezone). Returns null if absent/invalid. */
+const formatEventDate = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  }).format(date);
+  return `${formatted} WIB`;
+};
+
+/** Event name / date / location rows for an `infoPanel`, skipping anything absent. */
+const eventInfoRows = (event) => {
+  const rows = [];
+  if (event?.name) rows.push({ label: "Event", value: event.name });
+  const when = formatEventDate(event?.start_date);
+  if (when) rows.push({ label: "Date", value: when });
+  const place = [event?.venue_name, event?.city].filter(Boolean).join(", ");
+  if (place) rows.push({ label: "Location", value: place });
+  return rows;
+};
 
 /**
  * Fire-and-log wrapper around `enqueueEmail` — a notification failing to
@@ -30,13 +68,31 @@ const notify = async (message, ownerId) => {
  */
 export const notifyAdminApplicationSubmitted = async (application, applicant) => {
   const superAdmins = await usersRepository.listByRole("super_admin");
+  const bodyHtml = [
+    paragraph(`<strong>${escapeHtml(applicant.name)}</strong> (${escapeHtml(applicant.email)}) applied to become an event organizer.`),
+    infoPanel({
+      heading: "Application",
+      rows: [
+        { label: "Business", value: application.business_name },
+        { label: "Applicant", value: applicant.name },
+        { label: "Email", value: applicant.email },
+      ],
+    }),
+    button({ href: `${env.FRONTEND_URL}/dashboard/super-admin`, label: "Review application" }),
+  ].join("");
+
   await Promise.all(
     superAdmins.map((superAdmin) =>
       notify({
         to: superAdmin.email,
         subject: `New organizer application: ${application.business_name}`,
-        text: `${applicant.name} (${applicant.email}) applied to become an event organizer as "${application.business_name}". Review it in the dashboard.`,
-        html: `<p><strong>${applicant.name}</strong> (${applicant.email}) applied to become an event organizer as "${application.business_name}".</p><p>Review it in the Super Admin dashboard.</p>`,
+        text: `${applicant.name} (${applicant.email}) applied to become an event organizer as "${application.business_name}". Review it in the Super Admin dashboard: ${env.FRONTEND_URL}/dashboard/super-admin`,
+        html: renderBrandedEmail({
+          preheader: `${applicant.name} wants to host events on SiTIKET`,
+          tag: "New application",
+          heading: "New organizer application",
+          bodyHtml,
+        }),
       }),
     ),
   );
@@ -50,15 +106,33 @@ export const notifyAdminApplicationSubmitted = async (application, applicant) =>
  */
 export const notifyAdminApplicationDecision = async (application, applicant, decision) => {
   const approved = decision === "approved";
+  const html = approved
+    ? renderBrandedEmail({
+        preheader: "You can now create events on SiTIKET",
+        tag: "Approved",
+        heading: "You're approved to host events",
+        bodyHtml: [
+          paragraph(`Good news, ${escapeHtml(applicant.name)} — your application as <strong>${escapeHtml(application.business_name)}</strong> was approved. You can start publishing events right away.`),
+          button({ href: `${env.FRONTEND_URL}/dashboard/admin/events/new`, label: "Create your first event", variant: "lime" }),
+        ].join(""),
+      })
+    : renderBrandedEmail({
+        preheader: "An update on your SiTIKET organizer application",
+        tag: "Update",
+        heading: "About your organizer application",
+        bodyHtml: [
+          paragraph(`Hi ${escapeHtml(applicant.name)}, we're unable to approve your application as <strong>${escapeHtml(application.business_name)}</strong> at this time.`),
+          application.review_notes ? infoPanel({ heading: "Reason", rows: [{ label: "Notes", value: application.review_notes }] }) : "",
+        ].join(""),
+      });
+
   await notify({
     to: applicant.email,
-    subject: approved ? "Your organizer application was approved" : "Your organizer application was rejected",
+    subject: approved ? "Your organizer application was approved" : "Your organizer application was not approved",
     text: approved
-      ? `Good news — your application as "${application.business_name}" was approved. You can now create events.`
-      : `Your application as "${application.business_name}" was rejected.${application.review_notes ? ` Reason: ${application.review_notes}` : ""}`,
-    html: approved
-      ? `<p>Good news — your application as "${application.business_name}" was approved. You can now create events.</p>`
-      : `<p>Your application as "${application.business_name}" was rejected.</p>${application.review_notes ? `<p>Reason: ${application.review_notes}</p>` : ""}`,
+      ? `Good news — your application as "${application.business_name}" was approved. Create your first event: ${env.FRONTEND_URL}/dashboard/admin/events/new`
+      : `Your application as "${application.business_name}" was not approved.${application.review_notes ? ` Reason: ${application.review_notes}` : ""}`,
+    html,
   });
 };
 
@@ -69,13 +143,28 @@ export const notifyAdminApplicationDecision = async (application, applicant, dec
  * @param {object} event - the order's `events` row (routes the email through its organizer's SMTP)
  */
 export const notifyOrderPaid = async (order, tickets, event) => {
-  const codeList = tickets.map((ticket) => `- ${ticket.ticket_type_name}: ${ticket.ticket_code}`).join("\n");
+  const eventName = event?.name ?? "your event";
+  const infoRows = eventInfoRows(event);
+  const bodyHtml = [
+    paragraph(`Hi ${escapeHtml(order.buyer_name)}, your payment for <strong>${escapeHtml(eventName)}</strong> is confirmed. Your ${tickets.length === 1 ? "ticket is" : `${tickets.length} tickets are`} ready — show the QR code${tickets.length === 1 ? "" : "s"} at the gate.`),
+    ticketPanel({ eventName, tickets }),
+    infoRows.length ? infoPanel({ heading: "Event details", rows: infoRows }) : "",
+    button({ href: orderUrl(order.id, order.buyer_email), label: "View your tickets", variant: "lime" }),
+  ].join("");
+
+  const codeList = tickets.map((ticket, index) => `- Ticket ${index + 1} (${ticket.ticket_type_name}): ${ticket.ticket_code}`).join("\n");
   await notify(
     {
       to: order.buyer_email,
-      subject: "Your payment was confirmed — here are your tickets",
-      text: `Hi ${order.buyer_name}, your payment for order ${order.id} was confirmed.\n\nYour tickets:\n${codeList}\n\nView them at ${orderUrl(order.id, order.buyer_email)}`,
-      html: `<p>Hi ${order.buyer_name}, your payment for order <strong>${order.id}</strong> was confirmed.</p><p>Your tickets:</p><ul>${tickets.map((ticket) => `<li>${ticket.ticket_type_name}: <strong>${ticket.ticket_code}</strong></li>`).join("")}</ul><p><a href="${orderUrl(order.id, order.buyer_email)}">View your tickets</a></p>`,
+      subject: `Your tickets for ${eventName}`,
+      text: `Hi ${order.buyer_name}, your payment for ${eventName} is confirmed.\n\nYour tickets:\n${codeList}\n\nView them at ${orderUrl(order.id, order.buyer_email)}\n\n${SPAM_FOOTNOTE}`,
+      html: renderBrandedEmail({
+        preheader: `Your ${tickets.length === 1 ? "ticket" : "tickets"} for ${eventName}`,
+        tag: "Payment confirmed",
+        heading: "You're in — here are your tickets",
+        bodyHtml,
+        footnote: SPAM_FOOTNOTE,
+      }),
     },
     event?.owner_id,
   );
@@ -88,12 +177,23 @@ export const notifyOrderPaid = async (order, tickets, event) => {
  * @param {object} event - the order's `events` row (routes the email through its organizer's SMTP)
  */
 export const notifyPaymentProofRejected = async (order, reviewerNotes, event) => {
+  const eventName = event?.name ?? "your event";
+  const bodyHtml = [
+    paragraph(`Hi ${escapeHtml(order.buyer_name)}, we couldn't verify the payment proof you submitted for <strong>${escapeHtml(eventName)}</strong>. You can upload a new one while the order is still open.`),
+    reviewerNotes ? infoPanel({ heading: "Reason", rows: [{ label: "Notes", value: reviewerNotes }] }) : "",
+    button({ href: orderUrl(order.id, order.buyer_email), label: "Upload a new proof" }),
+  ].join("");
   await notify(
     {
       to: order.buyer_email,
-      subject: `Payment proof rejected for order ${order.id}`,
-      text: `Hi ${order.buyer_name}, the payment proof you submitted for order ${order.id} was rejected.${reviewerNotes ? ` Reason: ${reviewerNotes}` : ""} Please upload a new proof at ${orderUrl(order.id, order.buyer_email)}`,
-      html: `<p>Hi ${order.buyer_name}, the payment proof you submitted for order <strong>${order.id}</strong> was rejected.</p>${reviewerNotes ? `<p>Reason: ${reviewerNotes}</p>` : ""}<p><a href="${orderUrl(order.id, order.buyer_email)}">Upload a new proof</a></p>`,
+      subject: `Action needed: payment proof for ${eventName}`,
+      text: `Hi ${order.buyer_name}, the payment proof you submitted for ${eventName} couldn't be verified.${reviewerNotes ? ` Reason: ${reviewerNotes}` : ""} Please upload a new proof at ${orderUrl(order.id, order.buyer_email)}`,
+      html: renderBrandedEmail({
+        preheader: `Please re-upload your payment proof for ${eventName}`,
+        tag: "Action needed",
+        heading: "We couldn't verify your payment",
+        bodyHtml,
+      }),
     },
     event?.owner_id,
   );
@@ -104,12 +204,18 @@ export const notifyPaymentProofRejected = async (order, reviewerNotes, event) =>
  * @param {object} event - the order's `events` row (routes the email through its organizer's SMTP)
  */
 export const notifyOrderCancelled = async (order, event) => {
+  const eventName = event?.name ?? "your event";
   await notify(
     {
       to: order.buyer_email,
-      subject: `Order ${order.id} was cancelled`,
-      text: `Hi ${order.buyer_name}, your order ${order.id} was cancelled.`,
-      html: `<p>Hi ${order.buyer_name}, your order <strong>${order.id}</strong> was cancelled.</p>`,
+      subject: `Your order for ${eventName} was cancelled`,
+      text: `Hi ${order.buyer_name}, your order for ${eventName} was cancelled.`,
+      html: renderBrandedEmail({
+        preheader: `Your order for ${eventName} was cancelled`,
+        tag: "Cancelled",
+        heading: "Your order was cancelled",
+        bodyHtml: paragraph(`Hi ${escapeHtml(order.buyer_name)}, your order for <strong>${escapeHtml(eventName)}</strong> was cancelled. No payment was taken.`),
+      }),
     },
     event?.owner_id,
   );
@@ -120,12 +226,22 @@ export const notifyOrderCancelled = async (order, event) => {
  * @param {object} event - the order's `events` row (routes the email through its organizer's SMTP)
  */
 export const notifyOrderExpired = async (order, event) => {
+  const eventName = event?.name ?? "your event";
+  const bodyHtml = [
+    paragraph(`Hi ${escapeHtml(order.buyer_name)}, the payment window for your <strong>${escapeHtml(eventName)}</strong> order closed before a payment proof was submitted, so it expired and the held tickets were released back for sale.`),
+    button({ href: `${env.FRONTEND_URL}/events`, label: "Browse events" }),
+  ].join("");
   await notify(
     {
       to: order.buyer_email,
-      subject: `Order ${order.id} expired`,
-      text: `Hi ${order.buyer_name}, the payment window for order ${order.id} closed before a payment proof was submitted, so it has expired and its tickets were released back for sale.`,
-      html: `<p>Hi ${order.buyer_name}, the payment window for order <strong>${order.id}</strong> closed before a payment proof was submitted, so it has expired and its tickets were released back for sale.</p>`,
+      subject: `Your order for ${eventName} expired`,
+      text: `Hi ${order.buyer_name}, the payment window for your ${eventName} order closed before a payment proof was submitted, so it expired and its tickets were released back for sale.`,
+      html: renderBrandedEmail({
+        preheader: `Your order for ${eventName} expired`,
+        tag: "Expired",
+        heading: "Your payment window closed",
+        bodyHtml,
+      }),
     },
     event?.owner_id,
   );
@@ -133,20 +249,28 @@ export const notifyOrderExpired = async (order, event) => {
 
 const REFUND_STATUS_COPY = {
   requested: {
-    subject: (orderId) => `Refund requested for order ${orderId}`,
-    body: (order) => `Hi ${order.buyer_name}, we've received your refund request for order ${order.id}. We'll email you once it's reviewed.`,
+    tag: "Refund requested",
+    heading: "We've got your refund request",
+    subject: (eventName) => `Refund requested for ${eventName}`,
+    body: (order, eventName) => `Hi ${order.buyer_name}, we've received your refund request for ${eventName}. We'll email you once it's reviewed.`,
   },
   approved: {
-    subject: (orderId) => `Refund approved for order ${orderId}`,
-    body: (order) => `Hi ${order.buyer_name}, your refund request for order ${order.id} was approved. The money transfer will follow.`,
+    tag: "Refund approved",
+    heading: "Your refund was approved",
+    subject: (eventName) => `Refund approved for ${eventName}`,
+    body: (order, eventName) => `Hi ${order.buyer_name}, your refund request for ${eventName} was approved. The money transfer will follow.`,
   },
   rejected: {
-    subject: (orderId) => `Refund rejected for order ${orderId}`,
-    body: (order, notes) => `Hi ${order.buyer_name}, your refund request for order ${order.id} was rejected.${notes ? ` Reason: ${notes}` : ""}`,
+    tag: "Refund update",
+    heading: "About your refund request",
+    subject: (eventName) => `Refund declined for ${eventName}`,
+    body: (order, eventName, notes) => `Hi ${order.buyer_name}, your refund request for ${eventName} was declined.${notes ? ` Reason: ${notes}` : ""}`,
   },
   completed: {
-    subject: (orderId) => `Refund completed for order ${orderId}`,
-    body: (order) => `Hi ${order.buyer_name}, your refund for order ${order.id} has been sent. Its tickets are no longer valid for entry.`,
+    tag: "Refund completed",
+    heading: "Your refund has been sent",
+    subject: (eventName) => `Refund completed for ${eventName}`,
+    body: (order, eventName) => `Hi ${order.buyer_name}, your refund for ${eventName} has been sent. Its tickets are no longer valid for entry.`,
   },
 };
 
@@ -159,13 +283,23 @@ const REFUND_STATUS_COPY = {
  */
 export const notifyRefundStatus = async (order, status, notes, event) => {
   const copy = REFUND_STATUS_COPY[status];
-  const text = copy.body(order, notes);
+  const eventName = event?.name ?? "your event";
+  const text = copy.body(order, eventName, notes);
+  const bodyHtml = [
+    paragraph(escapeHtml(text)),
+    button({ href: orderUrl(order.id, order.buyer_email), label: "View your order" }),
+  ].join("");
   await notify(
     {
       to: order.buyer_email,
-      subject: copy.subject(order.id),
+      subject: copy.subject(eventName),
       text,
-      html: `<p>${text}</p>`,
+      html: renderBrandedEmail({
+        preheader: copy.subject(eventName),
+        tag: copy.tag,
+        heading: copy.heading,
+        bodyHtml,
+      }),
     },
     event?.owner_id,
   );

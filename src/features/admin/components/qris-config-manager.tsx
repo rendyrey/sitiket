@@ -1,11 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import FormField from "@/components/ui/form-field";
 import { removeQrisConfigAction, saveQrisConfigAction } from "@/features/admin/lib/actions";
+import { normalizeImageForUpload } from "@/lib/image/normalize-image";
 import type { QrisConfig } from "@/lib/api/types";
 import { toAssetUrl } from "@/lib/public-env";
 
@@ -29,11 +29,11 @@ export default function QrisConfigManager({ config }: { config: QrisConfig | nul
       return;
     }
 
+    setSubmitting(true);
     const formData = new FormData();
     formData.append("merchantName", merchantName.trim());
-    if (file) formData.append("qrisImage", file);
+    if (file) formData.append("qrisImage", await normalizeImageForUpload(file));
 
-    setSubmitting(true);
     const result = await saveQrisConfigAction(formData);
     setSubmitting(false);
 
@@ -82,8 +82,13 @@ export default function QrisConfigManager({ config }: { config: QrisConfig | nul
               {removing ? "Removing…" : "Remove"}
             </button>
           </div>
-          <div className="relative mt-5 aspect-square w-full max-w-[280px] border-2 border-black/10 bg-white">
-            <Image src={toAssetUrl(config.qrisImageUrl)} alt={`QRIS code for ${config.merchantName}`} fill sizes="280px" className="object-contain" />
+          <div className="mt-5 flex w-full max-w-[320px] justify-center border-2 border-black/10 bg-white p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- QRIS is a scannable payment code with a variable aspect ratio (the standard printout is portrait). A raw <img> sizes to the code's natural ratio without a fixed box, and avoids next/image re-encoding a dense QR. */}
+            <img
+              src={toAssetUrl(config.qrisImageUrl)}
+              alt={`QRIS code for ${config.merchantName}`}
+              className="block h-auto max-h-[420px] w-auto max-w-full"
+            />
           </div>
         </div>
       ) : (
@@ -105,8 +110,8 @@ export default function QrisConfigManager({ config }: { config: QrisConfig | nul
             onChange={(e) => setMerchantName(e.target.value)}
           />
           <label className="field-label">
-            QRIS code image (JPEG, PNG, or WEBP){config ? " — leave empty to keep the current one" : " *"}
-            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="text-field h-auto py-3" />
+            QRIS code image{config ? " — leave empty to keep the current one" : " *"}
+            <input ref={fileInputRef} type="file" accept="image/*" className="text-field h-auto py-3" />
           </label>
         </div>
         {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}

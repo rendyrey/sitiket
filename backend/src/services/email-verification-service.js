@@ -4,6 +4,7 @@ import { enqueueEmail } from "./email-job-service.js";
 import * as emailVerificationsRepository from "../repositories/email-verifications-repository.js";
 import * as ordersRepository from "../repositories/orders-repository.js";
 import { badRequest, notFound } from "../utils/http-error.js";
+import { codeBlock, paragraph, renderBrandedEmail } from "../utils/email-template.js";
 
 /**
  * Sends a 6-digit OTP to a guest buyer's email to satisfy the spec's
@@ -30,8 +31,18 @@ export const requestGuestOtp = async (orderId, email, ownerId) => {
     {
       to: email,
       subject: `Your SiTIKET verification code: ${code}`,
-      text: `Your verification code is ${code}. It expires in ${env.GUEST_EMAIL_OTP_TTL_MINUTES} minutes.`,
-      html: `<p>Your verification code is <strong>${code}</strong>.</p><p>It expires in ${env.GUEST_EMAIL_OTP_TTL_MINUTES} minutes.</p>`,
+      text: `Your verification code is ${code}. It expires in ${env.GUEST_EMAIL_OTP_TTL_MINUTES} minutes.\n\nDidn't request this? You can safely ignore this email.`,
+      html: renderBrandedEmail({
+        preheader: `Your SiTIKET verification code is ${code}`,
+        tag: "Verify your email",
+        heading: "Your verification code",
+        bodyHtml: [
+          paragraph("Enter this code to confirm your email and unlock payment for your order:"),
+          codeBlock(code),
+          paragraph(`It expires in <strong>${env.GUEST_EMAIL_OTP_TTL_MINUTES} minutes</strong>. Didn't request this? You can safely ignore this email.`),
+        ].join(""),
+        footnote: "Can't find this email next time? Check your spam or promotions folder.",
+      }),
     },
     { ownerId },
   );

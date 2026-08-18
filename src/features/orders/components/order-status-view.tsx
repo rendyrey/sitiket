@@ -51,12 +51,20 @@ export default function OrderStatusView({ guestEmail, isGuest, order, paymentIns
               Your proof of transfer has been submitted. The organizer is reviewing it — this page updates once
               they&apos;ve confirmed.
             </p>
+            <p className="mt-3 text-xs text-black/45">
+              Once approved, your tickets are emailed to {order.buyerEmail}. If they don&apos;t arrive, check your spam or
+              promotions folder.
+            </p>
           </div>
         )}
 
         {(order.status === "paid" || order.status === "refund_requested" || order.status === "refunded") && (
           <div>
             <h2 className="text-xl font-black uppercase">Your tickets</h2>
+            <p className="mt-2 text-xs text-black/45">
+              We&apos;ve also emailed these to {order.buyerEmail}. If they&apos;re not in your inbox, check your spam or
+              promotions folder.
+            </p>
             <div className="mt-4">
               <TicketsList tickets={order.tickets ?? []} />
             </div>

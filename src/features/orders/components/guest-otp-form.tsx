@@ -32,7 +32,7 @@ export default function GuestOtpForm({ orderId }: { orderId: string }) {
       <span className="tag">Verify your email</span>
       <p className="mt-4 text-sm text-black/60">
         We sent a 6-digit code to your email. Enter it below to unlock payment — this confirms your ticket goes to a
-        real inbox.
+        real inbox. Don&apos;t see it? Check your spam or promotions folder.
       </p>
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
         <FormField
