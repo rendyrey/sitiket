@@ -3,10 +3,7 @@ import * as orderPaymentsRepository from "../repositories/order-payments-reposit
 import * as ordersRepository from "../repositories/orders-repository.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
 import { conflict, forbidden, notFound } from "../utils/http-error.js";
-import {
-  resolveForEvent as resolveBankAccountForEvent,
-  resolveAllForEvent as resolveAllBankAccountsForEvent,
-} from "./bank-account-service.js";
+import { resolvePaymentOptionsForEvent } from "./payment-method-service.js";
 import { notifyOrderPaid, notifyPaymentProofRejected } from "./notification-service.js";
 import { issueTicketsForOrder } from "./ticket-service.js";
 
@@ -15,7 +12,7 @@ const AWAITING_PAYMENT_STATUSES = ["pending_payment", "awaiting_verification"];
 /**
  * @param {string} orderId
  * @param {{ userId?: string, guestEmail?: string }} identity - one of the two must be set
- * @param {{ file: { filename: string }, transferNote?: string }} submission
+ * @param {{ file: { filename: string }, transferNote?: string, method?: "bank_transfer" | "qris" }} submission
  */
 export const submitProof = async (orderId, identity, submission) => {
   const order = await ordersRepository.findById(orderId);
@@ -35,11 +32,21 @@ export const submitProof = async (orderId, identity, submission) => {
   }
 
   const event = await eventsRepository.findById(order.event_id);
-  const bankAccount = await resolveBankAccountForEvent(event);
+  const { recommendedBankAccount, qrisConfig } = await resolvePaymentOptionsForEvent(event);
+
+  // Default to whichever method is actually available when the client doesn't say.
+  const method = submission.method ?? (recommendedBankAccount ? "bank_transfer" : "qris");
+  if (method === "qris" && !qrisConfig) {
+    throw conflict("QRIS_NOT_AVAILABLE", "QRIS payment is not enabled for this event");
+  }
+  if (method === "bank_transfer" && !recommendedBankAccount) {
+    throw conflict("EVENT_OWNER_NO_BANK_ACCOUNT", "This event's organizer has not set up a payout bank account yet");
+  }
 
   const payment = await orderPaymentsRepository.create({
     orderId,
-    bankAccountId: bankAccount.id,
+    method,
+    bankAccountId: method === "bank_transfer" ? recommendedBankAccount.id : null,
     amount: order.total_amount,
     proofImageUrl: `/uploads/${submission.file.filename}`,
     transferNote: submission.transferNote,
@@ -69,20 +76,21 @@ export const reviewProof = async (paymentId, reviewer, decision, reviewerNotes) 
   if (decision === "approved") {
     await ordersRepository.updateStatus(order.id, "paid");
     const tickets = await issueTicketsForOrder(order.id);
-    await notifyOrderPaid(order, tickets);
+    await notifyOrderPaid(order, tickets, event);
   } else {
     // Buyer may correct and re-submit while the order hasn't expired.
     await ordersRepository.updateStatus(order.id, "pending_payment");
-    await notifyPaymentProofRejected(order, reviewerNotes);
+    await notifyPaymentProofRejected(order, reviewerNotes, event);
   }
 
   return orderPaymentsRepository.findById(paymentId);
 };
 
 /**
- * Resolves the payout bank account a buyer should see for an order — the
- * frontend has no other way to learn where to transfer, since
- * `resolveBankAccountForEvent` otherwise only runs server-side inside
+ * Resolves the payment options a buyer should see for an order — the payout
+ * bank account(s) to transfer to and/or the organizer's QRIS code to scan.
+ * The frontend has no other way to learn them, since
+ * `resolvePaymentOptionsForEvent` otherwise only runs server-side inside
  * `submitProof`.
  * @param {string} orderId
  * @param {{ userId?: string, guestEmail?: string }} identity
@@ -95,10 +103,7 @@ export const getPaymentInstructions = async (orderId, identity) => {
   if (!isOwnOrder) throw forbidden("NOT_ORDER_OWNER", "You do not have access to this order");
 
   const event = await eventsRepository.findById(order.event_id);
-  const [recommended, bankAccounts] = await Promise.all([
-    resolveBankAccountForEvent(event),
-    resolveAllBankAccountsForEvent(event),
-  ]);
+  const { recommendedBankAccount, bankAccounts, qrisConfig } = await resolvePaymentOptionsForEvent(event);
 
   return {
     bankAccounts: bankAccounts.map((account) => ({
@@ -106,8 +111,11 @@ export const getPaymentInstructions = async (orderId, identity) => {
       bankName: account.bank_name,
       accountNumber: account.account_number,
       accountHolderName: account.account_holder_name,
-      isRecommended: account.id === recommended.id,
+      isRecommended: account.id === recommendedBankAccount?.id,
     })),
+    qris: qrisConfig
+      ? { merchantName: qrisConfig.merchant_name, qrisImageUrl: qrisConfig.qris_image_url }
+      : null,
     amount: order.total_amount,
   };
 };

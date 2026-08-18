@@ -1,8 +1,10 @@
 import { eventCategoriesRepository } from "../repositories/event-categories-repository.js";
 import * as bankAccountsRepository from "../repositories/bank-accounts-repository.js";
 import * as eventsRepository from "../repositories/events-repository.js";
+import * as organizerEmailConfigsRepository from "../repositories/organizer-email-configs-repository.js";
+import * as qrisConfigsRepository from "../repositories/qris-configs-repository.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
-import { badRequest, notFound } from "../utils/http-error.js";
+import { badRequest, conflict, notFound } from "../utils/http-error.js";
 import { slugify } from "../utils/slugify.js";
 
 /**
@@ -38,13 +40,32 @@ const assertBankAccountBelongsToOwner = async (bankAccountId, ownerId) => {
   }
 };
 
+const assertOwnerHasQrisConfig = async (ownerId) => {
+  const config = await qrisConfigsRepository.findByOwner(ownerId);
+  if (!config) {
+    throw badRequest("QRIS_CONFIG_MISSING", "Set up your QRIS code before enabling QRIS payments for an event");
+  }
+};
+
+// Hard prerequisite (unlike the soft bank-account check above): every buyer
+// email for this owner's events rides their own SMTP, so an owner without an
+// email config could sell tickets no one ever receives.
+const assertOwnerHasEmailConfig = async (ownerId) => {
+  const config = await organizerEmailConfigsRepository.findByOwner(ownerId);
+  if (!config) {
+    throw conflict("EMAIL_CONFIG_REQUIRED", "Set up your organizer email (dashboard → Email settings) before creating events");
+  }
+};
+
 /**
  * @param {string} ownerId
  * @param {object} input - see schemas/event-schemas.js `createEventSchema`
  */
 export const createEvent = async (ownerId, input) => {
+  await assertOwnerHasEmailConfig(ownerId);
   await assertCategoryIsUsable(input.categoryId);
   await assertBankAccountBelongsToOwner(input.bankAccountId, ownerId);
+  if (input.qrisEnabled) await assertOwnerHasQrisConfig(ownerId);
 
   const slug = await generateUniqueSlug(input.name);
   return eventsRepository.create({ ...input, ownerId, slug });
@@ -62,6 +83,7 @@ export const updateEvent = async (eventId, requester, patch) => {
 
   if (patch.categoryId) await assertCategoryIsUsable(patch.categoryId);
   if (patch.bankAccountId) await assertBankAccountBelongsToOwner(patch.bankAccountId, event.owner_id);
+  if (patch.qrisEnabled) await assertOwnerHasQrisConfig(event.owner_id);
 
   return eventsRepository.update(eventId, patch);
 };

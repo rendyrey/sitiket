@@ -10,11 +10,12 @@ const MAX_ATTEMPTS = 5;
 const RETRY_BACKOFF_MS = 60 * 1000;
 
 /**
- * Queues an email for the background worker to send.
- * @param {{ to: string, subject: string, text: string, html?: string }} message
+ * Queues an email for the background worker to send. `ownerId` set routes it
+ * through that organizer's SMTP config; unset means the platform SMTP.
+ * @param {{ to: string, subject: string, text: string, html?: string, ownerId?: string }} message
  * @param {import("knex").Knex} [executor] - pass an open transaction to keep this atomic with a related write.
  */
-export const enqueue = async ({ to, subject, text, html }, executor = db) => {
+export const enqueue = async ({ to, subject, text, html, ownerId }, executor = db) => {
   const id = newId();
   const now = new Date();
   await executor(TABLE).insert({
@@ -23,6 +24,7 @@ export const enqueue = async ({ to, subject, text, html }, executor = db) => {
     subject,
     text_body: text,
     html_body: html ?? null,
+    owner_id: ownerId ?? null,
     status: "pending",
     attempts: 0,
     available_at: now,

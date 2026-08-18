@@ -11,10 +11,12 @@ const orderUrl = (orderId, email) => `${env.FRONTEND_URL}/orders/${orderId}?emai
  * notify). The actual SMTP send happens later, off the request, via the
  * `email_jobs` background worker.
  * @param {{ to: string, subject: string, text: string, html?: string }} message
+ * @param {string} [ownerId] - buyer-facing email is routed through this event
+ *   organizer's SMTP config; omitted, the platform SMTP is used.
  */
-const notify = async (message) => {
+const notify = async (message, ownerId) => {
   try {
-    await enqueueEmail(message);
+    await enqueueEmail(message, { ownerId });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error(`[notification] failed to queue "${message.subject}" to ${message.to}:`, error.message);
@@ -64,49 +66,69 @@ export const notifyAdminApplicationDecision = async (application, applicant, dec
  * Sends the buyer their ticket codes once a payment proof is approved.
  * @param {object} order - an `orders` row
  * @param {object[]} tickets - rows from `ticketsRepository.listByOrderWithContext`
+ * @param {object} event - the order's `events` row (routes the email through its organizer's SMTP)
  */
-export const notifyOrderPaid = async (order, tickets) => {
+export const notifyOrderPaid = async (order, tickets, event) => {
   const codeList = tickets.map((ticket) => `- ${ticket.ticket_type_name}: ${ticket.ticket_code}`).join("\n");
-  await notify({
-    to: order.buyer_email,
-    subject: "Your payment was confirmed — here are your tickets",
-    text: `Hi ${order.buyer_name}, your payment for order ${order.id} was confirmed.\n\nYour tickets:\n${codeList}\n\nView them at ${orderUrl(order.id, order.buyer_email)}`,
-    html: `<p>Hi ${order.buyer_name}, your payment for order <strong>${order.id}</strong> was confirmed.</p><p>Your tickets:</p><ul>${tickets.map((ticket) => `<li>${ticket.ticket_type_name}: <strong>${ticket.ticket_code}</strong></li>`).join("")}</ul><p><a href="${orderUrl(order.id, order.buyer_email)}">View your tickets</a></p>`,
-  });
+  await notify(
+    {
+      to: order.buyer_email,
+      subject: "Your payment was confirmed — here are your tickets",
+      text: `Hi ${order.buyer_name}, your payment for order ${order.id} was confirmed.\n\nYour tickets:\n${codeList}\n\nView them at ${orderUrl(order.id, order.buyer_email)}`,
+      html: `<p>Hi ${order.buyer_name}, your payment for order <strong>${order.id}</strong> was confirmed.</p><p>Your tickets:</p><ul>${tickets.map((ticket) => `<li>${ticket.ticket_type_name}: <strong>${ticket.ticket_code}</strong></li>`).join("")}</ul><p><a href="${orderUrl(order.id, order.buyer_email)}">View your tickets</a></p>`,
+    },
+    event?.owner_id,
+  );
 };
 
 /**
  * Tells the buyer their uploaded payment proof was rejected so they can re-submit.
  * @param {object} order - an `orders` row
  * @param {string} [reviewerNotes]
+ * @param {object} event - the order's `events` row (routes the email through its organizer's SMTP)
  */
-export const notifyPaymentProofRejected = async (order, reviewerNotes) => {
-  await notify({
-    to: order.buyer_email,
-    subject: `Payment proof rejected for order ${order.id}`,
-    text: `Hi ${order.buyer_name}, the payment proof you submitted for order ${order.id} was rejected.${reviewerNotes ? ` Reason: ${reviewerNotes}` : ""} Please upload a new proof at ${orderUrl(order.id, order.buyer_email)}`,
-    html: `<p>Hi ${order.buyer_name}, the payment proof you submitted for order <strong>${order.id}</strong> was rejected.</p>${reviewerNotes ? `<p>Reason: ${reviewerNotes}</p>` : ""}<p><a href="${orderUrl(order.id, order.buyer_email)}">Upload a new proof</a></p>`,
-  });
+export const notifyPaymentProofRejected = async (order, reviewerNotes, event) => {
+  await notify(
+    {
+      to: order.buyer_email,
+      subject: `Payment proof rejected for order ${order.id}`,
+      text: `Hi ${order.buyer_name}, the payment proof you submitted for order ${order.id} was rejected.${reviewerNotes ? ` Reason: ${reviewerNotes}` : ""} Please upload a new proof at ${orderUrl(order.id, order.buyer_email)}`,
+      html: `<p>Hi ${order.buyer_name}, the payment proof you submitted for order <strong>${order.id}</strong> was rejected.</p>${reviewerNotes ? `<p>Reason: ${reviewerNotes}</p>` : ""}<p><a href="${orderUrl(order.id, order.buyer_email)}">Upload a new proof</a></p>`,
+    },
+    event?.owner_id,
+  );
 };
 
-/** @param {object} order - an `orders` row */
-export const notifyOrderCancelled = async (order) => {
-  await notify({
-    to: order.buyer_email,
-    subject: `Order ${order.id} was cancelled`,
-    text: `Hi ${order.buyer_name}, your order ${order.id} was cancelled.`,
-    html: `<p>Hi ${order.buyer_name}, your order <strong>${order.id}</strong> was cancelled.</p>`,
-  });
+/**
+ * @param {object} order - an `orders` row
+ * @param {object} event - the order's `events` row (routes the email through its organizer's SMTP)
+ */
+export const notifyOrderCancelled = async (order, event) => {
+  await notify(
+    {
+      to: order.buyer_email,
+      subject: `Order ${order.id} was cancelled`,
+      text: `Hi ${order.buyer_name}, your order ${order.id} was cancelled.`,
+      html: `<p>Hi ${order.buyer_name}, your order <strong>${order.id}</strong> was cancelled.</p>`,
+    },
+    event?.owner_id,
+  );
 };
 
-/** @param {object} order - an `orders` row */
-export const notifyOrderExpired = async (order) => {
-  await notify({
-    to: order.buyer_email,
-    subject: `Order ${order.id} expired`,
-    text: `Hi ${order.buyer_name}, the payment window for order ${order.id} closed before a payment proof was submitted, so it has expired and its tickets were released back for sale.`,
-    html: `<p>Hi ${order.buyer_name}, the payment window for order <strong>${order.id}</strong> closed before a payment proof was submitted, so it has expired and its tickets were released back for sale.</p>`,
-  });
+/**
+ * @param {object} order - an `orders` row
+ * @param {object} event - the order's `events` row (routes the email through its organizer's SMTP)
+ */
+export const notifyOrderExpired = async (order, event) => {
+  await notify(
+    {
+      to: order.buyer_email,
+      subject: `Order ${order.id} expired`,
+      text: `Hi ${order.buyer_name}, the payment window for order ${order.id} closed before a payment proof was submitted, so it has expired and its tickets were released back for sale.`,
+      html: `<p>Hi ${order.buyer_name}, the payment window for order <strong>${order.id}</strong> closed before a payment proof was submitted, so it has expired and its tickets were released back for sale.</p>`,
+    },
+    event?.owner_id,
+  );
 };
 
 const REFUND_STATUS_COPY = {
@@ -133,14 +155,18 @@ const REFUND_STATUS_COPY = {
  * @param {object} order - an `orders` row
  * @param {"requested" | "approved" | "rejected" | "completed"} status
  * @param {string} [notes]
+ * @param {object} event - the order's `events` row (routes the email through its organizer's SMTP)
  */
-export const notifyRefundStatus = async (order, status, notes) => {
+export const notifyRefundStatus = async (order, status, notes, event) => {
   const copy = REFUND_STATUS_COPY[status];
   const text = copy.body(order, notes);
-  await notify({
-    to: order.buyer_email,
-    subject: copy.subject(order.id),
-    text,
-    html: `<p>${text}</p>`,
-  });
+  await notify(
+    {
+      to: order.buyer_email,
+      subject: copy.subject(order.id),
+      text,
+      html: `<p>${text}</p>`,
+    },
+    event?.owner_id,
+  );
 };

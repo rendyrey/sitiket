@@ -14,14 +14,15 @@ export const findLatestByOrder = (orderId) =>
 export const findById = (id) => db(TABLE).where({ id }).first();
 
 /**
- * @param {{ orderId: string, bankAccountId: string, amount: number, proofImageUrl: string, transferNote?: string }} input
+ * @param {{ orderId: string, method: "bank_transfer" | "qris", bankAccountId: string | null, amount: number, proofImageUrl: string, transferNote?: string }} input
  */
 export const create = async (input) => {
   const id = newId();
   await db(TABLE).insert({
     id,
     order_id: input.orderId,
-    bank_account_id: input.bankAccountId,
+    method: input.method,
+    bank_account_id: input.bankAccountId ?? null,
     amount: input.amount,
     proof_image_url: input.proofImageUrl,
     transfer_note: input.transferNote ?? null,

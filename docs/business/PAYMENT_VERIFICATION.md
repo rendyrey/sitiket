@@ -1,6 +1,6 @@
-# Payment Verification — v1 (Manual Bank Transfer)
+# Payment Verification — v1 (Manual Bank Transfer & QRIS)
 
-> Confirmed decision: v1 ships with manual bank transfer + proof upload, reviewed by the event owner. No payment gateway integration yet. Schema tables referenced below are defined in [DATABASE_DESIGN.md](./DATABASE_DESIGN.md) §4.6.
+> Confirmed decision: v1 ships with manual payment + proof upload, reviewed by the event owner. Two manual methods exist: **bank transfer** (buyer transfers to the organizer's payout account) and **static QRIS** (buyer scans the organizer's QRIS code from any e-wallet/mobile-banking app — opt-in per event via `events.qris_enabled`, backed by one `qris_configs` row per organizer). Both share the same proof-upload → owner-review flow below; `order_payments.method` records which was used. No payment gateway integration yet. Schema tables referenced below are defined in [DATABASE_DESIGN.md](./DATABASE_DESIGN.md) §4.3 and §4.6.
 
 ## 1. Why manual for v1
 
@@ -27,8 +27,8 @@ sequenceDiagram
         B->>S: Submit OTP
         S->>S: Set orders.guest_email_verified_at
     end
-    S->>B: Show destination bank account (event's bank_account_id, or owner's default)
-    B->>S: Upload transfer proof (order_payments row, status = pending_review)
+    S->>B: Show payment options — destination bank account(s) and/or the organizer's QRIS code — plus the exact amount
+    B->>S: Upload payment proof with the method used (order_payments row, status = pending_review)
     S->>S: Set orders.status = awaiting_verification
     S->>O: Notify: new payment proof to review
     O->>S: Approve or reject proof
@@ -75,7 +75,7 @@ sequenceDiagram
 This is explicitly deferred, but the schema is designed so it layers on rather than requiring a rework:
 
 1. Add a `payment_provider_transactions` table: `order_id`, `provider` (`midtrans`/`xendit`), `provider_reference`, `status`, `raw_webhook_payload`, timestamps.
-2. Add `orders.payment_method` (`manual_transfer` / `gateway`) so both paths can coexist — an owner without a merchant account keeps using manual transfer while others use the gateway.
+2. Extend `order_payments.method` (already `bank_transfer` / `qris` today) — or add `orders.payment_method` — with a `gateway` value so all paths can coexist: an owner without a merchant account keeps using manual transfer/QRIS while others use the gateway.
 3. Webhook handler verifies the provider signature, then transitions `orders.status` `pending_payment → paid` automatically (skipping `awaiting_verification` entirely for gateway orders).
 4. `order_payments` remains exactly as-is for any owner who still opts into manual transfer — the two payment methods are not mutually exclusive at the schema level.
 5. Refunds become callable through the provider's refund API from a `refund_requests.status = approved` row instead of being purely manual — see the "Automated via payment gateway" option that was deferred in this design pass.

@@ -17,20 +17,24 @@ import { badRequest, notFound } from "../utils/http-error.js";
  *
  * @param {string} orderId
  * @param {string} email
+ * @param {string} [ownerId] - the event organizer whose SMTP delivers this OTP
  * @returns {Promise<{ devCode?: string }>}
  */
-export const requestGuestOtp = async (orderId, email) => {
+export const requestGuestOtp = async (orderId, email, ownerId) => {
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const expiresAt = new Date(Date.now() + env.GUEST_EMAIL_OTP_TTL_MINUTES * 60 * 1000);
 
   await emailVerificationsRepository.create({ email, purpose: "guest_checkout", orderId, code, expiresAt });
 
-  const { smtpConfigured } = await enqueueEmail({
-    to: email,
-    subject: `Your SiTIKET verification code: ${code}`,
-    text: `Your verification code is ${code}. It expires in ${env.GUEST_EMAIL_OTP_TTL_MINUTES} minutes.`,
-    html: `<p>Your verification code is <strong>${code}</strong>.</p><p>It expires in ${env.GUEST_EMAIL_OTP_TTL_MINUTES} minutes.</p>`,
-  });
+  const { smtpConfigured } = await enqueueEmail(
+    {
+      to: email,
+      subject: `Your SiTIKET verification code: ${code}`,
+      text: `Your verification code is ${code}. It expires in ${env.GUEST_EMAIL_OTP_TTL_MINUTES} minutes.`,
+      html: `<p>Your verification code is <strong>${code}</strong>.</p><p>It expires in ${env.GUEST_EMAIL_OTP_TTL_MINUTES} minutes.</p>`,
+    },
+    { ownerId },
+  );
 
   if (!smtpConfigured) {
     // eslint-disable-next-line no-console

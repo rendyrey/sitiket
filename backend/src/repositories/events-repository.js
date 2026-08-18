@@ -114,6 +114,7 @@ export const create = async (input) => {
     contact_person_email: input.contactPersonEmail,
     contact_person_phone: input.contactPersonPhone,
     bank_account_id: input.bankAccountId ?? null,
+    qris_enabled: input.qrisEnabled ?? false,
     max_tickets_per_user: input.maxTicketsPerUser ?? 10,
     created_at: now,
     updated_at: now,
@@ -145,6 +146,7 @@ export const update = async (id, patch) => {
     contactPersonEmail: "contact_person_email",
     contactPersonPhone: "contact_person_phone",
     bankAccountId: "bank_account_id",
+    qrisEnabled: "qris_enabled",
     maxTicketsPerUser: "max_tickets_per_user",
   };
 

@@ -1,0 +1,14 @@
+import { Router } from "express";
+import * as qrisConfigController from "../controllers/qris-config-controller.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import { imageUpload } from "../middleware/upload.js";
+import { validate } from "../middleware/validate.js";
+import { saveQrisConfigSchema } from "../schemas/qris-config-schemas.js";
+
+export const qrisConfigRouter = Router();
+
+qrisConfigRouter.use(requireAuth, requireRole("admin", "super_admin"));
+
+qrisConfigRouter.get("/", qrisConfigController.getMine);
+qrisConfigRouter.put("/", imageUpload.single("qrisImage"), validate(saveQrisConfigSchema), qrisConfigController.save);
+qrisConfigRouter.delete("/", qrisConfigController.remove);

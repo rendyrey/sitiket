@@ -17,6 +17,7 @@ const baseFields = {
   contactPersonEmail: z.string().email(),
   contactPersonPhone: z.string().min(6).max(32),
   bankAccountId: z.string().uuid().optional(),
+  qrisEnabled: z.boolean().optional(),
   maxTicketsPerUser: z.coerce.number().int().positive().max(1000).optional(),
 };
 

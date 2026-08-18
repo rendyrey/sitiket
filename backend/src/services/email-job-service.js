@@ -1,5 +1,6 @@
-import { sendMail, transporter } from "../config/mailer.js";
+import { getOrganizerTransport, organizerFromHeader, sendMail, transporter } from "../config/mailer.js";
 import * as emailJobsRepository from "../repositories/email-jobs-repository.js";
+import * as organizerEmailConfigsRepository from "../repositories/organizer-email-configs-repository.js";
 
 /** Jobs claimed per worker tick. */
 const BATCH_SIZE = 20;
@@ -7,13 +8,54 @@ const BATCH_SIZE = 20;
 /**
  * Queues an email instead of sending it inline on the request that
  * triggered it — the background worker (`processEmailJobQueue`) delivers it.
+ * Pass `ownerId` for buyer-facing email so it goes out through that event
+ * organizer's own SMTP; without it the platform SMTP is used.
  * @param {{ to: string, subject: string, text: string, html?: string }} message
- * @returns {Promise<{ smtpConfigured: boolean }>} whether SMTP is set up at all,
- *   for callers (e.g. guest OTP) that fall back to logging when it isn't.
+ * @param {{ ownerId?: string }} [routing]
+ * @returns {Promise<{ smtpConfigured: boolean }>} whether a transport exists for
+ *   this route, for callers (e.g. guest OTP) that fall back to logging when it doesn't.
  */
-export const enqueueEmail = async (message) => {
-  await emailJobsRepository.enqueue(message);
+export const enqueueEmail = async (message, { ownerId } = {}) => {
+  await emailJobsRepository.enqueue({ ...message, ownerId });
+
+  if (ownerId) {
+    const config = await organizerEmailConfigsRepository.findByOwner(ownerId);
+    // Platform SMTP counts too — deliverJob falls back to it for legacy owners.
+    return { smtpConfigured: Boolean(config) || Boolean(transporter) };
+  }
   return { smtpConfigured: Boolean(transporter) };
+};
+
+/**
+ * Delivers one claimed job through the transport its `owner_id` routes to.
+ * Organizer-routed jobs whose config has since disappeared (legacy events
+ * pre-dating the email-config requirement, or a deleted config) fall back to
+ * the platform SMTP so buyer flows never silently stall. Throws when no
+ * transport at all is available — the job then retries with backoff and
+ * surfaces in `email_jobs` as `failed`, instead of being silently marked sent.
+ * @param {object} job - an `email_jobs` row
+ */
+const deliverJob = async (job) => {
+  const message = { to: job.to_email, subject: job.subject, text: job.text_body, html: job.html_body ?? undefined };
+
+  if (job.owner_id) {
+    const config = await organizerEmailConfigsRepository.findByOwner(job.owner_id);
+    if (config) {
+      await getOrganizerTransport(config).sendMail({ from: organizerFromHeader(config), ...message });
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.warn(`[email-job] organizer ${job.owner_id} has no email config — falling back to platform SMTP for job ${job.id}`);
+  }
+
+  const sent = await sendMail(message);
+  if (!sent) {
+    throw new Error(
+      job.owner_id
+        ? "Organizer email config missing and platform SMTP (SMTP_HOST) is not configured"
+        : "Platform SMTP (SMTP_HOST) is not configured",
+    );
+  }
 };
 
 /**
@@ -27,9 +69,7 @@ export const processEmailJobQueue = async () => {
   await Promise.all(
     jobs.map(async (job) => {
       try {
-        // `sendMail` resolves `false` (not a throw) when SMTP isn't configured —
-        // there's nothing to retry, so treat it the same as a successful send.
-        await sendMail({ to: job.to_email, subject: job.subject, text: job.text_body, html: job.html_body ?? undefined });
+        await deliverJob(job);
         await emailJobsRepository.markSent(job.id);
       } catch (error) {
         // eslint-disable-next-line no-console

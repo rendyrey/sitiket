@@ -1,6 +1,6 @@
 import { db } from "../config/db.js";
 import { env } from "../config/env.js";
-import { resolveForEvent as resolveBankAccountForEvent } from "./bank-account-service.js";
+import { resolvePaymentOptionsForEvent } from "./payment-method-service.js";
 import * as orderItemsRepository from "../repositories/order-items-repository.js";
 import * as ordersRepository from "../repositories/orders-repository.js";
 import * as ticketTypesRepository from "../repositories/ticket-types-repository.js";
@@ -88,9 +88,10 @@ export const createOrder = async (requester, input) => {
     discountAmount = calculateDiscount(promoCode, subtotalAmount);
   }
 
-  // Fails fast if the organizer has no payout account configured — checked here,
-  // before reserving inventory, and again by order-payment-service at proof-submission time.
-  await resolveBankAccountForEvent(event);
+  // Fails fast if the organizer has no way to get paid (payout bank account
+  // or event-enabled QRIS) — checked here, before reserving inventory, and
+  // again by order-payment-service at proof-submission time.
+  await resolvePaymentOptionsForEvent(event);
 
   const orderId = await db.transaction(async (trx) => {
     for (let index = 0; index < ticketTypes.length; index += 1) {
@@ -136,7 +137,8 @@ export const createOrder = async (requester, input) => {
 
   let devOtpCode;
   if (!requester) {
-    const otpResult = await requestGuestOtp(orderId, buyerEmail);
+    // The OTP email is buyer-facing, so it rides the organizer's SMTP.
+    const otpResult = await requestGuestOtp(orderId, buyerEmail, event.owner_id);
     devOtpCode = otpResult.devCode;
   }
 
@@ -217,10 +219,12 @@ const releaseOrder = async (order, status) => {
     await ordersRepository.updateStatus(order.id, status, trx);
   });
 
+  // Buyer emails go out through the event organizer's SMTP.
+  const event = await eventsRepository.findById(order.event_id);
   if (status === "cancelled") {
-    await notifyOrderCancelled(order);
+    await notifyOrderCancelled(order, event);
   } else {
-    await notifyOrderExpired(order);
+    await notifyOrderExpired(order, event);
   }
 };
 

@@ -2,9 +2,9 @@
 
 ## Status and stack
 
-Backend root: `backend/`. A separate ESM Node.js package using Express 5, MySQL 8 (via `knex` + `mysql2`), JWT sessions (Google ID token verified server-side, then a SiTIKET-issued JWT), `zod` validation, and `multer` for local-disk file uploads. The full v1 domain model from [docs/business/](docs/business/README.md) is implemented: auth, admin onboarding, events, ticket types, promo codes, orders/checkout with atomic inventory reservation, manual bank-transfer payment verification, QR ticket issuance, gate check-in, and manual refunds.
+Backend root: `backend/`. A separate ESM Node.js package using Express 5, MySQL 8 (via `knex` + `mysql2`), JWT sessions (Google ID token verified server-side, then a SiTIKET-issued JWT), `zod` validation, and `multer` for local-disk file uploads. The full v1 domain model from [docs/business/](docs/business/README.md) is implemented: auth, admin onboarding, events, ticket types, promo codes, orders/checkout with atomic inventory reservation, manual payment verification (bank transfer and per-event opt-in QRIS), QR ticket issuance, gate check-in, manual refunds, and per-organizer outgoing email (every buyer-facing email is sent through the event organizer's own SMTP — see § _Email delivery_).
 
-Not yet implemented (see § _Known gaps_): a real email-delivery provider, automated tests, a payment gateway (Midtrans/Xendit — deferred by design, see [docs/business/PAYMENT_VERIFICATION.md](docs/business/PAYMENT_VERIFICATION.md)), and production-grade file storage (uploads currently live on local disk).
+Not yet implemented (see § _Known gaps_): automated tests, a payment gateway (Midtrans/Xendit — deferred by design, see [docs/business/PAYMENT_VERIFICATION.md](docs/business/PAYMENT_VERIFICATION.md)), and production-grade file storage (uploads currently live on local disk).
 
 ## Local setup
 
@@ -62,10 +62,12 @@ All routes are prefixed `/api`. Grouped by resource; `mine`/owner-scoped routes 
 | Admin applications | `POST /admin-applications`, `GET /admin-applications`, `POST /admin-applications/:id/approve`\|`reject` |
 | Taxonomy | `GET/POST/PATCH /event-categories`, `GET/POST/PATCH /ticket-categories` |
 | Bank accounts | `GET/POST/PATCH /bank-accounts` |
+| QRIS config | `GET/PUT/DELETE /qris-config` — one static QRIS per organizer (PUT is multipart: `qrisImage` file + `merchantName`); events opt in via `qrisEnabled` |
+| Email config | `GET/PUT /email-config` — one SMTP config per organizer (`gmail` preset needs only email + App Password; `custom` takes host/port/secure); PUT live-verifies the login before saving; **required before creating events** |
 | Events | `GET/POST /events`, `GET /events/mine`, `GET /events/:slug`, `PATCH /events/:id`\|`:id/status`\|`:id/visibility` |
 | Event sub-resources | `GET/POST/DELETE /events/:eventId/images`, `/staff`, `GET/POST/PATCH /events/:eventId/ticket-types`, `/promo-codes`, `GET /events/:eventId/orders` |
 | Orders | `POST /orders`, `POST /orders/:id/verify-guest-email`, `GET /orders/mine`\|`:id`\|`:id/guest`, `POST /orders/:id/cancel` |
-| Payments | `GET /orders/:orderId/payments/instructions` (destination bank account + amount to show the buyer), `POST/GET /orders/:orderId/payments`, `POST /order-payments/:id/approve`\|`reject` |
+| Payments | `GET /orders/:orderId/payments/instructions` (destination bank account(s) and/or QRIS + amount to show the buyer), `POST /orders/:orderId/payments` (proof upload, optional `method`: `bank_transfer`\|`qris`), `GET /orders/:orderId/payments`, `POST /order-payments/:id/approve`\|`reject` |
 | Tickets & check-in | `GET /tickets/mine`, `GET /orders/:orderId/tickets`, `POST /check-ins/scan` |
 | Refunds | `POST/GET /orders/:orderId/refund-requests`, `GET /refund-requests/mine`, `POST /refund-requests/:id/approve`\|`reject`\|`complete` |
 
@@ -82,14 +84,21 @@ All routes are prefixed `/api`. Grouped by resource; `mine`/owner-scoped routes 
 - Overselling is prevented by an atomic guarded `UPDATE ... WHERE quantity_sold + ? <= quantity_total` inside the order-creation transaction (`repositories/ticket-types-repository.js` `reserveInventory`) — see `services/order-service.js`.
 - Promo code redemption is equally atomic (`repositories/promo-codes-repository.js` `incrementUsage`).
 - Order/payment/refund/ticket states are explicit enums, not booleans — see docs/business/DATABASE_DESIGN.md for every state machine.
-- A ticket is marked `paid`-order-issued only after a payment proof is explicitly approved by the event owner (or super_admin) — see [docs/business/PAYMENT_VERIFICATION.md](docs/business/PAYMENT_VERIFICATION.md).
+- A ticket is marked `paid`-order-issued only after a payment proof is explicitly approved by the event owner (or super_admin) — see [docs/business/PAYMENT_VERIFICATION.md](docs/business/PAYMENT_VERIFICATION.md). Bank transfer and QRIS are both manual-proof methods sharing this exact review flow; `order_payments.method` records which one the buyer used, and `services/payment-method-service.js` (`resolvePaymentOptionsForEvent`) is the single source of truth for which methods an event offers — order creation fails fast (`EVENT_NO_PAYMENT_METHOD`) when an organizer has neither a payout account nor event-enabled QRIS.
 - Abandoned `pending_payment` orders are swept every 5 minutes by `server.js` (`services/order-service.js` `expireStalePendingOrders`), releasing held inventory/promo usage.
 - Each ticket's QR payload is HMAC-signed (`utils/qr-token.js`) and check-in transitions `issued → used` via a guarded atomic `UPDATE`, so two simultaneous scans of the same ticket can't both succeed — see `services/ticket-service.js` and [docs/business/CHECKIN_GATE_SYSTEM.md](docs/business/CHECKIN_GATE_SYSTEM.md).
+
+## Email delivery
+
+- **Per-organizer SMTP.** Every buyer-facing email (guest OTP, ticket delivery on approval, proof rejection, order cancelled/expired, all refund statuses) is enqueued with `email_jobs.owner_id` and delivered through that organizer's `organizer_email_configs` row — `From:` is the organizer's own address. Platform emails (admin-application notifications) keep using the env-configured SMTP (`SMTP_HOST` etc.).
+- **Config is a hard prerequisite for creating events**: `POST /api/events` throws 409 `EMAIL_CONFIG_REQUIRED` until the owner saves an email config. Saving (`PUT /api/email-config`) live-verifies the SMTP login (`transporter.verify()`) before storing, so a saved config is always a deliverable one; `provider: "gmail"` applies the smtp.gmail.com:465 preset so the organizer only supplies their address + a Google App Password.
+- **Secrets at rest**: SMTP passwords are AES-256-GCM encrypted (`utils/secret-box.js`) with a key derived from `EMAIL_CONFIG_SECRET` (recommended in production) or, when unset, from `JWT_SECRET`.
+- **Worker semantics** (`services/email-job-service.js`, 3s interval in `server.js`): jobs routed to an organizer whose config has since disappeared (legacy events pre-dating the requirement, or a deleted config) fall back to the platform SMTP; when no transport at all is available the job retries with backoff and ends `failed` — it is never silently marked sent, so `email_jobs.status = 'failed'` rows are meaningful.
 
 ## Known gaps / follow-ups
 
 - **JWT role claims don't live-update.** A session JWT embeds `role` at sign-in time. If a Super Admin approves someone's Admin application (or changes anyone's role) mid-session, the affected user must sign in again to get a token reflecting the new role — there is no server-side session/role revalidation per request. Standard stateless-JWT tradeoff; consider shorter token lifetimes or a role-refresh endpoint if this becomes a real friction point.
-- **No real email provider.** `services/email-verification-service.js` logs the guest-checkout OTP server-side and returns it in the response outside `NODE_ENV=production` — there is no SMTP/Resend/etc. integration yet. Order confirmations are similarly not emailed; a guest's only way to retrieve their tickets post-purchase today is `GET /orders/:id/guest?email=...`.
+- **No email-config management beyond replace.** An organizer can overwrite their email config but not delete it (deliberate — it's a prerequisite), and there's no "send test email" endpoint beyond the verify-on-save handshake. The guest OTP still logs server-side and echoes in the response outside `NODE_ENV=production` when no transport is available, so dev checkout works without SMTP.
 - **Local disk uploads.** `middleware/upload.js` writes event images and payment proofs to `backend/uploads/`. Swap the multer storage engine for a cloud-storage backend (GCS/S3) before any real deployment.
 - **No automated tests yet.** Add them alongside the first real feature change per this project's `AGENTS.md`.
 - **Payment gateway** (Midtrans/Xendit) is explicitly deferred — see the migration path in [docs/business/PAYMENT_VERIFICATION.md](docs/business/PAYMENT_VERIFICATION.md) §5.

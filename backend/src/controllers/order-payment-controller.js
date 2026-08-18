@@ -9,6 +9,7 @@ export const submit = async (request, response) => {
   const payment = await orderPaymentService.submitProof(request.params.orderId, identity, {
     file: request.file,
     transferNote: request.body.transferNote,
+    method: request.body.method,
   });
   response.status(201).json({ data: payment });
 };

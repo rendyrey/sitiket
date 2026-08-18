@@ -2,6 +2,9 @@ import { z } from "zod";
 
 export const submitPaymentProofSchema = z.object({
   transferNote: z.string().max(500).optional(),
+  // Which way the buyer paid. Defaults server-side to whichever method the
+  // event actually offers (bank transfer when available, else QRIS).
+  method: z.enum(["bank_transfer", "qris"]).optional(),
   // Required only for guest (unauthenticated) submissions — proves the
   // submitter knows the order's buyer email, standing in for a session.
   guestEmail: z.string().email().optional(),

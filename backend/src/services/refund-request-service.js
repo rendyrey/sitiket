@@ -28,7 +28,8 @@ export const request = async (orderId, identity, reason) => {
 
   const refundRequest = await refundRequestsRepository.create({ orderId, requestedBy: identity.userId, reason });
   await ordersRepository.updateStatus(orderId, "refund_requested");
-  await notifyRefundStatus(order, "requested");
+  const event = await eventsRepository.findById(order.event_id);
+  await notifyRefundStatus(order, "requested", undefined, event);
   return refundRequest;
 };
 
@@ -44,7 +45,7 @@ const loadForReview = async (refundRequestId, reviewer) => {
   const event = await eventsRepository.findById(order.event_id);
   assertEventOwnerOrSuperAdmin(event, reviewer);
 
-  return { refundRequest, order };
+  return { refundRequest, order, event };
 };
 
 /**
@@ -53,13 +54,13 @@ const loadForReview = async (refundRequestId, reviewer) => {
  * @param {string} [notes]
  */
 export const approve = async (refundRequestId, reviewer, notes) => {
-  const { refundRequest, order } = await loadForReview(refundRequestId, reviewer);
+  const { refundRequest, order, event } = await loadForReview(refundRequestId, reviewer);
   if (refundRequest.status !== "requested") {
     throw conflict("ALREADY_DECIDED", `Refund request is already "${refundRequest.status}"`);
   }
 
   await refundRequestsRepository.decide(refundRequestId, { status: "approved", processedBy: reviewer.sub, notes });
-  await notifyRefundStatus(order, "approved", notes);
+  await notifyRefundStatus(order, "approved", notes, event);
   return refundRequestsRepository.findById(refundRequestId);
 };
 
@@ -69,14 +70,14 @@ export const approve = async (refundRequestId, reviewer, notes) => {
  * @param {string} [notes]
  */
 export const reject = async (refundRequestId, reviewer, notes) => {
-  const { refundRequest, order } = await loadForReview(refundRequestId, reviewer);
+  const { refundRequest, order, event } = await loadForReview(refundRequestId, reviewer);
   if (refundRequest.status !== "requested") {
     throw conflict("ALREADY_DECIDED", `Refund request is already "${refundRequest.status}"`);
   }
 
   await refundRequestsRepository.decide(refundRequestId, { status: "rejected", processedBy: reviewer.sub, notes });
   await ordersRepository.updateStatus(order.id, "refund_rejected");
-  await notifyRefundStatus(order, "rejected", notes);
+  await notifyRefundStatus(order, "rejected", notes, event);
   return refundRequestsRepository.findById(refundRequestId);
 };
 
@@ -89,7 +90,7 @@ export const reject = async (refundRequestId, reviewer, notes) => {
  * @param {string} [notes]
  */
 export const markCompleted = async (refundRequestId, reviewer, notes) => {
-  const { refundRequest, order } = await loadForReview(refundRequestId, reviewer);
+  const { refundRequest, order, event } = await loadForReview(refundRequestId, reviewer);
   if (refundRequest.status !== "approved") {
     throw conflict("NOT_APPROVED_YET", 'Only an "approved" refund request can be marked completed');
   }
@@ -100,7 +101,7 @@ export const markCompleted = async (refundRequestId, reviewer, notes) => {
     await ticketsRepository.voidIssuedTicketsForOrder(order.id, trx);
   });
 
-  await notifyRefundStatus(order, "completed", notes);
+  await notifyRefundStatus(order, "completed", notes, event);
   return refundRequestsRepository.findById(refundRequestId);
 };
 

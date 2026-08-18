@@ -18,6 +18,8 @@ import { orderRefundRequestRouter } from "./routes/order-refund-requests.js";
 import { orderTicketRouter } from "./routes/order-tickets.js";
 import { orderRouter } from "./routes/orders.js";
 import { promoCodeRouter } from "./routes/promo-codes.js";
+import { qrisConfigRouter } from "./routes/qris-config.js";
+import { emailConfigRouter } from "./routes/email-config.js";
 import { refundRequestRouter } from "./routes/refund-requests.js";
 import { ticketCategoryRouter } from "./routes/ticket-categories.js";
 import { ticketTypeRouter } from "./routes/ticket-types.js";
@@ -41,6 +43,8 @@ app.use("/api/admin-applications", adminApplicationRouter);
 app.use("/api/event-categories", eventCategoryRouter);
 app.use("/api/ticket-categories", ticketCategoryRouter);
 app.use("/api/bank-accounts", bankAccountRouter);
+app.use("/api/qris-config", qrisConfigRouter);
+app.use("/api/email-config", emailConfigRouter);
 
 app.use("/api/events/:eventId/images", eventImageRouter);
 app.use("/api/events/:eventId/staff", eventStaffRouter);

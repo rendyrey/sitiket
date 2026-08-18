@@ -147,6 +147,20 @@ Both tables are CRUD-managed exclusively by `super_admin` — enforce at the API
 
 Index: `owner_id`. Application rule: exactly one `is_default = true` row per owner (enforce with a partial unique index `WHERE is_default`).
 
+#### `qris_configs` — **[confirmed addition]**
+
+One static QRIS code per organizer — the image exported from their bank/PSP merchant app. Buyers scan it and pay from any e-wallet/mobile-banking app, then upload proof exactly like a manual bank transfer (same `order_payments` review flow). Events opt in per-event via `events.qris_enabled`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `owner_id` | uuid FK → `users.id`, not null, **unique** | One config per organizer; ON DELETE CASCADE. |
+| `merchant_name` | text, not null | Shown to the buyer next to the code ("pay to …"). |
+| `qris_image_url` | text, not null | `/uploads/…` path of the uploaded QRIS image. |
+| `created_at` / `updated_at` | timestamptz | |
+
+Deleting the config is allowed and degrades gracefully: events with `qris_enabled = true` simply stop offering QRIS (resolved at read time, never stored on the order).
+
 ### 4.4 Events
 
 #### `events`
@@ -174,6 +188,7 @@ Index: `owner_id`. Application rule: exactly one `is_default = true` row per own
 | `contact_person_email` | text, not null | |
 | `contact_person_phone` | text, not null | |
 | `bank_account_id` | uuid FK → `bank_accounts.id`, nullable | If null, resolve to the owner's `is_default` account at checkout time. |
+| `qris_enabled` | boolean, default false | Per-event opt-in for QRIS payment. Enabling requires the owner to have a `qris_configs` row (service-layer check `QRIS_CONFIG_MISSING`); offering it to buyers additionally requires the row to still exist at checkout time. |
 | `max_tickets_per_user` | integer, not null, default 10 | Owner-configurable cap enforced when creating an order (spec §"maximum tickets purchase... the owner deciding it"). |
 | `created_at` / `updated_at` | timestamptz | |
 
@@ -278,13 +293,14 @@ paid ──(refund requested)──> refund_requested ──> refunded | refund_
 
 #### `order_payments` — **[confirmed addition]**
 
-One row per proof-of-transfer submission. Modeled as one-to-many (not one-to-one) because a rejected proof can be re-submitted; the most recent row by `submitted_at` is authoritative.
+One row per proof-of-payment submission (manual bank transfer or QRIS — both are buyer-uploads-proof, owner-reviews methods). Modeled as one-to-many (not one-to-one) because a rejected proof can be re-submitted; the most recent row by `submitted_at` is authoritative.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `order_id` | uuid FK → `orders.id`, not null | |
-| `bank_account_id` | uuid FK → `bank_accounts.id`, not null | The destination account shown to the buyer at checkout (resolved from the event, see §4.4). |
+| `method` | enum `payment_method` (`bank_transfer`, `qris`), not null, default `bank_transfer` | How the buyer says they paid. |
+| `bank_account_id` | uuid FK → `bank_accounts.id`, nullable | The destination account shown to the buyer at checkout (resolved from the event, see §4.4). Set iff `method = bank_transfer`; NULL for QRIS payments (service-layer rule). |
 | `amount` | integer, not null | What the buyer claims to have transferred. |
 | `proof_image_url` | text, not null | |
 | `transfer_note` | text, nullable | Optional buyer-entered reference/note. |
@@ -370,6 +386,41 @@ Generic table so both signup edge cases and guest checkout share one verificatio
 | `created_at` | timestamptz | |
 
 **Rule:** a guest order may not move past `pending_payment` (i.e., may not accept a payment proof) until its linked `email_verifications` row for `guest_checkout` has `verified_at` set. Logged-in buyers skip this — their `users.email_verified_at` from Google sign-in already satisfies it.
+
+### 4.9 Outgoing email — **[confirmed addition]**
+
+Every buyer-facing email (guest OTP, ticket delivery, proof rejection, cancel/expiry, refund statuses) is sent **from the event organizer's own address** through their own SMTP; only platform emails (organizer-application notifications) use the env-configured platform SMTP.
+
+#### `organizer_email_configs`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `owner_id` | uuid FK → `users.id`, not null, **unique** | One config per organizer; ON DELETE CASCADE. |
+| `provider` | enum `email_provider` (`gmail`, `custom`) | `gmail` rows are saved with the predefined Gmail preset (smtp.gmail.com:465, TLS) — the organizer only supplies address + Google App Password. `custom` rows carry the full host/port/secure the organizer entered. |
+| `smtp_host` / `smtp_port` / `smtp_secure` | text / integer / boolean | Stored resolved (preset applied at save time) so the send path never branches on provider. |
+| `from_email` | text, not null | The organizer's sending address — also the SMTP username. |
+| `from_name` | text, nullable | Optional display name for the `From:` header. |
+| `smtp_password_encrypted` | text, not null | AES-256-GCM at rest (key from `EMAIL_CONFIG_SECRET`, falling back to a `JWT_SECRET`-derived key). Never returned by the API. |
+| `verified_at` | timestamptz, nullable | Set on save — `PUT /api/email-config` performs a live `transporter.verify()` and rejects credentials that don't authenticate. |
+| `created_at` / `updated_at` | timestamptz | |
+
+**Rule:** an `admin` cannot create an event until this row exists (409 `EMAIL_CONFIG_REQUIRED`) — buyer email delivery is a prerequisite of selling, like inventory. The check is create-time only, so pre-existing events keep working; their queued email falls back to the platform SMTP until the organizer configures theirs.
+
+#### `email_jobs`
+
+Outbox queue drained by a 3-second worker interval (`server.js`); rows retry with linear backoff up to 5 attempts, then stay `failed`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `to_email` / `subject` / `text_body` / `html_body` | text | The rendered message. |
+| `owner_id` | uuid FK → `users.id`, nullable, ON DELETE SET NULL | **Routing**: set → deliver through that organizer's `organizer_email_configs` transport; NULL → platform SMTP. Resolved at send time, so a config saved after enqueueing still applies. |
+| `status` | enum (`pending`, `processing`, `sent`, `failed`), default `pending` | |
+| `attempts` / `last_error` / `available_at` / `sent_at` | — | Retry bookkeeping. |
+| `created_at` / `updated_at` | timestamptz | |
+
+Indexes: `(status, available_at)`, `owner_id`.
 
 ## 5. Cross-cutting business rules and how the schema enforces them
 
