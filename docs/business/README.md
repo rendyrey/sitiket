@@ -11,4 +11,9 @@
 
 ## Status
 
-This documents a **design/planning stage**: the repository currently has a UI-only frontend (`src/data/events.ts` mock data) and a placeholder Express backend (`BACKEND.md`) with no database yet. Nothing in `docs/business/` describes already-implemented behavior — treat it as the target design to build against, and update it in the same change set as any schema or business-rule change once implementation begins.
+These documents began as a pre-implementation design and are now **kept in sync with shipped behavior** — v1 is built and running in production (Next.js frontend, Express + MySQL backend; see [SYSTEM_OVERVIEW.md](./SYSTEM_OVERVIEW.md) §5 for the feature-by-feature status). Read them as the current design of record.
+
+Two consequences:
+
+- Where a document states a concrete value (a hold duration, an interval, a limit), that value is the one in the code — update both in the same change set, and say what changed and when.
+- Anything still unbuilt is marked explicitly (🔜 future / ❌ not in scope). Unmarked behavior is implemented.

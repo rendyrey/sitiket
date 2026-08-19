@@ -70,6 +70,7 @@ These were explicitly decided with the product owner during design and materiall
 | Multi-image upload with one Instagram-ready poster | ✅ |
 | Purchase history & "my tickets" for logged-in users | ✅ |
 | Manual bank-transfer payment verification | ✅ |
+| Timed reservation hold (10 min) with a live countdown on the buyer's order page | ✅ |
 | In-app QR gate check-in with duplicate/fraud detection | ✅ |
 | Admin onboarding via Super Admin approval | ✅ |
 | Manual, status-tracked refunds | ✅ |

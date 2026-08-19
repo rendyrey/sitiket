@@ -18,7 +18,7 @@ Public:
 - `/events`: event catalog, real category filters, search
 - `/events/[slug]`: event details
 - `/checkout/[slug]`: real checkout — multiple ticket types, promo code, guest or signed-in
-- `/orders/[id]` (+ `?email=` for guests): order status — guest OTP verify, payment instructions (bank transfer and/or the organizer's QRIS code, per what the event offers), payment-proof upload with a paid-by method choice, QR tickets, refund request
+- `/orders/[id]` (+ `?email=` for guests): order status — a live payment-window countdown (10-minute hold; ticks client-side, self-refreshes once it hits zero), guest OTP verify, payment instructions (bank transfer and/or the organizer's QRIS code, per what the event offers), payment-proof upload with a paid-by method choice, QR tickets, refund request
 - `/login`: Google Sign-In
 - `/privacy-policy`, `/terms-of-service`: legal pages (footer-linked; the privacy policy carries the Google API Limited Use disclosure required for OAuth consent-screen branding/verification)
 
@@ -51,7 +51,7 @@ src/
     ├── auth/            # Google Sign-In, session atom/provider
     ├── events/           # public catalog + event detail (lib/api.ts, lib/to-event-item.ts)
     ├── checkout/         # real checkout flow
-    ├── orders/           # order status, guest OTP, payment proof, refund request
+    ├── orders/           # order status, payment-window countdown, guest OTP, payment proof, refund request
     ├── account/          # purchase history, apply-for-Admin
     ├── admin/            # event-owner dashboard (lib/api.ts, lib/actions.ts, components/)
     ├── super-admin/      # taxonomy, admin applications, users

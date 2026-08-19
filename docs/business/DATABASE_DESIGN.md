@@ -266,7 +266,7 @@ See [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) for the full flow narra
 | `discount_amount` | integer, not null, default 0 | |
 | `total_amount` | integer, not null | `subtotal_amount - discount_amount`. Always recomputed server-side; never trust a client-submitted total. |
 | `status` | enum `order_status` (see below), default `pending_payment` | |
-| `payment_expires_at` | timestamptz, not null | Reservation hold deadline; expiring orders release their `ticket_types.quantity_sold` hold. |
+| `payment_expires_at` | timestamptz, not null | Reservation hold deadline, set at creation to `now + ORDER_PAYMENT_HOLD_MINUTES` (10); expiring orders release their `ticket_types.quantity_sold` hold. Never extended afterwards — including when a rejected proof returns the order to `pending_payment`, see [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) §5. |
 | `created_at` / `updated_at` | timestamptz | |
 
 `order_status` values: `pending_payment`, `awaiting_verification`, `paid`, `expired`, `cancelled`, `refund_requested`, `refunded`, `refund_rejected`.

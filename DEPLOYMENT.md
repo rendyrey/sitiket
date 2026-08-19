@@ -59,21 +59,43 @@ Backend `/var/www/sitiket/backend/.env`:
 
 ```bash
 ssh ubuntu@43.157.226.204
+export PATH="/home/ubuntu/.nvm/versions/node/v24.18.0/bin:$PATH"  # required — see below
 cd /var/www/sitiket
-git pull
+git pull --ff-only
 
-# Backend
+# Backend — no build step
 cd backend
 npm ci                 # only when package-lock.json changed
-npm run db:migrate
-pm2 restart sitiket-backend
+npm run db:migrate     # only when migrations changed
+cd ..
 
 # Frontend
-cd ..
 pnpm install           # only when pnpm-lock.yaml changed
 pnpm build             # NEXT_PUBLIC_* values are baked in here
-pm2 restart sitiket-app
+
+pm2 restart sitiket-app sitiket-backend --update-env && pm2 save
 ```
+
+`pnpm`/`node` live in nvm (`/home/ubuntu/.nvm/versions/node/<version>/bin`) and
+are **not** on the PATH of a non-interactive `ssh host 'cmd'` shell. Export it
+before any `pnpm`/`pm2` command, and use `set -eo pipefail` so a
+`pnpm: command not found` can't hide behind a pipe to `tail`:
+
+```bash
+export PATH="/home/ubuntu/.nvm/versions/node/v24.18.0/bin:$PATH"
+```
+
+Both apps are launched by pm2 as `pnpm start`, so their saved PATH points into
+nvm. Running `pm2 restart <app> --update-env` from a shell *without* that PATH
+overwrites the saved one and the app crash-loops with no stack trace — it simply
+cannot find node. Always `--update-env` from a shell with nvm exported, then
+`pm2 save`.
+
+**Config-only change** (editing a value in `backend/.env`, e.g.
+`ORDER_PAYMENT_HOLD_MINUTES`): no pull or build needed, but the value is read at
+boot — `pm2 restart sitiket-backend --update-env && pm2 save`, PATH exported as
+above. Back the file up first and diff the key count to prove only the intended
+line moved.
 
 Smoke checks: `curl -s localhost:4000/api/health`, then load the landing page
 and an event page over the public domain (verifies nginx, the session BFF, and
