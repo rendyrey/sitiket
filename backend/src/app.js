@@ -7,6 +7,7 @@ import { adminApplicationRouter } from "./routes/admin-applications.js";
 import { authRouter } from "./routes/auth.js";
 import { bankAccountRouter } from "./routes/bank-accounts.js";
 import { checkInRouter } from "./routes/check-ins.js";
+import { eventAttendanceRouter } from "./routes/event-attendance.js";
 import { eventCategoryRouter } from "./routes/event-categories.js";
 import { eventImageRouter } from "./routes/event-images.js";
 import { eventOrderRouter } from "./routes/event-orders.js";
@@ -46,6 +47,7 @@ app.use("/api/bank-accounts", bankAccountRouter);
 app.use("/api/qris-config", qrisConfigRouter);
 app.use("/api/email-config", emailConfigRouter);
 
+app.use("/api/events/:eventId/attendance", eventAttendanceRouter);
 app.use("/api/events/:eventId/images", eventImageRouter);
 app.use("/api/events/:eventId/staff", eventStaffRouter);
 app.use("/api/events/:eventId/ticket-types", ticketTypeRouter);

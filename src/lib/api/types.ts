@@ -685,3 +685,58 @@ export interface ScanTicketResult {
   result: CheckInResult;
   ticket: Ticket | null;
 }
+
+// ---- Event attendance report (organizer dashboard) ----
+// The backend shapes this one camelCase already (see
+// backend/src/services/event-attendance-service.js), so there is no `Raw…`
+// counterpart and nothing in normalize.ts to map.
+
+/** One 15-minute slice of the gate's arrival curve. */
+export interface AttendanceArrivalBucket {
+  /** Start of the bucket, UTC. Format it in `Asia/Jakarta` for display. */
+  startsAt: IsoDateTimeString;
+  /** Scans that landed inside this bucket. */
+  arrivals: number;
+  /** Running total of scans up to and including this bucket. */
+  cumulative: number;
+}
+
+/** Sold-vs-scanned split for a single ticket tier. */
+export interface AttendanceByTicketType {
+  ticketTypeId: Uuid;
+  name: string;
+  price: RupiahAmount;
+  /** Live tickets (issued + used). Refund-voided tickets are excluded. */
+  sold: number;
+  checkedIn: number;
+}
+
+/** Scans credited to one gate-staff account. */
+export interface AttendanceByScanner {
+  userId: Uuid | null;
+  name: string;
+  email: string | null;
+  scans: number;
+}
+
+export interface EventAttendanceReport {
+  eventId: Uuid;
+  eventName: string;
+  eventStartDate: IsoDateTimeString;
+  /** Live tickets sold — `issued` + `used`, excluding refund-voided ones. */
+  ticketsSold: number;
+  checkedIn: number;
+  notArrived: number;
+  /** Tickets voided by a refund; counted as neither sold nor absent. */
+  voided: number;
+  /** `checkedIn / ticketsSold`, as a 0–1 fraction. `0` when nothing sold. */
+  attendanceRate: number;
+  revenue: RupiahAmount;
+  byTicketType: AttendanceByTicketType[];
+  arrivals: AttendanceArrivalBucket[];
+  bucketMinutes: number;
+  firstCheckInAt: IsoDateTimeString | null;
+  lastCheckInAt: IsoDateTimeString | null;
+  peakBucket: { startsAt: IsoDateTimeString; arrivals: number } | null;
+  byScanner: AttendanceByScanner[];
+}

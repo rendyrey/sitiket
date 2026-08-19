@@ -13,6 +13,7 @@ import type {
   ApiPageMeta,
   BankAccount,
   Event,
+  EventAttendanceReport,
   EventStaff,
   ListEventOrdersQuery,
   ListEventsQuery,
@@ -41,6 +42,16 @@ export const listMyEvents = async (query?: ListEventsQuery): Promise<{ events: E
   const { data, meta } = await apiFetchPage<Event>("/api/events/mine", { query });
   return { events: data, meta };
 };
+
+// ---- Attendance (tickets sold vs. gate scans) ----
+
+/**
+ * Server-only. The owner-scoped attendance report powering
+ * `/dashboard/admin/events/[slug]/attendance`. Already camelCase from the
+ * backend, so it needs no `normalize.ts` mapper.
+ */
+export const getEventAttendance = (eventId: string): Promise<EventAttendanceReport> =>
+  apiFetch<EventAttendanceReport>(`/api/events/${eventId}/attendance`);
 
 // ---- Ticket types ----
 

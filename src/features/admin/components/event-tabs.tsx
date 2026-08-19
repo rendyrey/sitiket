@@ -7,6 +7,7 @@ const TABS = [
   { segment: "/promo-codes", label: "Promo codes" },
   { segment: "/staff", label: "Gate staff" },
   { segment: "/orders", label: "Orders" },
+  { segment: "/attendance", label: "Attendance" },
 ];
 
 export default function EventTabs({ activeSegment = "", slug }: { activeSegment?: string; slug: string }) {
