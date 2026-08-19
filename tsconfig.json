@@ -6,6 +6,10 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Lets `*.test.ts` files import siblings with an explicit `.ts` specifier,
+    // which is what `node --test` needs to resolve them under ESM. Requires
+    // noEmit (above) — tsc never writes these paths out.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
