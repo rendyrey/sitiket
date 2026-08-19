@@ -56,6 +56,15 @@ sequenceDiagram
 | `pending_payment` / `awaiting_verification` | `cancelled` | Buyer or owner explicitly cancels before payment is confirmed. |
 | `paid` | `refund_requested` → `refunded` / `refund_rejected` | See refund flow below. |
 
+### Payment window
+
+`payment_expires_at` is stamped at checkout as `now + ORDER_PAYMENT_HOLD_MINUTES` — **10 minutes** as of 2026-08-19 (was 60). Short by design: the reservation holds real inventory out of sale, and a buyer doing a mobile transfer needs minutes, not an hour.
+
+Two consequences of the short window:
+
+- The buyer sees a live `mm:ss` countdown on the order status page (`payment-window-countdown.tsx`) from the moment the order exists — including during guest OTP verification, which spends the same window. Once the clock hits zero the page polls itself until the sweep has moved the order to `expired`.
+- The sweep that expires lapsed orders (and sends the "payment window closed" email) runs every **60 seconds** in `server.js`, so the email tracks the countdown the buyer just watched instead of trailing it by minutes.
+
 ### Payment proof (`order_payments.status`)
 
 `pending_review → approved` or `pending_review → rejected`. A rejected order can receive a new `order_payments` row (re-submission); the row with the latest `submitted_at` is authoritative for the order's current payment state.
@@ -66,7 +75,7 @@ sequenceDiagram
 | --- | --- |
 | Buyer never uploads proof | Order auto-expires at `payment_expires_at`; reserved ticket-type inventory is released back to `quantity_total - quantity_sold`. |
 | Buyer uploads proof, owner never reviews it | Out of scope for automated handling in v1 — flagged as an operational gap; consider a reminder notification to the owner after N hours (implementation detail, not a schema concern). |
-| Owner rejects with a reason | `reviewer_notes` is shown to the buyer; buyer can submit a corrected proof against the same order as long as it hasn't expired. |
+| Owner rejects with a reason | `reviewer_notes` is shown to the buyer; buyer can submit a corrected proof against the same order as long as it hasn't expired. **Known gap:** rejection returns the order to `pending_payment` without extending `payment_expires_at`, so with a 10-minute window a rejection reviewed later than that always lands on an already-lapsed order — the next sweep expires it and the re-submit path above is unreachable. Fixing it is a policy decision (grant a fresh hold on rejection vs. require a new order); not changed here. |
 | Amount transferred doesn't match `orders.total_amount` | Not automatically validated in v1 (no bank statement integration) — the owner is expected to visually confirm the amount from the proof image / their own bank app before approving. Flag as a known manual-verification limitation. |
 | Event is cancelled after an order is `paid` | Order moves into the manual refund flow — buyer or owner files a `refund_requests` row; no automatic refund happens. |
 

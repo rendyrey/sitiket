@@ -4,6 +4,7 @@ import BankTransferInstructions from "./bank-transfer-instructions";
 import GuestOtpForm from "./guest-otp-form";
 import OrderStatusBadge from "./order-status-badge";
 import PaymentProofForm from "./payment-proof-form";
+import PaymentWindowCountdown from "./payment-window-countdown";
 import RefundRequestPanel from "./refund-request-panel";
 import TicketsList from "./tickets-list";
 
@@ -21,6 +22,10 @@ export default function OrderStatusView({ guestEmail, isGuest, order, paymentIns
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
       <div className="space-y-6">
+        {/* Above the OTP step as well as the payment step — email verification
+            spends the same window, and a guest deserves to see that. */}
+        {order.status === "pending_payment" && <PaymentWindowCountdown expiresAt={order.paymentExpiresAt} />}
+
         {order.status === "pending_payment" && needsGuestVerification && <GuestOtpForm orderId={order.id} />}
 
         {order.status === "pending_payment" && !needsGuestVerification && (

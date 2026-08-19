@@ -27,7 +27,7 @@ const envSchema = z.object({
 
   UPLOAD_DIR: z.string().default("uploads"),
 
-  ORDER_PAYMENT_HOLD_MINUTES: z.coerce.number().int().positive().default(60),
+  ORDER_PAYMENT_HOLD_MINUTES: z.coerce.number().int().positive().default(10),
   GUEST_EMAIL_OTP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
 
   // Optional: dedicated key for encrypting organizer SMTP passwords at rest

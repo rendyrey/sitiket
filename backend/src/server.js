@@ -3,7 +3,10 @@ import { env } from "./config/env.js";
 import { expireStalePendingOrders } from "./services/order-service.js";
 import { processEmailJobQueue } from "./services/email-job-service.js";
 
-const EXPIRY_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+// Kept well under ORDER_PAYMENT_HOLD_MINUTES (10): the sweep is what sends the
+// "payment window closed" email, so a coarse interval would make that mail land
+// minutes after the countdown the buyer watched already hit zero.
+const EXPIRY_SWEEP_INTERVAL_MS = 60 * 1000;
 const EMAIL_QUEUE_POLL_INTERVAL_MS = 3 * 1000;
 
 app.listen(env.PORT, () => console.log(`SiTIKET API listening on port ${env.PORT}`));
