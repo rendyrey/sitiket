@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { removeEventImageAction, uploadEventImageAction } from "@/features/admin/lib/actions";
 import type { EventImage } from "@/lib/api/types";
-import { normalizeImageForUpload } from "@/lib/image/normalize-image";
+import { normalizeImageForUpload, toUploadErrorMessage } from "@/lib/image/normalize-image";
 import { toAssetUrl } from "@/lib/public-env";
 
 export default function ImageManager({ eventId, images }: { eventId: string; images: EventImage[] }) {
@@ -24,20 +24,31 @@ export default function ImageManager({ eventId, images }: { eventId: string; ima
     }
 
     setSubmitting(true);
-    const formData = new FormData();
-    formData.append("image", await normalizeImageForUpload(file));
-    formData.append("isPoster", isPoster ? "true" : "false");
+    // try/finally is load-bearing: without it any throw between here and the
+    // end (a decode failure, or a Server Action rejecting an over-limit body)
+    // skipped `setSubmitting(false)` and pinned the button on "Uploading…"
+    // forever, with no error shown and no way to retry but a page reload.
+    try {
+      const formData = new FormData();
+      // Posters are validated against exact pixel dimensions server-side, so
+      // the normalizer must not resize them — only re-compress if needed.
+      formData.append("image", await normalizeImageForUpload(file, { preserveDimensions: isPoster }));
+      formData.append("isPoster", isPoster ? "true" : "false");
 
-    const result = await uploadEventImageAction(eventId, formData);
-    setSubmitting(false);
+      const result = await uploadEventImageAction(eventId, formData);
 
-    if (!result.ok) {
-      setError(result.message);
-      return;
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setIsPoster(false);
+      router.refresh();
+    } catch (cause) {
+      setError(toUploadErrorMessage(cause));
+    } finally {
+      setSubmitting(false);
     }
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    setIsPoster(false);
-    router.refresh();
   };
 
   const handleRemove = async (imageId: string) => {
@@ -70,7 +81,7 @@ export default function ImageManager({ eventId, images }: { eventId: string; ima
           <input ref={fileInputRef} type="file" accept="image/*" className="text-field h-auto py-3" />
           <label className="flex items-center gap-2 text-sm font-semibold">
             <input type="checkbox" checked={isPoster} onChange={(e) => setIsPoster(e.target.checked)} className="border-black text-black focus:ring-lime" />
-            Set as poster (must be exactly 1080×1080 or 1080×1920 — Instagram feed/story size)
+            Set as poster (must be exactly 1080×1080, 1080×1350, or 1080×1920 — Instagram feed/portrait/story size)
           </label>
         </div>
         {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}

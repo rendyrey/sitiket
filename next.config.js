@@ -10,6 +10,17 @@ const assetOrigin = new URL(process.env.NEXT_PUBLIC_API_ORIGIN ?? "http://localh
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    serverActions: {
+      // Every image upload (event posters/gallery, payment proofs, QRIS codes)
+      // travels through a Server Action, so its multipart body is capped by
+      // this limit -- NOT by the backend's multer limit. The default is 1 MB,
+      // which silently rejected ordinary 1080x1080 posters exported from
+      // Canva/Figma. Keep this >= the backend's MAX_IMAGE_BYTES and <= nginx's
+      // client_max_body_size, or uploads fail at whichever link is smallest.
+      bodySizeLimit: "50mb",
+    },
+  },
   images: {
     // Event posters/gallery images and payment-proof uploads are served from
     // the backend's local disk storage under /uploads — see BACKEND.md.

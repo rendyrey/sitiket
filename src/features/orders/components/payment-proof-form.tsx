@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import FormField from "@/components/ui/form-field";
-import { normalizeImageForUpload } from "@/lib/image/normalize-image";
+import { normalizeImageForUpload, toUploadErrorMessage } from "@/lib/image/normalize-image";
 import type { PaymentMethod } from "@/lib/api/types";
 import { submitPaymentProofAction } from "../lib/actions";
 
@@ -34,19 +34,27 @@ export default function PaymentProofForm({ guestEmail, hasBankTransfer, hasQris,
     }
 
     setSubmitting(true);
-    const formData = new FormData();
-    formData.append("proof", await normalizeImageForUpload(file));
-    formData.append("method", method);
-    if (transferNote.trim()) formData.append("transferNote", transferNote.trim());
-    if (guestEmail) formData.append("guestEmail", guestEmail);
+    // try/finally: a throw here (decode failure, or an over-limit body rejected
+    // by the Server Action) must never strand the button on "Uploading…" — a
+    // buyer stuck mid-payment has no way to recover but reloading the page.
+    try {
+      const formData = new FormData();
+      formData.append("proof", await normalizeImageForUpload(file));
+      formData.append("method", method);
+      if (transferNote.trim()) formData.append("transferNote", transferNote.trim());
+      if (guestEmail) formData.append("guestEmail", guestEmail);
 
-    const result = await submitPaymentProofAction(orderId, formData);
-    setSubmitting(false);
-    if (!result.ok) {
-      setError(result.message);
-      return;
+      const result = await submitPaymentProofAction(orderId, formData);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      router.refresh();
+    } catch (cause) {
+      setError(toUploadErrorMessage(cause));
+    } finally {
+      setSubmitting(false);
     }
-    router.refresh();
   };
 
   return (

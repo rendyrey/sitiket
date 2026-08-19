@@ -2,7 +2,7 @@ export default function EventsPageHero() {
   return (
     <section className="border-b-4 border-ink bg-lime py-16 sm:py-24">
       <div className="site-container">
-        <span className="section-index">DISCOVER / JAKARTA</span>
+        <span className="section-index">DISCOVER / BANDOENG</span>
         <h1 className="mt-5 text-5xl font-black uppercase leading-[.86] text-black xs:text-6xl sm:text-8xl lg:text-[128px]">
           FIND YOUR
           <br />

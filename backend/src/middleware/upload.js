@@ -6,7 +6,11 @@ import { env } from "../config/env.js";
 import { badRequest } from "../utils/http-error.js";
 
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+// Must stay in sync with the two limits in front of it, or an upload dies at
+// the smallest link with a confusing error: nginx `client_max_body_size`
+// (/etc/nginx/sites-available/sitiket) and the Next.js Server Action
+// `bodySizeLimit` (next.config.js). All three are 50 MB.
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 
 // multer's diskStorage does not create its destination directory; if UPLOAD_DIR
 // is missing every write fails with ENOENT and the upload 500s. Ensure it
@@ -59,7 +63,7 @@ export const imageUpload = multer({
 const toClientError = (error) => {
   if (error instanceof multer.MulterError) {
     if (error.code === "LIMIT_FILE_SIZE") {
-      return badRequest("IMAGE_TOO_LARGE", "That photo is too large. Please upload an image under 10 MB.");
+      return badRequest("IMAGE_TOO_LARGE", "That photo is too large. Please upload an image under 50 MB.");
     }
     return badRequest("UPLOAD_FAILED", `Upload failed: ${error.message}`);
   }

@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import FormField from "@/components/ui/form-field";
 import { removeQrisConfigAction, saveQrisConfigAction } from "@/features/admin/lib/actions";
-import { normalizeImageForUpload } from "@/lib/image/normalize-image";
+import { normalizeImageForUpload, toUploadErrorMessage } from "@/lib/image/normalize-image";
 import type { QrisConfig } from "@/lib/api/types";
 import { toAssetUrl } from "@/lib/public-env";
 
@@ -30,21 +30,30 @@ export default function QrisConfigManager({ config }: { config: QrisConfig | nul
     }
 
     setSubmitting(true);
-    const formData = new FormData();
-    formData.append("merchantName", merchantName.trim());
-    if (file) formData.append("qrisImage", await normalizeImageForUpload(file));
+    // try/finally: a throw here (decode failure, or an over-limit body rejected
+    // by the Server Action) must never strand the button on "Saving…".
+    try {
+      const formData = new FormData();
+      formData.append("merchantName", merchantName.trim());
+      if (file) formData.append("qrisImage", await normalizeImageForUpload(file));
 
-    const result = await saveQrisConfigAction(formData);
-    setSubmitting(false);
+      const result = await saveQrisConfigAction(formData);
 
-    if (!result.ok) {
-      setError(result.message);
-      toast.error(result.message);
-      return;
+      if (!result.ok) {
+        setError(result.message);
+        toast.error(result.message);
+        return;
+      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      toast.success("QRIS code saved.");
+      router.refresh();
+    } catch (cause) {
+      const message = toUploadErrorMessage(cause);
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
     }
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    toast.success("QRIS code saved.");
-    router.refresh();
   };
 
   const handleRemove = async () => {

@@ -115,3 +115,21 @@ APIs & Services → Credentials / OAuth consent screen):
 `backend/uploads/` on the VPS disk holds all user uploads (event images,
 payment proofs, QRIS codes). It is not in git — back it up alongside the
 database. Swapping to object storage (GCS/S3) is a known follow-up (BACKEND.md).
+
+### Upload size limits — keep all three in sync
+
+An image upload crosses three independent size gates. It fails at whichever is
+smallest, so changing one alone does nothing. All three are currently **50 MB**:
+
+| Gate | Where | Default if unset |
+| --- | --- | --- |
+| nginx `client_max_body_size` | `/etc/nginx/sites-available/sitiket` (both server blocks) | 1 MB |
+| Next.js Server Action `bodySizeLimit` | `next.config.js` → `experimental.serverActions` | **1 MB** |
+| multer `MAX_IMAGE_BYTES` | `backend/src/middleware/upload.js` | — |
+
+The Next.js one is the easy one to miss: every upload form posts through a
+Server Action, so its 1 MB default silently capped uploads even while nginx and
+multer allowed far more. Symptom was a permanently stuck "Uploading…" button.
+
+Poster images are additionally validated against an exact resolution allow-list
+(1080x1080, 1080x1350, 1080x1920) in `backend/src/services/event-image-service.js`.

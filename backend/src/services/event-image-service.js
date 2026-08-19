@@ -3,10 +3,14 @@ import * as eventImagesRepository from "../repositories/event-images-repository.
 import { getOwnedEventOrThrow } from "./event-service.js";
 import { badRequest, notFound } from "../utils/http-error.js";
 
-// Instagram feed (square) and story (portrait) resolutions — see
-// docs/business/DATABASE_DESIGN.md §4.4.
+// Instagram feed (square), portrait feed, and story resolutions — see
+// docs/business/DATABASE_DESIGN.md §4.4. 1080x1350 is Instagram's 4:5 portrait
+// feed size and the one that fits best: the event detail hero and event cards
+// both render the poster in an `aspect-[4/5]` frame, so a 1080x1350 artwork
+// fills it with no cropping at all.
 const POSTER_RESOLUTIONS = [
   { label: "Instagram feed (1080x1080)", width: 1080, height: 1080 },
+  { label: "Instagram portrait (1080x1350)", width: 1080, height: 1350 },
   { label: "Instagram story (1080x1920)", width: 1080, height: 1920 },
 ];
 
@@ -25,7 +29,8 @@ export const addImage = async (eventId, requester, file, isPoster) => {
   const { width, height } = imageSize(file.path);
 
   if (isPoster && !POSTER_RESOLUTIONS.some((resolution) => resolution.width === width && resolution.height === height)) {
-    const allowed = POSTER_RESOLUTIONS.map((resolution) => resolution.label).join(" or ");
+    const labels = POSTER_RESOLUTIONS.map((resolution) => resolution.label);
+    const allowed = `${labels.slice(0, -1).join(", ")} or ${labels.at(-1)}`;
     throw badRequest(
       "INVALID_POSTER_RESOLUTION",
       `Poster image is ${width}x${height}; it must be exactly ${allowed}`,

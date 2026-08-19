@@ -16,7 +16,7 @@ export default function HomeHero({
         <div className="relative z-10">
           <span className="eyebrow">
             <span className="h-2 w-2 rounded-full bg-lime" />
-            Jakarta’s event shortcut
+            Bandoeng’s event shortcut
           </span>
           <h1 className="hero-title mt-8">
             DON’T JUST
