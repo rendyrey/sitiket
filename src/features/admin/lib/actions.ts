@@ -6,35 +6,51 @@ import {
   toBankAccount,
   toEventImage,
   toEventStaff,
+  toMerchOrderPayment,
   toOrderPayment,
   toOrganizerEmailConfig,
+  toProduct,
+  toProductImage,
   toPromoCode,
   toQrisConfig,
   toRefundRequest,
   toTicketType,
 } from "@/lib/api/normalize";
-import { listEventOrders, listOrderPayments, listOrderRefundRequests } from "@/features/admin/lib/api";
+import {
+  listEventOrders,
+  listMerchOrderPayments,
+  listOrderPayments,
+  listOrderRefundRequests,
+  listSellingMerchOrders,
+} from "@/features/admin/lib/api";
 import type {
   CreateBankAccountRequest,
   CreateEventRequest,
+  CreateProductRequest,
   CreatePromoCodeRequest,
   CreateTicketTypeRequest,
   Event,
   EventStatus,
   InviteEventStaffRequest,
   ListEventOrdersQuery,
+  ListSellingMerchOrdersQuery,
   RawBankAccount,
   RawEventImage,
   RawEventStaff,
+  RawMerchOrderPayment,
   RawOrderPayment,
   RawOrganizerEmailConfig,
+  RawProduct,
+  RawProductImage,
   RawPromoCode,
   RawQrisConfig,
   RawRefundRequest,
   RawTicketType,
+  ReplaceVariantsRequest,
   SaveEmailConfigRequest,
   UpdateBankAccountRequest,
   UpdateEventRequest,
+  UpdateProductRequest,
   UpdatePromoCodeRequest,
   UpdateTicketTypeRequest,
 } from "@/lib/api/types";
@@ -188,5 +204,68 @@ export async function getOrderReviewAction(orderId: string) {
       payments,
       refundRequests,
     })),
+  );
+}
+
+// ---- Merch products ----
+
+export async function createProductAction(input: CreateProductRequest) {
+  return toActionResult(() => apiFetch<RawProduct>("/api/products", { method: "POST", body: input }), toProduct);
+}
+
+export async function updateProductAction(productId: string, input: UpdateProductRequest) {
+  return toActionResult(() => apiFetch<RawProduct>(`/api/products/${productId}`, { method: "PATCH", body: input }), toProduct);
+}
+
+/** Enable/disable in the public catalog — data and order history stay intact. */
+export async function setProductActiveAction(productId: string, isActive: boolean) {
+  return toActionResult(
+    () => apiFetch<RawProduct>(`/api/products/${productId}/status`, { method: "PATCH", body: { isActive } }),
+    toProduct,
+  );
+}
+
+/** Soft delete — past merch orders keep referencing the product. */
+export async function deleteProductAction(productId: string) {
+  return toActionResult(() => apiFetch<void>(`/api/products/${productId}`, { method: "DELETE" }));
+}
+
+/** Replaces the WHOLE option/variant matrix atomically. */
+export async function replaceProductVariantsAction(productId: string, input: ReplaceVariantsRequest) {
+  return toActionResult(() => apiFetch<unknown>(`/api/products/${productId}/variants`, { method: "PUT", body: input }));
+}
+
+/** `formData` must contain an `image` file field. Max 10 photos per product (backend-enforced). */
+export async function uploadProductImageAction(productId: string, formData: FormData) {
+  return toActionResult(() => apiFetch<RawProductImage>(`/api/products/${productId}/images`, { method: "POST", formData }), toProductImage);
+}
+
+export async function removeProductImageAction(productId: string, imageId: string) {
+  return toActionResult(() => apiFetch<void>(`/api/products/${productId}/images/${imageId}`, { method: "DELETE" }));
+}
+
+// ---- Merch orders (seller review) ----
+
+/** Called directly from the client on every search/filter/sort/page change — keeps the merch orders table AJAX-driven. */
+export async function listSellingMerchOrdersAction(query?: ListSellingMerchOrdersQuery) {
+  return toActionResult(() => listSellingMerchOrders(query));
+}
+
+/** Lazily fetched only when a row is expanded — payment proofs for one merch order. */
+export async function getMerchOrderPaymentsAction(merchOrderId: string) {
+  return toActionResult(() => listMerchOrderPayments(merchOrderId));
+}
+
+export async function approveMerchPaymentAction(paymentId: string, reviewerNotes?: string) {
+  return toActionResult(
+    () => apiFetch<RawMerchOrderPayment>(`/api/merch-order-payments/${paymentId}/approve`, { method: "POST", body: { reviewerNotes } }),
+    toMerchOrderPayment,
+  );
+}
+
+export async function rejectMerchPaymentAction(paymentId: string, reviewerNotes?: string) {
+  return toActionResult(
+    () => apiFetch<RawMerchOrderPayment>(`/api/merch-order-payments/${paymentId}/reject`, { method: "POST", body: { reviewerNotes } }),
+    toMerchOrderPayment,
   );
 }

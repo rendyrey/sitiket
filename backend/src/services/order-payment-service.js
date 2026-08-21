@@ -5,7 +5,10 @@ import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js"
 import { conflict, forbidden, notFound } from "../utils/http-error.js";
 import { resolvePaymentOptionsForEvent } from "./payment-method-service.js";
 import { notifyOrderPaid, notifyPaymentProofRejected } from "./notification-service.js";
+import { pushNotification } from "./web-notification-service.js";
 import { issueTicketsForOrder } from "./ticket-service.js";
+
+const formatRupiah = (amount) => `Rp ${Number(amount).toLocaleString("id-ID")}`;
 
 const AWAITING_PAYMENT_STATUSES = ["pending_payment", "awaiting_verification"];
 
@@ -53,6 +56,16 @@ export const submitProof = async (orderId, identity, submission) => {
   });
 
   await ordersRepository.updateStatus(orderId, "awaiting_verification");
+
+  // Header-bell notification for the organizer, alongside the review queue.
+  await pushNotification({
+    userId: event.owner_id,
+    type: "ticket_payment_submitted",
+    title: "Ticket payment confirmed by buyer",
+    body: `${order.buyer_name} says they paid ${formatRupiah(order.total_amount)} for ${event.name} — review the proof.`,
+    href: `/dashboard/admin/events/${event.slug}/orders`,
+  });
+
   return payment;
 };
 
@@ -77,10 +90,37 @@ export const reviewProof = async (paymentId, reviewer, decision, reviewerNotes) 
     await ordersRepository.updateStatus(order.id, "paid");
     const tickets = await issueTicketsForOrder(order.id);
     await notifyOrderPaid(order, tickets, event);
+    // Bell notifications: the sale is final for the organizer; the buyer
+    // (when signed in — guests have no bell) learns their tickets are ready.
+    await pushNotification({
+      userId: event.owner_id,
+      type: "ticket_order_paid",
+      title: "Tickets sold",
+      body: `${order.buyer_name}'s ${formatRupiah(order.total_amount)} order for ${event.name} is paid — ${tickets.length} ticket${tickets.length === 1 ? "" : "s"} issued.`,
+      href: `/dashboard/admin/events/${event.slug}/orders`,
+    });
+    if (order.user_id) {
+      await pushNotification({
+        userId: order.user_id,
+        type: "ticket_payment_approved",
+        title: "Your tickets are ready",
+        body: `Payment for ${event.name} is confirmed — show your QR code${tickets.length === 1 ? "" : "s"} at the gate.`,
+        href: `/orders/${order.id}`,
+      });
+    }
   } else {
     // Buyer may correct and re-submit while the order hasn't expired.
     await ordersRepository.updateStatus(order.id, "pending_payment");
     await notifyPaymentProofRejected(order, reviewerNotes, event);
+    if (order.user_id) {
+      await pushNotification({
+        userId: order.user_id,
+        type: "ticket_payment_rejected",
+        title: "Ticket payment proof rejected",
+        body: `The organizer couldn't verify your payment proof for ${event.name}. Upload a new one while the order is open.`,
+        href: `/orders/${order.id}`,
+      });
+    }
   }
 
   return orderPaymentsRepository.findById(paymentId);

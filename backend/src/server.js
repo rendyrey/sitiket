@@ -1,5 +1,7 @@
 import { app } from "./app.js";
 import { env } from "./config/env.js";
+import { isSemanticSearchEnabled, refreshStaleProductEmbeddings } from "./services/embedding-service.js";
+import { expireStaleMerchOrders } from "./services/merch-order-service.js";
 import { expireStalePendingOrders } from "./services/order-service.js";
 import { processEmailJobQueue } from "./services/email-job-service.js";
 
@@ -16,6 +18,9 @@ app.listen(env.PORT, () => console.log(`SiTIKET API listening on port ${env.PORT
 // proof ever submitted. See docs/business/PAYMENT_VERIFICATION.md.
 setInterval(() => {
   expireStalePendingOrders().catch((error) => console.error("Failed to sweep expired orders:", error));
+  // Merch orders share the sweep even though their hold is 24h, not 10min —
+  // the query is cheap and the buyer's countdown stays honest to the minute.
+  expireStaleMerchOrders().catch((error) => console.error("Failed to sweep expired merch orders:", error));
 }, EXPIRY_SWEEP_INTERVAL_MS);
 
 // Same single-instance stand-in pattern: delivers `email_jobs` rows queued
@@ -24,3 +29,13 @@ setInterval(() => {
 setInterval(() => {
   processEmailJobQueue().catch((error) => console.error("Failed to process email job queue:", error));
 }, EMAIL_QUEUE_POLL_INTERVAL_MS);
+
+// Semantic-search vectors refresh pull-based (new/edited products converge
+// here) so product writes never block on the embeddings vendor. Interval only
+// exists when a VOYAGE_API_KEY is configured.
+const EMBEDDING_SWEEP_INTERVAL_MS = 60 * 1000;
+if (isSemanticSearchEnabled()) {
+  setInterval(() => {
+    refreshStaleProductEmbeddings().catch((error) => console.error("Failed to refresh product embeddings:", error));
+  }, EMBEDDING_SWEEP_INTERVAL_MS);
+}

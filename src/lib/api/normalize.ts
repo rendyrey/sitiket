@@ -1,10 +1,20 @@
 import type {
   AdminApplication,
+  AppNotification,
   BankAccount,
   EventImage,
   EventStaff,
+  MerchCategory,
+  MerchOrder,
+  MerchOrderItem,
+  MerchOrderPayment,
   OrderPayment,
   OrganizerEmailConfig,
+  Product,
+  ProductDetail,
+  ProductImage,
+  ProductOptionGroup,
+  ProductVariant,
   PromoCode,
   QrisConfig,
   RawAdminApplication,
@@ -12,8 +22,18 @@ import type {
   RawEventImage,
   RawEventStaff,
   RawEventStaffWithUser,
+  RawMerchCategory,
+  RawMerchOrder,
+  RawMerchOrderItem,
+  RawMerchOrderPayment,
+  RawNotification,
   RawOrderPayment,
   RawOrganizerEmailConfig,
+  RawProduct,
+  RawProductDetail,
+  RawProductImage,
+  RawProductOptionGroup,
+  RawProductVariant,
   RawPromoCode,
   RawQrisConfig,
   RawRefundRequest,
@@ -168,4 +188,133 @@ export const toTaxonomyItem = (raw: RawTaxonomy): TaxonomyItem => ({
   sortOrder: raw.sort_order,
   createdAt: raw.created_at,
   updatedAt: raw.updated_at,
+});
+
+export const toMerchCategory = (raw: RawMerchCategory): MerchCategory => ({
+  ...toTaxonomyItem(raw),
+  ...(raw.product_count !== undefined ? { productCount: Number(raw.product_count) } : {}),
+});
+
+export const toProduct = (raw: RawProduct): Product => ({
+  id: raw.id,
+  ownerId: raw.owner_id,
+  categoryId: raw.category_id,
+  categoryName: raw.category_name,
+  categorySlug: raw.category_slug,
+  name: raw.name,
+  slug: raw.slug,
+  description: raw.description,
+  price: raw.price,
+  stock: raw.stock,
+  quantitySold: raw.quantity_sold,
+  isActive: raw.is_active === 1,
+  thumbnailUrl: raw.thumbnail_url,
+  // MySQL aggregates/correlated subqueries may arrive as strings — coerce.
+  effectivePrice: Number(raw.effective_price),
+  maxVariantPrice: raw.max_variant_price === null ? null : Number(raw.max_variant_price),
+  stockRemaining: Number(raw.stock_remaining ?? 0),
+  hasVariants: Number(raw.has_variants) === 1,
+  ...(raw.units_sold !== undefined ? { unitsSold: Number(raw.units_sold) } : {}),
+  ...(raw.revenue !== undefined ? { revenue: Number(raw.revenue) } : {}),
+  createdAt: raw.created_at,
+  updatedAt: raw.updated_at,
+});
+
+export const toProductImage = (raw: RawProductImage): ProductImage => ({
+  id: raw.id,
+  productId: raw.product_id,
+  imageUrl: raw.image_url,
+  sortOrder: raw.sort_order,
+  createdAt: raw.created_at,
+});
+
+export const toProductOptionGroup = (raw: RawProductOptionGroup): ProductOptionGroup => ({
+  id: raw.id,
+  productId: raw.product_id,
+  name: raw.name,
+  position: raw.position,
+  options: raw.options.map((option) => ({
+    id: option.id,
+    groupId: option.group_id,
+    value: option.value,
+    position: option.position,
+  })),
+});
+
+export const toProductVariant = (raw: RawProductVariant): ProductVariant => ({
+  id: raw.id,
+  productId: raw.product_id,
+  label: raw.label,
+  price: raw.price,
+  stock: raw.stock,
+  quantitySold: raw.quantity_sold,
+  isActive: raw.is_active === 1,
+  optionIds: raw.option_ids,
+});
+
+export const toProductDetail = (raw: RawProductDetail): ProductDetail => ({
+  ...toProduct(raw),
+  images: raw.images.map(toProductImage),
+  groups: raw.groups.map(toProductOptionGroup),
+  variants: raw.variants.map(toProductVariant),
+  ...(raw.seller_name !== undefined ? { sellerName: raw.seller_name } : {}),
+});
+
+export const toMerchOrderItem = (raw: RawMerchOrderItem): MerchOrderItem => ({
+  id: raw.id,
+  merchOrderId: raw.merch_order_id,
+  productId: raw.product_id,
+  variantId: raw.variant_id,
+  productName: raw.product_name,
+  variantLabel: raw.variant_label,
+  quantity: raw.quantity,
+  unitPrice: raw.unit_price,
+  subtotal: raw.subtotal,
+});
+
+export const toMerchOrder = (raw: RawMerchOrder): MerchOrder => ({
+  id: raw.id,
+  sellerId: raw.seller_id,
+  userId: raw.user_id,
+  buyerName: raw.buyer_name,
+  buyerEmail: raw.buyer_email,
+  buyerPhone: raw.buyer_phone,
+  shippingAddress: raw.shipping_address,
+  shippingCity: raw.shipping_city,
+  shippingProvince: raw.shipping_province,
+  shippingPostalCode: raw.shipping_postal_code,
+  buyerNote: raw.buyer_note,
+  subtotalAmount: raw.subtotal_amount,
+  totalAmount: raw.total_amount,
+  status: raw.status,
+  paymentExpiresAt: raw.payment_expires_at,
+  createdAt: raw.created_at,
+  updatedAt: raw.updated_at,
+  ...(raw.items ? { items: raw.items.map(toMerchOrderItem) } : {}),
+});
+
+export const toMerchOrderPayment = (raw: RawMerchOrderPayment): MerchOrderPayment => ({
+  id: raw.id,
+  merchOrderId: raw.merch_order_id,
+  bankAccountId: raw.bank_account_id,
+  method: raw.method,
+  amount: raw.amount,
+  proofImageUrl: raw.proof_image_url,
+  transferNote: raw.transfer_note,
+  status: raw.status,
+  reviewedBy: raw.reviewed_by,
+  reviewedAt: raw.reviewed_at,
+  reviewerNotes: raw.reviewer_notes,
+  submittedAt: raw.submitted_at,
+});
+
+export const toAppNotification = (raw: RawNotification): AppNotification => ({
+  id: raw.id,
+  userId: raw.user_id,
+  type: raw.type,
+  title: raw.title,
+  body: raw.body,
+  href: raw.href,
+  readAt: raw.read_at,
+  createdAt: raw.created_at,
 });

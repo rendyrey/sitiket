@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/session";
 
 const NAV_ITEMS = [
   { href: "/dashboard/admin", label: "Events" },
+  { href: "/dashboard/admin/merch", label: "Merch" },
+  { href: "/dashboard/admin/merch/orders", label: "Merch orders" },
   { href: "/dashboard/admin/bank-accounts", label: "Bank accounts" },
   { href: "/dashboard/admin/qris", label: "QRIS" },
   { href: "/dashboard/admin/email-settings", label: "Email settings" },

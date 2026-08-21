@@ -21,17 +21,26 @@ Public:
 - `/orders/[id]` (+ `?email=` for guests): order status — a live payment-window countdown (10-minute hold; ticks client-side, self-refreshes once it hits zero), guest OTP verify, payment instructions (bank transfer and/or the organizer's QRIS code, per what the event offers), payment-proof upload with a paid-by method choice, QR tickets, refund request
 - `/login`: Google Sign-In
 - `/privacy-policy`, `/terms-of-service`: legal pages (footer-linked; the privacy policy carries the Google API Limited Use disclosure required for OAuth consent-screen branding/verification)
+- `/merch`: public merch storefront — typo-tolerant relevance search, category chips, price-range filter, sort, and an infinitely scrolling grid (page 1 is URL-driven/server-rendered; later pages stream in through a Server Action + IntersectionObserver sentinel)
+- `/merch/[slug]`: product detail — Shopee-style photo slider (up to 10), option-group chips with per-combination price/stock, quantity stepper, add-to-cart / buy-now
+- `/cart`: cart grouped per seller (localStorage-persisted Jotai atom — `features/merch/lib/cart.ts`); anyone can fill a cart, checkout requires sign-in
 
 Signed-in:
-- `/account`: purchase history, "my tickets" (QR codes), apply-for-Admin form
+- `/account`: purchase history (tickets + merch), "my tickets" (QR codes), contact & delivery-address profile form (merch checkout prerequisite), apply-for-Admin form
+- `/merch/checkout`: profile address + per-seller order summary; a multi-seller cart shows a confirmation modal ("N sellers → N separate payments") before creating one order per seller
+- `/merch-orders/[id]`: merch order status — 24h payment-window countdown (reuses the ticket countdown), the seller's bank/QRIS instructions, "I have paid" proof upload, shipping details
+
+Header (all pages): cart indicator with a live badge, and — signed-in only — the notification bell (`features/notifications`), a dropdown polling `GET /api/notifications` every 60s for new ticket/merch buyer activity with unread badge + mark-all-read.
 
 Admin (event owner), under `/dashboard/admin`:
 - `/dashboard/admin`, `/events/new`, `/events/[slug]` (+ `/images`, `/ticket-types`, `/promo-codes`, `/staff`, `/orders`), `/bank-accounts`, `/qris`, `/email-settings`, `/refunds`
+- `/merch`: the seller's product inventory (stock, units sold, revenue, enable/disable, soft delete); `/merch/new` + `/merch/[id]`: product form, photo manager (max 10), and the option/variant matrix builder (up to 3 groups; every combination gets its own price/stock)
+- `/merch/orders`: incoming merch orders — buyer + shipping details per row, payment proofs reviewed inline (approve/reject), server-side search/filter/sort/pagination
 - `/qris`: upload/replace the owner's static QRIS code (one per owner); each event then opts in via the "Accept QRIS payments" toggle on its Details form (backend rejects enabling without a config — `QRIS_CONFIG_MISSING`)
 - `/email-settings`: the owner's outbound email identity. Gmail is one click — "Connect Gmail" runs a Google OAuth round-trip (`/api/auth/google-mail/start` → Google consent → `/api/auth/google-mail/callback`, CSRF-protected by an httpOnly state cookie) and the backend stores an encrypted refresh token; other providers fill in SMTP host/port/TLS, live-verified on save. **Required before creating events** — `/events/new` blocks with a link here when `GET /api/email-config` returns null (backend enforces it too with 409 `EMAIL_CONFIG_REQUIRED`)
 
 Super Admin, under `/dashboard/super-admin`:
-- `/dashboard/super-admin` (applications), `/users`, `/event-categories`, `/ticket-categories`
+- `/dashboard/super-admin` (applications), `/users`, `/event-categories`, `/ticket-categories`, `/merch-categories` (with live product counts; delete is disabled while products use a category)
 
 Gate staff (owner, delegated `event_staff`, or super_admin — enforced backend-side per event, not by frontend role):
 - `/dashboard/scan`: QR check-in, camera scan (via `BarcodeDetector` where supported) or manual paste
@@ -53,9 +62,11 @@ src/
     ├── checkout/         # real checkout flow
     ├── orders/           # order status, payment-window countdown, guest OTP, payment proof, refund request
     ├── account/          # purchase history, apply-for-Admin
-    ├── admin/            # event-owner dashboard (lib/api.ts, lib/actions.ts, components/)
-    ├── super-admin/      # taxonomy, admin applications, users
+    ├── admin/            # event-owner dashboard (lib/api.ts, lib/actions.ts, components/) — incl. merch products/orders managers
+    ├── super-admin/      # taxonomy (incl. merch categories), admin applications, users
     ├── scanner/          # gate check-in
+    ├── merch/            # public storefront, cart (Jotai + localStorage), checkout, merch order status
+    ├── notifications/    # header bell — Server-Action polling, unread badge, mark-read
     └── home/
 ```
 

@@ -247,6 +247,208 @@ export const notifyOrderExpired = async (order, event) => {
   );
 };
 
+const merchOrderUrl = (orderId) => `${env.FRONTEND_URL}/merch-orders/${orderId}`;
+
+const formatRupiah = (amount) => `Rp ${Number(amount).toLocaleString("id-ID")}`;
+
+/** One `infoPanel` row per order line, e.g. "2× Band Tee (Red / M) — Rp 300.000". */
+const merchItemRows = (order) =>
+  (order.items ?? []).map((item) => ({
+    label: `${item.quantity}× ${item.product_name}${item.variant_label ? ` (${item.variant_label})` : ""}`,
+    value: formatRupiah(item.subtotal),
+  }));
+
+const merchItemLines = (order) =>
+  (order.items ?? [])
+    .map(
+      (item) =>
+        `- ${item.quantity}× ${item.product_name}${item.variant_label ? ` (${item.variant_label})` : ""}: ${formatRupiah(item.subtotal)}`,
+    )
+    .join("\n");
+
+const buyerContactRows = (order) => [
+  { label: "Buyer", value: order.buyer_name },
+  { label: "Email", value: order.buyer_email },
+  { label: "Phone", value: order.buyer_phone },
+  {
+    label: "Ship to",
+    value: [order.shipping_address, order.shipping_city, order.shipping_province, order.shipping_postal_code]
+      .filter(Boolean)
+      .join(", "),
+  },
+];
+
+/**
+ * Tells the seller a buyer just placed a merch order (spec: sellers get an
+ * email whenever someone buys their merch). Seller-facing, so it rides the
+ * platform SMTP — the organizer's own SMTP is only for buyer-facing mail.
+ * @param {object} order - a `merch_orders` row with `items`
+ * @param {object} seller - the seller's user row
+ */
+export const notifyMerchOrderPlaced = async (order, seller) => {
+  if (!seller?.email) return;
+  const bodyHtml = [
+    paragraph(
+      `<strong>${escapeHtml(order.buyer_name)}</strong> placed a ${formatRupiah(order.total_amount)} merch order. It is awaiting their payment — you'll get another email once they confirm the transfer.`,
+    ),
+    infoPanel({ heading: "Order", rows: merchItemRows(order) }),
+    infoPanel({ heading: "Buyer details", rows: buyerContactRows(order) }),
+    button({ href: `${env.FRONTEND_URL}/dashboard/admin/merch/orders`, label: "View merch orders" }),
+  ].join("");
+
+  await notify({
+    to: seller.email,
+    subject: `New merch order from ${order.buyer_name} — ${formatRupiah(order.total_amount)}`,
+    text: `${order.buyer_name} (${order.buyer_email}, ${order.buyer_phone}) placed a merch order:\n\n${merchItemLines(order)}\n\nTotal: ${formatRupiah(order.total_amount)}\nShip to: ${order.shipping_address}\n\nManage it at ${env.FRONTEND_URL}/dashboard/admin/merch/orders`,
+    html: renderBrandedEmail({
+      preheader: `${order.buyer_name} ordered your merch`,
+      tag: "New merch order",
+      heading: "You have a new merch order",
+      bodyHtml,
+    }),
+  });
+};
+
+/**
+ * Tells the seller the buyer clicked "I have paid" and uploaded a proof.
+ * @param {object} order - a `merch_orders` row
+ * @param {object} seller - the seller's user row
+ */
+export const notifyMerchPaymentSubmitted = async (order, seller) => {
+  if (!seller?.email) return;
+  const bodyHtml = [
+    paragraph(
+      `<strong>${escapeHtml(order.buyer_name)}</strong> confirmed they paid ${formatRupiah(order.total_amount)} for their merch order and uploaded a transfer proof. Review it to release the order.`,
+    ),
+    button({ href: `${env.FRONTEND_URL}/dashboard/admin/merch/orders`, label: "Review the proof", variant: "lime" }),
+  ].join("");
+
+  await notify({
+    to: seller.email,
+    subject: `Payment proof submitted by ${order.buyer_name} — ${formatRupiah(order.total_amount)}`,
+    text: `${order.buyer_name} confirmed they paid ${formatRupiah(order.total_amount)} for their merch order and uploaded a proof. Review it at ${env.FRONTEND_URL}/dashboard/admin/merch/orders`,
+    html: renderBrandedEmail({
+      preheader: `${order.buyer_name} says they've paid — review the proof`,
+      tag: "Payment submitted",
+      heading: "A buyer confirmed their payment",
+      bodyHtml,
+    }),
+  });
+};
+
+/**
+ * Tells the buyer their merch payment was approved. Buyer-facing, so it
+ * rides the seller's own SMTP config.
+ * @param {object} order - a `merch_orders` row with `items`
+ * @param {object} seller - the seller's user row
+ */
+export const notifyMerchOrderPaid = async (order, seller) => {
+  const sellerName = seller?.name ?? "the seller";
+  const bodyHtml = [
+    paragraph(
+      `Hi ${escapeHtml(order.buyer_name)}, ${escapeHtml(sellerName)} confirmed your ${formatRupiah(order.total_amount)} payment. Your merch order is now being prepared for delivery.`,
+    ),
+    infoPanel({ heading: "Your order", rows: merchItemRows(order) }),
+    button({ href: merchOrderUrl(order.id), label: "View your order", variant: "lime" }),
+  ].join("");
+
+  await notify(
+    {
+      to: order.buyer_email,
+      subject: "Your merch payment is confirmed",
+      text: `Hi ${order.buyer_name}, ${sellerName} confirmed your ${formatRupiah(order.total_amount)} payment.\n\nYour order:\n${merchItemLines(order)}\n\nTrack it at ${merchOrderUrl(order.id)}`,
+      html: renderBrandedEmail({
+        preheader: "Your merch order is being prepared",
+        tag: "Payment confirmed",
+        heading: "Your merch payment is confirmed",
+        bodyHtml,
+      }),
+    },
+    order.seller_id,
+  );
+};
+
+/**
+ * Tells the buyer their merch payment proof was rejected so they can re-submit.
+ * @param {object} order - a `merch_orders` row
+ * @param {string} [reviewerNotes]
+ * @param {object} seller - the seller's user row
+ */
+export const notifyMerchProofRejected = async (order, reviewerNotes, seller) => {
+  const bodyHtml = [
+    paragraph(
+      `Hi ${escapeHtml(order.buyer_name)}, ${escapeHtml(seller?.name ?? "the seller")} couldn't verify the payment proof for your merch order. You can upload a new one while the order is still open.`,
+    ),
+    reviewerNotes ? infoPanel({ heading: "Reason", rows: [{ label: "Notes", value: reviewerNotes }] }) : "",
+    button({ href: merchOrderUrl(order.id), label: "Upload a new proof" }),
+  ].join("");
+
+  await notify(
+    {
+      to: order.buyer_email,
+      subject: "Action needed: your merch payment proof",
+      text: `Hi ${order.buyer_name}, the payment proof for your merch order couldn't be verified.${reviewerNotes ? ` Reason: ${reviewerNotes}` : ""} Upload a new proof at ${merchOrderUrl(order.id)}`,
+      html: renderBrandedEmail({
+        preheader: "Please re-upload your merch payment proof",
+        tag: "Action needed",
+        heading: "We couldn't verify your payment",
+        bodyHtml,
+      }),
+    },
+    order.seller_id,
+  );
+};
+
+/**
+ * @param {object} order - a `merch_orders` row
+ * @param {object} seller - the seller's user row
+ */
+export const notifyMerchOrderCancelled = async (order, seller) => {
+  await notify(
+    {
+      to: order.buyer_email,
+      subject: "Your merch order was cancelled",
+      text: `Hi ${order.buyer_name}, your ${formatRupiah(order.total_amount)} merch order from ${seller?.name ?? "the seller"} was cancelled. No payment was taken.`,
+      html: renderBrandedEmail({
+        preheader: "Your merch order was cancelled",
+        tag: "Cancelled",
+        heading: "Your merch order was cancelled",
+        bodyHtml: paragraph(
+          `Hi ${escapeHtml(order.buyer_name)}, your ${formatRupiah(order.total_amount)} merch order from <strong>${escapeHtml(seller?.name ?? "the seller")}</strong> was cancelled. No payment was taken.`,
+        ),
+      }),
+    },
+    order.seller_id,
+  );
+};
+
+/**
+ * @param {object} order - a `merch_orders` row
+ * @param {object} seller - the seller's user row
+ */
+export const notifyMerchOrderExpired = async (order, seller) => {
+  const bodyHtml = [
+    paragraph(
+      `Hi ${escapeHtml(order.buyer_name)}, the payment window for your merch order from <strong>${escapeHtml(seller?.name ?? "the seller")}</strong> closed before a payment proof was submitted, so it expired and its stock was released.`,
+    ),
+    button({ href: `${env.FRONTEND_URL}/merch`, label: "Browse merch" }),
+  ].join("");
+  await notify(
+    {
+      to: order.buyer_email,
+      subject: "Your merch order expired",
+      text: `Hi ${order.buyer_name}, the payment window for your merch order closed before a payment proof was submitted, so it expired and its stock was released.`,
+      html: renderBrandedEmail({
+        preheader: "Your merch order expired",
+        tag: "Expired",
+        heading: "Your payment window closed",
+        bodyHtml,
+      }),
+    },
+    order.seller_id,
+  );
+};
+
 const REFUND_STATUS_COPY = {
   requested: {
     tag: "Refund requested",

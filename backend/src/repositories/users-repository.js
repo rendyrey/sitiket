@@ -79,3 +79,18 @@ export const updateStatus = (id, status) => db(TABLE).where({ id }).update({ sta
  * @param {string} phone
  */
 export const updatePhone = (id, phone) => db(TABLE).where({ id }).update({ phone, updated_at: new Date() });
+
+/**
+ * Self-service profile fields (contact + delivery address for merch checkout).
+ * @param {string} id
+ * @param {{ phone?: string, address?: string, city?: string, province?: string, postalCode?: string }} patch
+ */
+export const updateProfile = async (id, patch) => {
+  const changes = { updated_at: new Date() };
+  const fieldMap = { phone: "phone", address: "address", city: "city", province: "province", postalCode: "postal_code" };
+  for (const [key, column] of Object.entries(fieldMap)) {
+    if (patch[key] !== undefined) changes[column] = patch[key];
+  }
+  await db(TABLE).where({ id }).update(changes);
+  return findById(id);
+};

@@ -28,11 +28,19 @@ const envSchema = z.object({
   UPLOAD_DIR: z.string().default("uploads"),
 
   ORDER_PAYMENT_HOLD_MINUTES: z.coerce.number().int().positive().default(10),
+  // Merch stock is far less time-critical than event tickets, so its manual
+  // bank-transfer window follows the e-commerce norm (24h) instead of 10 min.
+  MERCH_PAYMENT_HOLD_HOURS: z.coerce.number().int().positive().default(24),
   GUEST_EMAIL_OTP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
 
   // Optional: dedicated key for encrypting organizer SMTP passwords at rest
   // (utils/secret-box.js). Falls back to a JWT_SECRET-derived key when unset.
   EMAIL_CONFIG_SECRET: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(16).optional()),
+
+  // Optional: enables embedding-based semantic merch search via the Voyage AI
+  // API (services/embedding-service.js). Unset, catalog search degrades
+  // gracefully to FULLTEXT + fuzzy matching only.
+  VOYAGE_API_KEY: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
 
   // Optional: outgoing SMTP for the guest-checkout OTP email. Unset in dev,
   // the OTP just logs server-side (and echoes in the response) instead.

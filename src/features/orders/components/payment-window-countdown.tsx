@@ -24,7 +24,17 @@ const MAX_CLOSED_REFRESHES = 10;
  * device shows a skewed number; the server is always the authority on whether a
  * proof arrived in time.
  */
-export default function PaymentWindowCountdown({ expiresAt }: { expiresAt: string }) {
+export default function PaymentWindowCountdown({
+  expiresAt,
+  // Ticket copy by default; the merch order page overrides both (its hold
+  // releases product stock, not seats).
+  closedMessage = "Your reserved tickets are being released back for sale, and we've emailed you to say so. You can start a fresh order any time — subject to what's still available.",
+  openMessage = "Transfer the total and upload your proof of payment before this runs out. After that the tickets are released back for sale and you'd need to order again.",
+}: {
+  expiresAt: string;
+  closedMessage?: string;
+  openMessage?: string;
+}) {
   const router = useRouter();
   // Seeded during render, so the server-rendered HTML already carries a real
   // number rather than a placeholder that pops in on hydration. The initialiser
@@ -87,11 +97,7 @@ export default function PaymentWindowCountdown({ expiresAt }: { expiresAt: strin
           </strong>
         )}
       </div>
-      <p className="mt-4 text-sm text-black/60">
-        {hasClosed
-          ? "Your reserved tickets are being released back for sale, and we've emailed you to say so. You can start a fresh order any time — subject to what's still available."
-          : "Transfer the total and upload your proof of payment before this runs out. After that the tickets are released back for sale and you'd need to order again."}
-      </p>
+      <p className="mt-4 text-sm text-black/60">{hasClosed ? closedMessage : openMessage}</p>
       {/* Announced roughly once a minute — see formatTimeLeftSpoken. */}
       <span className="sr-only" aria-live="polite" role="status">
         {formatTimeLeftSpoken(remaining)}

@@ -6,6 +6,8 @@ import { useState } from "react";
 import ActionLink from "@/components/ui/action-link";
 import { mainNavigation } from "@/config/navigation";
 import { useSession } from "@/features/auth/lib/use-session";
+import { CartIndicator } from "@/features/merch/components";
+import { NotificationBell } from "@/features/notifications/components";
 import Logo from "./logo";
 import { MenuIcon, TicketIcon } from "./icons";
 
@@ -52,12 +54,15 @@ export default function SiteHeader() {
             <Link href="/account" className="nav-link">
               My tickets
             </Link>
+            <NotificationBell />
+            <CartIndicator />
             <button type="button" onClick={handleSignOut} className="button button-ghost">
               Sign out
             </button>
           </div>
         ) : (
           <div className="hidden items-center gap-3 lg:flex">
+            <CartIndicator />
             <ActionLink href="/login" variant="ghost">
               Sign in
             </ActionLink>
@@ -66,16 +71,20 @@ export default function SiteHeader() {
             </ActionLink>
           </div>
         )}
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className="grid h-11 w-11 shrink-0 place-items-center border border-white/30 transition-colors hover:border-lime hover:text-lime focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime lg:hidden"
-          aria-controls="mobile-navigation"
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-        >
-          <MenuIcon className="h-6 w-6" />
-        </button>
+        <div className="flex shrink-0 items-center gap-2 lg:hidden">
+          {user && <NotificationBell />}
+          <CartIndicator />
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="grid h-11 w-11 shrink-0 place-items-center border border-white/30 transition-colors hover:border-lime hover:text-lime focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime"
+            aria-controls="mobile-navigation"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+          >
+            <MenuIcon className="h-6 w-6" />
+          </button>
+        </div>
       </div>
       {open && (
         <div

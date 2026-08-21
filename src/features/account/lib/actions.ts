@@ -3,7 +3,7 @@
 import { apiFetch } from "@/lib/api/client";
 import { toActionResult } from "@/lib/api/action-result";
 import { toAdminApplication } from "@/lib/api/normalize";
-import type { ApplyAdminRequest, RawAdminApplication } from "@/lib/api/types";
+import type { ApplyAdminRequest, RawAdminApplication, UpdateProfileRequest, User } from "@/lib/api/types";
 
 /**
  * Submits an Admin (event owner) application for the current user — requires
@@ -14,4 +14,13 @@ import type { ApplyAdminRequest, RawAdminApplication } from "@/lib/api/types";
  */
 export async function applyAdminAction(input: ApplyAdminRequest) {
   return toActionResult(() => apiFetch<RawAdminApplication>("/api/admin-applications", { method: "POST", body: input }), toAdminApplication);
+}
+
+/**
+ * Updates the signed-in user's contact + delivery address. The address is a
+ * prerequisite for merch checkout — it becomes each merch order's shipping
+ * snapshot.
+ */
+export async function updateProfileAction(input: UpdateProfileRequest) {
+  return toActionResult(() => apiFetch<User>("/api/auth/me", { method: "PATCH", body: input }));
 }

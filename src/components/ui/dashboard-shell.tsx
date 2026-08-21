@@ -32,7 +32,12 @@ export default function DashboardShell({ children, navItems, title, user }: Dash
     router.refresh();
   };
 
-  const isActive = (href: string) => pathname === href || (href !== "/dashboard/admin" && href !== "/dashboard/super-admin" && pathname.startsWith(href));
+  const matches = (href: string) =>
+    pathname === href || (href !== "/dashboard/admin" && href !== "/dashboard/super-admin" && pathname.startsWith(href));
+  // Only the LONGEST matching item lights up, so nested entries (e.g. "Merch"
+  // and "Merch orders") never highlight together.
+  const activeHref = navItems.filter((item) => matches(item.href)).sort((a, b) => b.href.length - a.href.length)[0]?.href;
+  const isActive = (href: string) => href === activeHref;
 
   return (
     <div className="min-h-[calc(100vh-100px)] bg-paper lg:grid lg:grid-cols-[260px_1fr]">

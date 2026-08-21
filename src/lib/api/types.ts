@@ -50,6 +50,9 @@ export type EmailProvider = "gmail" | "custom";
 export type RefundStatus = "requested" | "approved" | "rejected" | "completed";
 export type TicketStatus = "issued" | "used" | "void";
 export type CheckInResult = "success" | "duplicate" | "invalid" | "expired";
+/** Merch orders have no refund machinery in v1 — the seller settles directly with the buyer. */
+export type MerchOrderStatus = "pending_payment" | "awaiting_verification" | "paid" | "expired" | "cancelled";
+export type MerchCatalogSort = "newest" | "price_asc" | "price_desc";
 
 // ============================================================================
 // Presenter-shaped entities — already camelCase, booleans already real
@@ -61,6 +64,11 @@ export interface User {
   emailVerifiedAt: IsoDateTimeString | null;
   name: string;
   phone: string | null;
+  /** Delivery address — a prerequisite for merch checkout (snapshotted onto each merch order). */
+  address: string | null;
+  city: string | null;
+  province: string | null;
+  postalCode: string | null;
   avatarUrl: string | null;
   role: UserRole;
   status: UserStatus;
@@ -319,6 +327,161 @@ export interface RawTaxonomy {
   updated_at: IsoDateTimeString;
 }
 
+/** `GET /merch-categories?withCounts=true` (super_admin) adds `product_count`. */
+export interface RawMerchCategory extends RawTaxonomy {
+  /** Aggregate — may arrive as a string from MySQL; normalize with `Number()`. */
+  product_count?: number | string;
+}
+
+/**
+ * One catalog row from `GET /api/merch` / `GET /api/products/mine` — a raw
+ * `products` row plus the correlated columns the repository selects
+ * (thumbnail, effective price, remaining stock, …). MySQL aggregates can
+ * arrive as strings; normalize.ts converts them.
+ */
+export interface RawProduct {
+  id: Uuid;
+  owner_id: Uuid;
+  category_id: Uuid;
+  name: string;
+  slug: string;
+  description: string;
+  /** Base price — ignored for selling once the product has variants. */
+  price: RupiahAmount;
+  stock: number;
+  quantity_sold: number;
+  is_active: MysqlRawBoolean;
+  deleted_at: IsoDateTimeString | null;
+  created_at: IsoDateTimeString;
+  updated_at: IsoDateTimeString;
+  category_name: string | null;
+  category_slug: string | null;
+  /** First gallery image (`/uploads/...`), or null while the product has no photos. */
+  thumbnail_url: string | null;
+  /** Cheapest active-variant price when variants exist, else the base price. */
+  effective_price: number | string;
+  max_variant_price: number | string | null;
+  stock_remaining: number | string | null;
+  has_variants: number;
+  /** Owner listing only — units/revenue from paid merch orders. */
+  units_sold?: number | string;
+  revenue?: number | string;
+}
+
+export interface RawProductImage {
+  id: Uuid;
+  product_id: Uuid;
+  image_url: string;
+  sort_order: number;
+  created_at: IsoDateTimeString;
+}
+
+export interface RawProductOption {
+  id: Uuid;
+  group_id: Uuid;
+  value: string;
+  position: number;
+  created_at: IsoDateTimeString;
+}
+
+export interface RawProductOptionGroup {
+  id: Uuid;
+  product_id: Uuid;
+  name: string;
+  position: number;
+  created_at: IsoDateTimeString;
+  options: RawProductOption[];
+}
+
+export interface RawProductVariant {
+  id: Uuid;
+  product_id: Uuid;
+  /** Human-readable combination, e.g. `"Red / M"`. */
+  label: string;
+  price: RupiahAmount;
+  stock: number;
+  quantity_sold: number;
+  is_active: MysqlRawBoolean;
+  created_at: IsoDateTimeString;
+  updated_at: IsoDateTimeString;
+  /** The `product_options` ids this combination is made of — one per group. */
+  option_ids: Uuid[];
+}
+
+/** `GET /api/merch/:slug` (public, adds `seller_name`) and `GET /api/products/:id` (owner). */
+export interface RawProductDetail extends RawProduct {
+  images: RawProductImage[];
+  groups: RawProductOptionGroup[];
+  variants: RawProductVariant[];
+  seller_name?: string;
+}
+
+export interface RawMerchOrderItem {
+  id: Uuid;
+  merch_order_id: Uuid;
+  product_id: Uuid;
+  /** Null for base-stock items, or after the seller replaced the variant config. */
+  variant_id: Uuid | null;
+  /** Snapshots taken at checkout — stable even if the product is renamed/deleted. */
+  product_name: string;
+  variant_label: string | null;
+  quantity: number;
+  unit_price: RupiahAmount;
+  subtotal: RupiahAmount;
+  created_at: IsoDateTimeString;
+}
+
+export interface RawMerchOrder {
+  id: Uuid;
+  seller_id: Uuid;
+  /** Never null — merch checkout requires a signed-in buyer. */
+  user_id: Uuid;
+  buyer_name: string;
+  buyer_email: string;
+  buyer_phone: string;
+  shipping_address: string;
+  shipping_city: string | null;
+  shipping_province: string | null;
+  shipping_postal_code: string | null;
+  buyer_note: string | null;
+  subtotal_amount: RupiahAmount;
+  total_amount: RupiahAmount;
+  status: MerchOrderStatus;
+  payment_expires_at: IsoDateTimeString;
+  created_at: IsoDateTimeString;
+  updated_at: IsoDateTimeString;
+  /** Present on create/detail/mine/selling responses. */
+  items?: RawMerchOrderItem[];
+}
+
+export interface RawMerchOrderPayment {
+  id: Uuid;
+  merch_order_id: Uuid;
+  /** `null` for QRIS payments. */
+  bank_account_id: Uuid | null;
+  method: PaymentMethod;
+  amount: RupiahAmount;
+  proof_image_url: string;
+  transfer_note: string | null;
+  status: OrderPaymentStatus;
+  reviewed_by: Uuid | null;
+  reviewed_at: IsoDateTimeString | null;
+  reviewer_notes: string | null;
+  submitted_at: IsoDateTimeString;
+}
+
+/** One header-bell notification row (`GET /api/notifications`). */
+export interface RawNotification {
+  id: Uuid;
+  user_id: Uuid;
+  type: string;
+  title: string;
+  body: string;
+  href: string | null;
+  read_at: IsoDateTimeString | null;
+  created_at: IsoDateTimeString;
+}
+
 // ============================================================================
 // Normalized (client-side) entities — see lib/api/normalize.ts
 // ============================================================================
@@ -467,6 +630,139 @@ export interface TaxonomyItem {
   sortOrder: number;
   createdAt: IsoDateTimeString;
   updatedAt: IsoDateTimeString;
+}
+
+export interface MerchCategory extends TaxonomyItem {
+  /** Only present from `GET /merch-categories?withCounts=true` (super_admin). */
+  productCount?: number;
+}
+
+export interface Product {
+  id: Uuid;
+  ownerId: Uuid;
+  categoryId: Uuid;
+  categoryName: string | null;
+  categorySlug: string | null;
+  name: string;
+  slug: string;
+  description: string;
+  /** Base price — display `effectivePrice` (and the range up to `maxVariantPrice`) instead. */
+  price: RupiahAmount;
+  stock: number;
+  quantitySold: number;
+  isActive: boolean;
+  thumbnailUrl: string | null;
+  effectivePrice: RupiahAmount;
+  maxVariantPrice: RupiahAmount | null;
+  stockRemaining: number;
+  hasVariants: boolean;
+  /** Owner listing only. */
+  unitsSold?: number;
+  revenue?: number;
+  createdAt: IsoDateTimeString;
+  updatedAt: IsoDateTimeString;
+}
+
+export interface ProductImage {
+  id: Uuid;
+  productId: Uuid;
+  imageUrl: string;
+  sortOrder: number;
+  createdAt: IsoDateTimeString;
+}
+
+export interface ProductOption {
+  id: Uuid;
+  groupId: Uuid;
+  value: string;
+  position: number;
+}
+
+export interface ProductOptionGroup {
+  id: Uuid;
+  productId: Uuid;
+  name: string;
+  position: number;
+  options: ProductOption[];
+}
+
+export interface ProductVariant {
+  id: Uuid;
+  productId: Uuid;
+  label: string;
+  price: RupiahAmount;
+  stock: number;
+  quantitySold: number;
+  isActive: boolean;
+  /** One `ProductOption` id per group — match against the buyer's selection. */
+  optionIds: Uuid[];
+}
+
+export interface ProductDetail extends Product {
+  images: ProductImage[];
+  groups: ProductOptionGroup[];
+  variants: ProductVariant[];
+  /** Public detail only. */
+  sellerName?: string;
+}
+
+export interface MerchOrderItem {
+  id: Uuid;
+  merchOrderId: Uuid;
+  productId: Uuid;
+  variantId: Uuid | null;
+  productName: string;
+  variantLabel: string | null;
+  quantity: number;
+  unitPrice: RupiahAmount;
+  subtotal: RupiahAmount;
+}
+
+export interface MerchOrder {
+  id: Uuid;
+  sellerId: Uuid;
+  userId: Uuid;
+  buyerName: string;
+  buyerEmail: string;
+  buyerPhone: string;
+  shippingAddress: string;
+  shippingCity: string | null;
+  shippingProvince: string | null;
+  shippingPostalCode: string | null;
+  buyerNote: string | null;
+  subtotalAmount: RupiahAmount;
+  totalAmount: RupiahAmount;
+  status: MerchOrderStatus;
+  paymentExpiresAt: IsoDateTimeString;
+  createdAt: IsoDateTimeString;
+  updatedAt: IsoDateTimeString;
+  items?: MerchOrderItem[];
+}
+
+export interface MerchOrderPayment {
+  id: Uuid;
+  merchOrderId: Uuid;
+  bankAccountId: Uuid | null;
+  method: PaymentMethod;
+  amount: RupiahAmount;
+  proofImageUrl: string;
+  transferNote: string | null;
+  status: OrderPaymentStatus;
+  reviewedBy: Uuid | null;
+  reviewedAt: IsoDateTimeString | null;
+  reviewerNotes: string | null;
+  submittedAt: IsoDateTimeString;
+}
+
+export interface AppNotification {
+  id: Uuid;
+  userId: Uuid;
+  type: string;
+  title: string;
+  body: string;
+  href: string | null;
+  readAt: IsoDateTimeString | null;
+  createdAt: IsoDateTimeString;
 }
 
 /** One payout account a buyer may transfer to, as surfaced by the payment instructions endpoint. */
@@ -679,6 +975,76 @@ export interface RequestRefundRequest {
 export interface ScanTicketRequest {
   qrPayload: string;
   deviceLabel?: string;
+}
+
+// ---- Merch ----
+
+export interface CreateProductRequest {
+  categoryId: Uuid;
+  name: string;
+  description: string;
+  price: number;
+  stock: number;
+}
+
+export type UpdateProductRequest = Partial<CreateProductRequest>;
+
+/**
+ * `PUT /api/products/:id/variants` — the whole option/variant matrix,
+ * replaced atomically. `variants[].options[i]` is the chosen value from
+ * `groups[i]`. Empty arrays remove variants entirely (base price/stock applies).
+ */
+export interface ReplaceVariantsRequest {
+  groups: { name: string; options: string[] }[];
+  variants: { options: string[]; price: number; stock: number; isActive?: boolean }[];
+}
+
+/** `GET /api/merch` — public storefront search/filter/pagination. */
+export interface ListMerchCatalogQuery {
+  search?: string;
+  /** A `merch_categories.slug`, not an id. */
+  category?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sortBy?: MerchCatalogSort;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateMerchOrderItemRequest {
+  productId: Uuid;
+  /** Required when the product has variants. */
+  variantId?: Uuid;
+  quantity: number;
+}
+
+/**
+ * `POST /api/merch-orders` — may span multiple sellers; the backend splits it
+ * into one order per seller and returns them all.
+ */
+export interface CreateMerchOrderRequest {
+  items: CreateMerchOrderItemRequest[];
+  buyerNote?: string;
+}
+
+/** `GET /api/merch-orders/selling` — the seller table's server-side search/filter/sort/pagination. */
+export interface ListSellingMerchOrdersQuery {
+  /** Matches buyer name or email. */
+  search?: string;
+  status?: MerchOrderStatus;
+  sortBy?: "createdAt" | "buyerName";
+  sortDir?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
+}
+
+/** `PATCH /api/auth/me` — self-service contact + delivery address. */
+export interface UpdateProfileRequest {
+  phone?: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
 }
 
 export interface ScanTicketResult {

@@ -1,10 +1,12 @@
 import { apiFetch, apiFetchPage } from "@/lib/api/client";
-import { toAdminApplication, toTaxonomyItem } from "@/lib/api/normalize";
+import { toAdminApplication, toMerchCategory, toTaxonomyItem } from "@/lib/api/normalize";
 import type {
   AdminApplication,
   AdminApplicationStatus,
   ListUsersQuery,
+  MerchCategory,
   RawAdminApplication,
+  RawMerchCategory,
   RawTaxonomy,
   TaxonomyItem,
   User,
@@ -29,4 +31,12 @@ export const listEventCategoriesAll = async (): Promise<TaxonomyItem[]> => {
 export const listTicketCategoriesAll = async (): Promise<TaxonomyItem[]> => {
   const raw = await apiFetch<RawTaxonomy[]>("/api/ticket-categories", { query: { includeInactive: true } });
   return raw.map(toTaxonomyItem);
+};
+
+/** Merch categories with their live product counts — the Super Admin table (spec: products per category). */
+export const listMerchCategoriesWithCounts = async (): Promise<MerchCategory[]> => {
+  const raw = await apiFetch<RawMerchCategory[]>("/api/merch-categories", {
+    query: { includeInactive: true, withCounts: true },
+  });
+  return raw.map(toMerchCategory);
 };

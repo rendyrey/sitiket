@@ -2,8 +2,12 @@ import { apiFetch, apiFetchPage } from "@/lib/api/client";
 import {
   toBankAccount,
   toEventStaff,
+  toMerchOrder,
+  toMerchOrderPayment,
   toOrderPayment,
   toOrganizerEmailConfig,
+  toProduct,
+  toProductDetail,
   toPromoCode,
   toQrisConfig,
   toRefundRequest,
@@ -17,15 +21,24 @@ import type {
   EventStaff,
   ListEventOrdersQuery,
   ListEventsQuery,
+  ListSellingMerchOrdersQuery,
+  MerchOrder,
+  MerchOrderPayment,
   Order,
   OrderPayment,
   OrganizerEmailConfig,
+  Product,
+  ProductDetail,
   PromoCode,
   QrisConfig,
   RawBankAccount,
   RawEventStaffWithUser,
+  RawMerchOrder,
+  RawMerchOrderPayment,
   RawOrderPayment,
   RawOrganizerEmailConfig,
+  RawProduct,
+  RawProductDetail,
   RawPromoCode,
   RawQrisConfig,
   RawRefundRequest,
@@ -128,4 +141,35 @@ export const listOrderRefundRequests = async (orderId: string): Promise<RefundRe
 export const listMyRefundRequests = async (): Promise<RefundRequest[]> => {
   const raw = await apiFetch<RawRefundRequestWithOrderContext[]>("/api/refund-requests/mine");
   return raw.map(toRefundRequest);
+};
+
+// ---- Merch (seller-scoped) ----
+
+/** Server-only. The signed-in seller's products, with units sold + revenue from paid orders. */
+export const listMyProducts = async (): Promise<Product[]> => {
+  const raw = await apiFetch<RawProduct[]>("/api/products/mine");
+  return raw.map(toProduct);
+};
+
+/** Server-only. Owner detail: product + gallery + option/variant config in one payload. */
+export const getMyProduct = async (productId: string): Promise<ProductDetail> => {
+  const raw = await apiFetch<RawProductDetail>(`/api/products/${productId}`);
+  return toProductDetail(raw);
+};
+
+/**
+ * Server-only. Incoming merch orders (buyer details + items included) —
+ * search/status/sort/pagination run server-side, mirroring the events
+ * orders table.
+ */
+export const listSellingMerchOrders = async (
+  query?: ListSellingMerchOrdersQuery,
+): Promise<{ orders: MerchOrder[]; meta: ApiPageMeta }> => {
+  const { data, meta } = await apiFetchPage<RawMerchOrder>("/api/merch-orders/selling", { query });
+  return { orders: data.map(toMerchOrder), meta };
+};
+
+export const listMerchOrderPayments = async (merchOrderId: string): Promise<MerchOrderPayment[]> => {
+  const raw = await apiFetch<RawMerchOrderPayment[]>(`/api/merch-orders/${merchOrderId}/payments`);
+  return raw.map(toMerchOrderPayment);
 };

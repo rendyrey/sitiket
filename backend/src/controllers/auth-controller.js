@@ -13,3 +13,9 @@ export const me = async (request, response) => {
   const user = await usersRepository.findById(request.user.sub);
   response.status(200).json({ data: toPublicUser(user) });
 };
+
+/** PATCH /api/auth/me — self-service contact + delivery-address update (merch checkout prerequisite). */
+export const updateMe = async (request, response) => {
+  const user = await usersRepository.updateProfile(request.user.sub, request.body);
+  response.status(200).json({ data: toPublicUser(user) });
+};

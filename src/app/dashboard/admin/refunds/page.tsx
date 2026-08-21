@@ -10,7 +10,7 @@ export default async function AdminRefundsPage() {
   return (
     <div>
       <h1 className="text-3xl font-black uppercase">Refund requests</h1>
-      <p className="mt-2 max-w-xl text-sm text-black/50">Across every event you own. Refunds are manual — mark one "money sent" only after you've actually transferred it back.</p>
+      <p className="mt-2 max-w-xl text-sm text-black/50">Across every event you own. Refunds are manual — mark one &ldquo;money sent&rdquo; only after you&apos;ve actually transferred it back.</p>
       <div className="mt-8 max-w-3xl">
         <RefundsOverview refundRequests={refundRequests} />
       </div>

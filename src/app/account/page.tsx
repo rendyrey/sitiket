@@ -3,7 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatPrice } from "@/data/events";
 import ApplyAdminForm from "@/features/account/components/apply-admin-form";
+import ProfileForm from "@/features/account/components/profile-form";
 import { listMyOrders, listMyTickets } from "@/features/account/lib/api";
+import { MerchOrderStatusBadge } from "@/features/merch/components";
+import { listMyMerchOrders } from "@/features/merch/lib/api";
 import { OrderStatusBadge, TicketsList } from "@/features/orders/components";
 import { getCurrentUser } from "@/lib/session";
 
@@ -13,7 +16,7 @@ export default async function AccountPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?redirect=/account");
 
-  const [orders, tickets] = await Promise.all([listMyOrders(), listMyTickets()]);
+  const [orders, tickets, merchOrders] = await Promise.all([listMyOrders(), listMyTickets(), listMyMerchOrders()]);
   const upcomingTickets = tickets.filter((ticket) => ticket.status !== "void");
 
   return (
@@ -66,9 +69,45 @@ export default async function AccountPage() {
                 ))}
               </div>
             </section>
+
+            <section>
+              <h2 className="text-xl font-black uppercase">Merch orders</h2>
+              <div className="mt-5 space-y-3">
+                {merchOrders.length === 0 && (
+                  <p className="text-sm text-black/50">
+                    No merch orders yet.{" "}
+                    <Link href="/merch" className="text-black underline decoration-lime decoration-2 underline-offset-4">
+                      Browse the merch store
+                    </Link>
+                    .
+                  </p>
+                )}
+                {merchOrders.map((order) => (
+                  <Link
+                    key={order.id}
+                    href={`/merch-orders/${order.id}`}
+                    className="flex flex-wrap items-center justify-between gap-3 border-2 border-ink bg-white p-4 transition-colors hover:bg-paper"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold">
+                        {order.items?.map((item) => `${item.quantity}× ${item.productName}`).join(", ") || `#${order.id}`}
+                      </p>
+                      <p className="text-xs text-black/40">{new Date(order.createdAt).toLocaleDateString("en-GB")}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <strong>{formatPrice(order.totalAmount)}</strong>
+                      <MerchOrderStatusBadge status={order.status} />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
           </div>
 
-          <div className="h-fit">{user.role === "user" && <ApplyAdminForm />}</div>
+          <div className="h-fit space-y-8">
+            <ProfileForm user={user} />
+            {user.role === "user" && <ApplyAdminForm />}
+          </div>
         </div>
       </div>
     </div>

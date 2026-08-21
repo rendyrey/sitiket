@@ -53,6 +53,21 @@ erDiagram
     ORDER_ITEMS ||--o{ TICKETS : "issues"
 
     TICKETS ||--o{ TICKET_CHECK_INS : "scanned"
+
+    USERS ||--o{ PRODUCTS : "sells (as admin)"
+    USERS ||--o{ MERCH_ORDERS : "buys / sells"
+    USERS ||--o{ NOTIFICATIONS : "receives"
+    MERCH_CATEGORIES ||--o{ PRODUCTS : "classifies"
+    PRODUCTS ||--o{ PRODUCT_IMAGES : "has"
+    PRODUCTS ||--o{ PRODUCT_OPTION_GROUPS : "offers"
+    PRODUCT_OPTION_GROUPS ||--o{ PRODUCT_OPTIONS : "contains"
+    PRODUCTS ||--o{ PRODUCT_VARIANTS : "sold as"
+    PRODUCT_VARIANTS ||--o{ PRODUCT_VARIANT_OPTIONS : "combines"
+    PRODUCT_OPTIONS ||--o{ PRODUCT_VARIANT_OPTIONS : "used in"
+    PRODUCTS ||--o{ MERCH_ORDER_ITEMS : "purchased as"
+    PRODUCT_VARIANTS ||--o{ MERCH_ORDER_ITEMS : "purchased as"
+    MERCH_ORDERS ||--o{ MERCH_ORDER_ITEMS : "contains"
+    MERCH_ORDERS ||--o{ MERCH_ORDER_PAYMENTS : "paid via"
 ```
 
 ## 4. Entity reference
@@ -68,7 +83,9 @@ erDiagram
 | `email` | citext/text, unique, not null | |
 | `email_verified_at` | timestamptz, nullable | Set automatically at first Google sign-in, since Google-verified emails are inherently confirmed. Satisfies the spec's `email_verified_at` requirement for logged-in buyers. |
 | `name` | text, not null | |
-| `phone` | text, nullable | Collected post-signup; used to prefill checkout. |
+| `phone` | text, nullable | Collected post-signup; used to prefill checkout. **Required (with `address`) before merch checkout.** |
+| `address` | text, nullable | Delivery address for the merch store — snapshotted onto each `merch_orders` row at checkout. |
+| `city` / `province` / `postal_code` | text, nullable | Structured remainder of the delivery address. |
 | `avatar_url` | text, nullable | From Google profile. |
 | `role` | enum `user_role` (`user`, `admin`, `super_admin`), default `user` | |
 | `status` | enum `user_status` (`active`, `suspended`), default `active` | Lets a Super Admin disable an abusive account without deleting history. |
@@ -422,11 +439,88 @@ Outbox queue drained by a 3-second worker interval (`server.js`); rows retry wit
 
 Indexes: `(status, available_at)`, `owner_id`.
 
+### 4.10 Merch store — **[confirmed addition]**
+
+An e-commerce area where every admin/organizer sells physical merch (Shopee/Tokopedia-style), paid by manual transfer to the SELLER's own bank account/QRIS and verified through the same proof-review model as tickets. Confirmed decisions: a multi-seller cart splits into one order per seller (the buyer is warned they'll make multiple payments); merch checkout requires a signed-in buyer with a saved delivery address (no guest flow); stock is held for **24 hours** (`MERCH_PAYMENT_HOLD_HOURS`), not the 10-minute ticket window; sellers arrange delivery themselves (no courier integration).
+
+#### `merch_categories`
+
+Same taxonomy shape as `event_categories` (Super-Admin-managed). Two extras: the Super Admin table shows a live product count per category, and DELETE is supported but **guarded — a category referenced by any non-deleted product returns 409 `CATEGORY_IN_USE`**.
+
+#### `products`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `owner_id` | uuid FK → `users.id`, not null | The seller (an `admin`/`super_admin`). |
+| `category_id` | uuid FK → `merch_categories.id`, not null | |
+| `name` / `slug` | text; slug unique | Slug is auto-generated, suffixed on collision. |
+| `description` | text, not null | Feeds the catalog FULLTEXT search together with `name`. |
+| `price` / `stock` / `quantity_sold` | integer | **Base** values — used only while the product has no variants. |
+| `is_active` | boolean, default true | The seller's enable/disable toggle; disabled products leave the public catalog. |
+| `deleted_at` | timestamptz, nullable | Soft delete (slug is mangled to free it) so `merch_order_items` history keeps resolving. |
+| `created_at` / `updated_at` | timestamptz | |
+
+FULLTEXT index on `(name, description)` — backs the storefront's relevance-ranked search; typo tolerance is added per-token in the repository (see `backend/src/repositories/products-repository.js`).
+
+#### `product_images`
+
+Up to **10 photos** per product (service-enforced), `sort_order`-driven; the first image is the catalog thumbnail. FK CASCADE on product delete.
+
+#### `product_option_groups` / `product_options` / `product_variants` / `product_variant_options`
+
+Multi-level options, Shopee-style: groups are the axes ("Color", "Size" — max 3), options the values within a group (max 20), and a **variant is one sellable combination with its OWN `price`, `stock`, `quantity_sold`, `is_active`, and a human-readable `label` ("Red / M")**. `product_variant_options` links each variant to exactly one option per group. The whole config is replaced atomically via `PUT /api/products/:id/variants`; order lines snapshot label/price and their `variant_id` FK is ON DELETE SET NULL, so replacing config never corrupts history.
+
+#### `merch_orders`
+
+One order per SELLER — a multi-seller cart is split at checkout inside a single transaction (all-or-nothing stock reservation).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `seller_id` / `user_id` | uuid FK → `users.id`, not null | Buyer is **never null** — merch checkout requires sign-in. |
+| `buyer_name` / `buyer_email` / `buyer_phone` | text, not null | Snapshot of the buyer's profile at checkout. |
+| `shipping_address` (+ `shipping_city`/`shipping_province`/`shipping_postal_code`) | text | Snapshot of the profile address; the seller ships here themselves. |
+| `buyer_note` | text, nullable | Free-form note to the seller. |
+| `subtotal_amount` / `total_amount` | integer | Server-computed; no promo codes for merch in v1. |
+| `status` | enum (`pending_payment`, `awaiting_verification`, `paid`, `expired`, `cancelled`) | Same machine as ticket orders minus refunds. |
+| `payment_expires_at` | timestamptz, not null | now + `MERCH_PAYMENT_HOLD_HOURS` (default 24h); swept by the same interval as ticket orders. |
+
+**Lifecycle:** `pending_payment → awaiting_verification → paid`; `pending_payment → expired` (sweep releases stock); `pending_payment | awaiting_verification → cancelled`.
+
+#### `merch_order_items`
+
+One cart line per (product, variant) pair — the same product with different options is separate lines. Snapshots `product_name`, `variant_label`, `unit_price`, `subtotal`; `variant_id` is nullable (base-stock items, or SET NULL after a variant-config replace — release logic distinguishes the two by `variant_label`).
+
+#### `merch_order_payments`
+
+Mirror of `order_payments` (one row per proof submission, latest is authoritative, `pending_review → approved | rejected`), with the seller (or super_admin) as reviewer. `bank_account_id` is null for QRIS proofs. Unlike events there is no per-entity QRIS opt-in: a seller with a `qris_configs` row always offers QRIS for merch.
+
+#### `product_embeddings`
+
+Optional semantic-search layer (only populated when `VOYAGE_API_KEY` is configured). One row per product: `product_id` PK/FK CASCADE, `model`, `content_hash` (= `SHA2(CONCAT(name, 0x0A, description), 256)` — lets the refresh sweep find stale rows in SQL), `embedding` (JSON array of ~1024 floats; MySQL 8 has no vector type and cosine similarity is computed in Node at this scale), `updated_at`. Search stays fully functional without this table's contents — it is an enhancement layer, never a dependency.
+
+#### `notifications` — in-app (header bell)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `user_id` | uuid FK → `users.id`, not null, CASCADE | The recipient. |
+| `type` | text, not null | e.g. `ticket_order_placed`, `merch_payment_submitted`, `merch_payment_approved`. |
+| `title` / `body` | text, not null | |
+| `href` | text, nullable | Frontend route the row links to. |
+| `read_at` | timestamptz, nullable | Null = unread (drives the bell badge). |
+| `created_at` | timestamptz | |
+
+Indexes: `(user_id, read_at)`, `(user_id, created_at)`. Written fire-and-log next to (never instead of) the email notifications: sellers hear about new ticket/merch orders and submitted proofs; buyers hear about approvals/rejections/expiry.
+
 ## 5. Cross-cutting business rules and how the schema enforces them
 
 | Rule | Enforcement |
 | --- | --- |
 | Never oversell a ticket type | `ticket_types.quantity_sold <= quantity_total` check constraint, incremented inside the same DB transaction that confirms an order — reserve inventory at `pending_payment` creation, not at `paid`, so two buyers can't both hold the last seat. |
+| Never oversell merch | Same guarded-UPDATE pattern on `products` (base stock) and `product_variants` (per-combination stock), reserved at merch-order creation inside one all-or-nothing transaction spanning every seller's order in the cart. |
+| One merch payment per seller | A multi-seller cart is split into one `merch_orders` row per `seller_id` at checkout — payment is a manual transfer to each seller's own account, so a combined order could never be settled in one payment. |
 | Never trust a client-submitted price/total | `order_items.unit_price` and `orders.total_amount` are always computed server-side from `ticket_types.price` and `promo_codes` at write time. |
 | One buyer identity per order | `buyer_name`/`buyer_email`/`buyer_phone` live once on `orders`, never duplicated onto `tickets`. |
 | Per-event, per-user purchase cap | Enforced in the order-creation service: sum `order_items.quantity` across the buyer's (`user_id` or `buyer_email`) non-cancelled/non-expired orders for the event, reject if it would exceed `events.max_tickets_per_user`. |

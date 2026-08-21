@@ -10,6 +10,7 @@ import * as promoCodesRepository from "../repositories/promo-codes-repository.js
 import * as eventsRepository from "../repositories/events-repository.js";
 import { requestGuestOtp } from "./email-verification-service.js";
 import { notifyOrderCancelled, notifyOrderExpired } from "./notification-service.js";
+import { pushNotification } from "./web-notification-service.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
 import { badRequest, conflict, forbidden, notFound } from "../utils/http-error.js";
 
@@ -141,6 +142,16 @@ export const createOrder = async (requester, input) => {
     const otpResult = await requestGuestOtp(orderId, buyerEmail, event.owner_id);
     devOtpCode = otpResult.devCode;
   }
+
+  // Header-bell notification for the organizer — fire-and-log, never blocks
+  // the checkout that already committed.
+  await pushNotification({
+    userId: event.owner_id,
+    type: "ticket_order_placed",
+    title: "New ticket order",
+    body: `${input.buyerName} ordered ${requestedQuantity} ticket${requestedQuantity === 1 ? "" : "s"} for ${event.name}.`,
+    href: `/dashboard/admin/events/${event.slug}/orders`,
+  });
 
   return { order: await getOrderWithItems(orderId), devOtpCode };
 };
