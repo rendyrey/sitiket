@@ -52,7 +52,7 @@ const envSchema = z.object({
   EMBEDDINGS_MODEL: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
   // Optional cosine-similarity cutoff override for semantic candidates.
   // Absolute similarity ranges differ per embedding model family, so the
-  // default is per-provider: 0.45 for Voyage, 0.2 for OpenAI-compatible
+  // default is per-provider: 0.45 for Voyage, 0.35 for OpenAI-compatible
   // (measured against text-embedding-3-large; see embedding-service.js).
   EMBEDDINGS_MIN_SIMILARITY: z.preprocess(
     (value) => (value === "" ? undefined : value),

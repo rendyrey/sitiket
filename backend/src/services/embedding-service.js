@@ -42,10 +42,16 @@ const resolveEmbeddingsConfig = () => {
       model: env.EMBEDDINGS_MODEL,
       sendInputType: false,
       // OpenAI-family models score much lower absolute cosine values than
-      // Voyage — 0.2 measured against text-embedding-3-large on real
-      // Indonesian↔English product queries ("kaos" ≈ 0.21 vs unrelated
-      // words ≈ 0.13–0.18). Override with EMBEDDINGS_MIN_SIMILARITY.
-      minSimilarity: env.EMBEDDINGS_MIN_SIMILARITY ?? 0.2,
+      // Voyage. 0.35 measured with text-embedding-3-large on real
+      // Indonesian↔English product data: against a properly described tee,
+      // right-intent queries score high ("kaos" ≈ 0.46, "tshirt" ≈ 0.51)
+      // while wrong-brand/adjacent ones stay low ("juventus" ≈ 0.27,
+      // "sepatu" ≈ 0.33). NOTE: this depends on sellers writing real
+      // descriptions — a near-empty description collapses everything into
+      // one "product-type" blob where wrong-brand queries score ABOVE
+      // right-language ones and no threshold can separate them.
+      // Override with EMBEDDINGS_MIN_SIMILARITY.
+      minSimilarity: env.EMBEDDINGS_MIN_SIMILARITY ?? 0.35,
     };
   }
   if (env.VOYAGE_API_KEY) {

@@ -58,7 +58,7 @@ Backend `/var/www/sitiket/backend/.env`:
   is too weak: "kaos" scored below unrelated words against an English product
   name). `VOYAGE_API_KEY` is the single-var alternative (Voyage AI); the trio
   wins when both are set. `EMBEDDINGS_MIN_SIMILARITY` optionally overrides the
-  per-provider cosine cutoff (defaults: 0.45 Voyage, 0.2 OpenAI-compatible).
+  per-provider cosine cutoff (defaults: 0.45 Voyage, 0.35 OpenAI-compatible).
   Unset, merch search stays keyword-only (FULLTEXT + fuzzy) — nothing breaks.
   The backend must be restarted (`--update-env`, with the nvm PATH exported)
   after changing these; a model change re-embeds all products automatically.
