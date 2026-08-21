@@ -22,8 +22,32 @@ import * as productEmbeddingsRepository from "../repositories/product-embeddings
  */
 
 const VOYAGE_ENDPOINT = "https://api.voyageai.com/v1/embeddings";
-/** Multilingual (Indonesian included), cheap, 1024-dim. */
-export const EMBEDDING_MODEL = "voyage-3.5-lite";
+/** Voyage default: multilingual (Indonesian included), cheap, 1024-dim. */
+const VOYAGE_DEFAULT_MODEL = "voyage-3.5-lite";
+
+/**
+ * Which embeddings backend to talk to, derived from env:
+ * 1. A generic OpenAI-compatible endpoint when the EMBEDDINGS_* trio is set —
+ *    `POST {base}/embeddings` with `{input, model}` (no `input_type`; that
+ *    param is Voyage-specific and rejected by strict OpenAI-compat servers).
+ * 2. Voyage AI when only VOYAGE_API_KEY is set (adds `input_type`, which
+ *    measurably improves its retrieval quality).
+ * 3. `null` — semantic search off, keyword search only.
+ */
+const resolveEmbeddingsConfig = () => {
+  if (env.EMBEDDINGS_BASE_URL && env.EMBEDDINGS_API_KEY && env.EMBEDDINGS_MODEL) {
+    return {
+      endpoint: `${env.EMBEDDINGS_BASE_URL.replace(/\/+$/, "")}/embeddings`,
+      apiKey: env.EMBEDDINGS_API_KEY,
+      model: env.EMBEDDINGS_MODEL,
+      sendInputType: false,
+    };
+  }
+  if (env.VOYAGE_API_KEY) {
+    return { endpoint: VOYAGE_ENDPOINT, apiKey: env.VOYAGE_API_KEY, model: VOYAGE_DEFAULT_MODEL, sendInputType: true };
+  }
+  return null;
+};
 
 /** Ignore semantic candidates below this cosine similarity. */
 const MIN_SIMILARITY = 0.45;
@@ -32,34 +56,42 @@ const MAX_SEMANTIC_RESULTS = 20;
 /** Query-embedding LRU size — buyers repeat/refine the same searches. */
 const QUERY_CACHE_MAX = 500;
 
-export const isSemanticSearchEnabled = () => Boolean(env.VOYAGE_API_KEY);
+export const isSemanticSearchEnabled = () => resolveEmbeddingsConfig() !== null;
 
 /** Must stay in sync with CONTENT_HASH_SQL in product-embeddings-repository.js. */
 export const contentHash = (name, description) =>
   createHash("sha256").update(`${name}\n${description}`, "utf8").digest("hex");
 
 /**
- * Calls the Voyage embeddings endpoint for a batch of texts.
+ * Calls the configured embeddings endpoint for a batch of texts.
  * @param {string[]} texts
  * @param {"query" | "document"} inputType - queries and documents are embedded
- *   asymmetrically; using the right type measurably improves retrieval.
+ *   asymmetrically on providers that support it (Voyage); OpenAI-compatible
+ *   endpoints embed both the same way and never see this param.
  * @returns {Promise<number[][]>} one vector per input, in order
  */
 const embedTexts = async (texts, inputType) => {
-  const response = await fetch(VOYAGE_ENDPOINT, {
+  const config = resolveEmbeddingsConfig();
+  if (!config) throw new Error("No embeddings provider configured");
+
+  const body = { input: texts, model: config.model };
+  if (config.sendInputType) body.input_type = inputType;
+
+  const response = await fetch(config.endpoint, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.VOYAGE_API_KEY}`,
+      Authorization: `Bearer ${config.apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ input: texts, model: EMBEDDING_MODEL, input_type: inputType }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Voyage embeddings request failed (${response.status}): ${detail.slice(0, 300)}`);
+    throw new Error(`Embeddings request to ${config.endpoint} failed (${response.status}): ${detail.slice(0, 300)}`);
   }
   const json = await response.json();
-  // Voyage returns entries with an `index` — order defensively by it.
+  // Both Voyage and OpenAI-compatible responses carry an `index` per entry —
+  // order defensively by it.
   return json.data.sort((a, b) => a.index - b.index).map((entry) => entry.embedding);
 };
 
@@ -106,11 +138,15 @@ const embedQueryCached = async (query) => {
  * @returns {Promise<string[] | null>}
  */
 export const semanticProductIds = async (query) => {
-  if (!isSemanticSearchEnabled() || !query?.trim()) return null;
+  const config = resolveEmbeddingsConfig();
+  if (!config || !query?.trim()) return null;
   try {
     const [queryEmbedding, candidates] = await Promise.all([
       embedQueryCached(query),
-      productEmbeddingsRepository.listForCatalog(),
+      // Scoped to the current model — after a provider/model switch, rows
+      // embedded by the old model are invisible until the sweep re-embeds
+      // them (vectors from different models are not comparable).
+      productEmbeddingsRepository.listForCatalog(config.model),
     ]);
     return candidates
       .map((candidate) => ({
@@ -136,8 +172,11 @@ export const semanticProductIds = async (query) => {
  * @returns {Promise<number>} how many products were (re-)embedded
  */
 export const refreshStaleProductEmbeddings = async (limit = 10) => {
-  if (!isSemanticSearchEnabled()) return 0;
-  const products = await productEmbeddingsRepository.listProductsNeedingEmbedding(limit);
+  const config = resolveEmbeddingsConfig();
+  if (!config) return 0;
+  // Rows are stale when content changed OR they were embedded by a different
+  // model (e.g. after switching providers) — both re-embed through here.
+  const products = await productEmbeddingsRepository.listProductsNeedingEmbedding(limit, config.model);
   if (products.length === 0) return 0;
 
   const embeddings = await embedTexts(
@@ -146,7 +185,7 @@ export const refreshStaleProductEmbeddings = async (limit = 10) => {
   );
   for (const [index, product] of products.entries()) {
     await productEmbeddingsRepository.upsert(product.id, {
-      model: EMBEDDING_MODEL,
+      model: config.model,
       contentHash: contentHash(product.name, product.description),
       embedding: embeddings[index],
     });

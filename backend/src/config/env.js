@@ -41,6 +41,15 @@ const envSchema = z.object({
   // API (services/embedding-service.js). Unset, catalog search degrades
   // gracefully to FULLTEXT + fuzzy matching only.
   VOYAGE_API_KEY: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  // Alternative to VOYAGE_API_KEY: any OpenAI-compatible /embeddings endpoint
+  // (OpenAI, DeepInfra, a future Kilo Gateway embeddings rollout, a local
+  // server, …). All three must be set together; when they are, they take
+  // precedence over VOYAGE_API_KEY. EMBEDDINGS_BASE_URL is the /v1 root,
+  // e.g. "https://api.openai.com/v1"; EMBEDDINGS_MODEL must be an embedding
+  // model (chat models like deepseek-chat cannot produce embeddings).
+  EMBEDDINGS_BASE_URL: z.preprocess((value) => (value === "" ? undefined : value), z.string().url().optional()),
+  EMBEDDINGS_API_KEY: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  EMBEDDINGS_MODEL: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
 
   // Optional: outgoing SMTP for the guest-checkout OTP email. Unset in dev,
   // the OTP just logs server-side (and echoes in the response) instead.
