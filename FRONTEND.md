@@ -21,7 +21,7 @@ Public:
 - `/orders/[id]` (+ `?email=` for guests): order status — a live payment-window countdown (10-minute hold; ticks client-side, self-refreshes once it hits zero), guest OTP verify, payment instructions (bank transfer and/or the organizer's QRIS code, per what the event offers), payment-proof upload with a paid-by method choice, QR tickets, refund request
 - `/login`: Google Sign-In
 - `/privacy-policy`, `/terms-of-service`: legal pages (footer-linked; the privacy policy carries the Google API Limited Use disclosure required for OAuth consent-screen branding/verification)
-- `/merch`: public merch storefront — typo-tolerant relevance search, category chips, price-range filter, sort, and an infinitely scrolling grid (page 1 is URL-driven/server-rendered; later pages stream in through a Server Action + IntersectionObserver sentinel)
+- `/merch`: public merch storefront — typo-tolerant relevance search (plus embedding-based semantic matches when the backend has an embeddings provider configured — see BACKEND.md § _Merch invariants_), category chips, price-range filter, sort, and an infinitely scrolling grid (page 1 is URL-driven/server-rendered; later pages stream in through a Server Action + IntersectionObserver sentinel)
 - `/merch/[slug]`: product detail — Shopee-style photo slider (up to 10), option-group chips with per-combination price/stock, quantity stepper, add-to-cart / buy-now
 - `/cart`: cart grouped per seller (localStorage-persisted Jotai atom — `features/merch/lib/cart.ts`); anyone can fill a cart, checkout requires sign-in
 

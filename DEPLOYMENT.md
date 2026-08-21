@@ -51,6 +51,13 @@ Backend `/var/www/sitiket/backend/.env`:
 - `EMAIL_CONFIG_SECRET` — key for encrypting organizer SMTP passwords at rest
   (≥16 chars; falls back to deriving from `JWT_SECRET` when unset, but set it
   explicitly in production).
+- `EMBEDDINGS_BASE_URL` / `EMBEDDINGS_API_KEY` / `EMBEDDINGS_MODEL` — optional
+  trio enabling semantic merch search through any OpenAI-compatible
+  `/embeddings` endpoint; production uses `https://api.openai.com/v1` with
+  `text-embedding-3-small`. `VOYAGE_API_KEY` is the single-var alternative
+  (Voyage AI); the trio wins when both are set. Unset, merch search stays
+  keyword-only (FULLTEXT + fuzzy) — nothing breaks. The backend must be
+  restarted (`--update-env`, with the nvm PATH exported) after changing these.
 - `SMTP_*` — the **platform** sender, used only for platform emails (admin
   application notifications) and as a legacy fallback; buyer-facing emails ride
   each organizer's own SMTP config (see BACKEND.md).
