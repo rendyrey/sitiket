@@ -141,13 +141,15 @@ export const semanticProductIds = async (query) => {
   const config = resolveEmbeddingsConfig();
   if (!config || !query?.trim()) return null;
   try {
-    const [queryEmbedding, candidates] = await Promise.all([
-      embedQueryCached(query),
-      // Scoped to the current model — after a provider/model switch, rows
-      // embedded by the old model are invisible until the sweep re-embeds
-      // them (vectors from different models are not comparable).
-      productEmbeddingsRepository.listForCatalog(config.model),
-    ]);
+    // Candidates first (a ~1ms local query): with nothing to compare
+    // against — empty catalog, or right after a provider/model switch —
+    // skip the vendor call for the query embedding entirely. Scoped to the
+    // current model: rows embedded by an old model are invisible until the
+    // sweep re-embeds them (vectors from different models are not comparable).
+    const candidates = await productEmbeddingsRepository.listForCatalog(config.model);
+    if (candidates.length === 0) return null;
+
+    const queryEmbedding = await embedQueryCached(query);
     return candidates
       .map((candidate) => ({
         id: candidate.product_id,
