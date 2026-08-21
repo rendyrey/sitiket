@@ -41,16 +41,25 @@ const resolveEmbeddingsConfig = () => {
       apiKey: env.EMBEDDINGS_API_KEY,
       model: env.EMBEDDINGS_MODEL,
       sendInputType: false,
+      // OpenAI-family models score much lower absolute cosine values than
+      // Voyage — 0.2 measured against text-embedding-3-large on real
+      // Indonesian↔English product queries ("kaos" ≈ 0.21 vs unrelated
+      // words ≈ 0.13–0.18). Override with EMBEDDINGS_MIN_SIMILARITY.
+      minSimilarity: env.EMBEDDINGS_MIN_SIMILARITY ?? 0.2,
     };
   }
   if (env.VOYAGE_API_KEY) {
-    return { endpoint: VOYAGE_ENDPOINT, apiKey: env.VOYAGE_API_KEY, model: VOYAGE_DEFAULT_MODEL, sendInputType: true };
+    return {
+      endpoint: VOYAGE_ENDPOINT,
+      apiKey: env.VOYAGE_API_KEY,
+      model: VOYAGE_DEFAULT_MODEL,
+      sendInputType: true,
+      minSimilarity: env.EMBEDDINGS_MIN_SIMILARITY ?? 0.45,
+    };
   }
   return null;
 };
 
-/** Ignore semantic candidates below this cosine similarity. */
-const MIN_SIMILARITY = 0.45;
 /** At most this many semantic candidates join the keyword results. */
 const MAX_SEMANTIC_RESULTS = 20;
 /** Query-embedding LRU size — buyers repeat/refine the same searches. */
@@ -155,7 +164,7 @@ export const semanticProductIds = async (query) => {
         id: candidate.product_id,
         similarity: cosineSimilarity(queryEmbedding, candidate.embedding),
       }))
-      .filter((candidate) => candidate.similarity >= MIN_SIMILARITY)
+      .filter((candidate) => candidate.similarity >= config.minSimilarity)
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, MAX_SEMANTIC_RESULTS)
       .map((candidate) => candidate.id);
@@ -196,4 +205,4 @@ export const refreshStaleProductEmbeddings = async (limit = 10) => {
 };
 
 // Exported for unit tests.
-export const __testables = { cosineSimilarity, contentHash, MIN_SIMILARITY };
+export const __testables = { cosineSimilarity, contentHash };

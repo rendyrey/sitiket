@@ -54,10 +54,14 @@ Backend `/var/www/sitiket/backend/.env`:
 - `EMBEDDINGS_BASE_URL` / `EMBEDDINGS_API_KEY` / `EMBEDDINGS_MODEL` — optional
   trio enabling semantic merch search through any OpenAI-compatible
   `/embeddings` endpoint; production uses `https://api.openai.com/v1` with
-  `text-embedding-3-small`. `VOYAGE_API_KEY` is the single-var alternative
-  (Voyage AI); the trio wins when both are set. Unset, merch search stays
-  keyword-only (FULLTEXT + fuzzy) — nothing breaks. The backend must be
-  restarted (`--update-env`, with the nvm PATH exported) after changing these.
+  `text-embedding-3-large` (NOT `-small` — its Indonesian↔English alignment
+  is too weak: "kaos" scored below unrelated words against an English product
+  name). `VOYAGE_API_KEY` is the single-var alternative (Voyage AI); the trio
+  wins when both are set. `EMBEDDINGS_MIN_SIMILARITY` optionally overrides the
+  per-provider cosine cutoff (defaults: 0.45 Voyage, 0.2 OpenAI-compatible).
+  Unset, merch search stays keyword-only (FULLTEXT + fuzzy) — nothing breaks.
+  The backend must be restarted (`--update-env`, with the nvm PATH exported)
+  after changing these; a model change re-embeds all products automatically.
 - `SMTP_*` — the **platform** sender, used only for platform emails (admin
   application notifications) and as a legacy fallback; buyer-facing emails ride
   each organizer's own SMTP config (see BACKEND.md).
