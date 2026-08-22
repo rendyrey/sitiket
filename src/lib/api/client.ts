@@ -101,8 +101,9 @@ export const apiRequest = async <TResponse = unknown>(
 
 /** Fetch and unwrap `{ data: T }` — the common single-resource case. */
 export const apiFetch = async <T>(path: string, options?: ApiRequestOptions): Promise<T> => {
-  const json = await apiRequest<{ data: T }>(path, options);
-  return json.data;
+  const json = await apiRequest<{ data: T } | undefined>(path, options);
+  // 204 No Content (deletes) has no envelope — `json` is undefined, T is void.
+  return json?.data as T;
 };
 
 /** Fetch and unwrap `{ data: T[], meta }` — every paginated list endpoint. */
