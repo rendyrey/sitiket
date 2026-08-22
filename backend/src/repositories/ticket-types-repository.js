@@ -19,6 +19,13 @@ export const listByEvent = (eventId, { activeOnly = false } = {}) => {
  */
 export const findById = (id, executor = db) => executor(TABLE).where({ id }).first();
 
+/** True when any order line (paid or pending) ever referenced this tier — deletion is then blocked. */
+export const isReferencedByOrders = async (id) =>
+  Boolean(await db("order_items").where({ ticket_type_id: id }).first());
+
+/** @param {string} id */
+export const remove = (id) => db(TABLE).where({ id }).delete();
+
 /**
  * @param {{ eventId: string, categoryId: string, name: string, price: number, quantityTotal: number, saleStartAt?: Date, saleEndAt?: Date }} input
  */

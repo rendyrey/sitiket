@@ -1,7 +1,7 @@
 import { ticketCategoriesRepository } from "../repositories/ticket-categories-repository.js";
 import * as ticketTypesRepository from "../repositories/ticket-types-repository.js";
 import { getOwnedEventOrThrow } from "./event-service.js";
-import { badRequest, notFound } from "../utils/http-error.js";
+import { badRequest, conflict, notFound } from "../utils/http-error.js";
 
 const assertCategoryIsUsable = async (categoryId) => {
   const category = await ticketCategoriesRepository.findById(categoryId);
@@ -55,4 +55,28 @@ export const update = async (eventId, requester, ticketTypeId, patch) => {
     }
     throw error;
   }
+};
+
+/**
+ * Permanently deletes a tier — only while nothing references it. Once any
+ * order line exists (paid or pending), the tier is history other rows point
+ * at; the organizer hides it (isActive=false) instead.
+ * @param {string} eventId
+ * @param {{ sub: string, role: string }} requester
+ * @param {string} ticketTypeId
+ */
+export const remove = async (eventId, requester, ticketTypeId) => {
+  await getOwnedEventOrThrow(eventId, requester);
+
+  const ticketType = await ticketTypesRepository.findById(ticketTypeId);
+  if (!ticketType || ticketType.event_id !== eventId) throw notFound("TICKET_TYPE_NOT_FOUND", "Ticket type not found");
+
+  if (await ticketTypesRepository.isReferencedByOrders(ticketTypeId)) {
+    throw conflict(
+      "TICKET_TYPE_HAS_ORDERS",
+      "Buyers have already ordered this ticket type — set it to Hidden instead of deleting it.",
+    );
+  }
+
+  await ticketTypesRepository.remove(ticketTypeId);
 };

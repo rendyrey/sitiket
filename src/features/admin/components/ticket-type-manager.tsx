@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { formatPrice } from "@/data/events";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
 import SearchableSelect from "@/components/ui/searchable-select";
-import { createTicketTypeAction, updateTicketTypeAction } from "@/features/admin/lib/actions";
+import { createTicketTypeAction, deleteTicketTypeAction, updateTicketTypeAction } from "@/features/admin/lib/actions";
 import { getSalesStatus, type SalesStatus } from "@/lib/tickets/sales-window";
 import type { TaxonomyItem, TicketType } from "@/lib/api/types";
 
@@ -45,6 +46,8 @@ export default function TicketTypeManager({ categories, eventId, eventStartAt, e
   const [saleEnd, setSaleEnd] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<TicketType | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const resetForm = () => {
     setEditingId(null);
@@ -119,6 +122,22 @@ export default function TicketTypeManager({ categories, eventId, eventStartAt, e
     router.refresh();
   };
 
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    const result = await deleteTicketTypeAction(eventId, deleting.id);
+    setDeleteBusy(false);
+    const wasEditing = editingId === deleting.id;
+    setDeleting(null);
+    if (!result.ok) {
+      toast.error(result.message);
+      return;
+    }
+    if (wasEditing) resetForm();
+    toast.success("Ticket type deleted.");
+    router.refresh();
+  };
+
   const categoryName = (ticketType: TicketType) =>
     categories.find((category) => category.id === ticketType.categoryId)?.name ?? "Uncategorized";
 
@@ -185,6 +204,13 @@ export default function TicketTypeManager({ categories, eventId, eventStartAt, e
             className={`button ${ticketType.isActive ? "button-dark" : "button-lime"}`}
           >
             {ticketType.isActive ? "Active" : "Hidden"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleting(ticketType)}
+            className="text-xs font-black uppercase text-red-600 hover:underline"
+          >
+            Delete
           </button>
         </div>
       ),
@@ -260,6 +286,22 @@ export default function TicketTypeManager({ categories, eventId, eventStartAt, e
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleting !== null}
+        tag="Delete ticket type"
+        title={`Delete ${deleting?.name ?? "this ticket type"}?`}
+        confirmLabel="Delete"
+        danger
+        busy={deleteBusy}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setDeleting(null)}
+      >
+        <p>
+          This permanently removes the tier from the event page and cannot be undone. It only works while nobody has
+          ordered it — once a tier has orders, set it to <strong>Hidden</strong> instead.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

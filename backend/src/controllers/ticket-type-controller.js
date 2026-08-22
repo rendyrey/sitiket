@@ -28,3 +28,9 @@ export const update = async (request, response) => {
   );
   response.status(200).json({ data: ticketType });
 };
+
+/** DELETE /api/events/:eventId/ticket-types/:ticketTypeId */
+export const remove = async (request, response) => {
+  await ticketTypeService.remove(request.params.eventId, request.user, request.params.ticketTypeId);
+  response.status(204).send();
+};

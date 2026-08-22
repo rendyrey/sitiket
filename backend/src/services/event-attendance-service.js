@@ -1,9 +1,12 @@
 import * as eventAttendanceRepository from "../repositories/event-attendance-repository.js";
-import { getOwnedEventOrThrow } from "./event-service.js";
+import * as eventsRepository from "../repositories/events-repository.js";
+import { notFound } from "../utils/http-error.js";
+import { assertCanScanEvent } from "./ticket-service.js";
 
 /**
- * The organizer-facing attendance report: tickets sold vs. people actually
- * scanned in at the gate.
+ * The attendance report: tickets sold vs. people actually scanned in at the
+ * gate. Visible to everyone who can work the gate (owner, accepted staff,
+ * super_admin) — revenue stays owner-only.
  */
 
 /** Arrivals chart resolution. 15 minutes is fine enough to show a door rush without becoming noise. */
@@ -56,14 +59,20 @@ const toArrivalBuckets = (times) => {
  * @param {{ sub: string, role: string }} requester
  */
 export const getAttendanceReport = async (eventId, requester) => {
-  const event = await getOwnedEventOrThrow(eventId, requester);
+  const event = await eventsRepository.findById(eventId);
+  if (!event) throw notFound("EVENT_NOT_FOUND", "Event not found");
+  await assertCanScanEvent(eventId, requester);
+
+  // Gate staff see the turnout numbers they're working against, but the
+  // organizer's money is not theirs to read.
+  const isOwnerView = requester.role === "super_admin" || event.owner_id === requester.sub;
 
   const [totals, byTicketType, checkInTimes, byScanner, revenue] = await Promise.all([
     eventAttendanceRepository.getTotals(eventId),
     eventAttendanceRepository.getByTicketType(eventId),
     eventAttendanceRepository.listCheckInTimes(eventId),
     eventAttendanceRepository.getByScanner(eventId),
-    eventAttendanceRepository.getPaidRevenue(eventId),
+    isOwnerView ? eventAttendanceRepository.getPaidRevenue(eventId) : Promise.resolve(null),
   ]);
 
   const notArrived = totals.sold - totals.checkedIn;

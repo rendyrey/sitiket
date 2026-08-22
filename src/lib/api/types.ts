@@ -1316,7 +1316,8 @@ export interface EventAttendanceReport {
   voided: number;
   /** `checkedIn / ticketsSold`, as a 0–1 fraction. `0` when nothing sold. */
   attendanceRate: number;
-  revenue: RupiahAmount;
+  /** Owner/super_admin only — `null` when viewed by gate staff. */
+  revenue: RupiahAmount | null;
   byTicketType: AttendanceByTicketType[];
   arrivals: AttendanceArrivalBucket[];
   bucketMinutes: number;

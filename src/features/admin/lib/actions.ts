@@ -198,6 +198,11 @@ export async function listEventOrdersAction(eventId: string, query?: ListEventOr
   return toActionResult(() => listEventOrders(eventId, query));
 }
 
+/** Permanently deletes a tier — the backend refuses (409) once any order references it. */
+export async function deleteTicketTypeAction(eventId: string, ticketTypeId: string) {
+  return toActionResult(() => apiFetch<void>(`/api/events/${eventId}/ticket-types/${ticketTypeId}`, { method: "DELETE" }));
+}
+
 /** The issued tickets (with QR payloads) of one order — organizer/super_admin only, fetched on expand. */
 export async function getOrderTicketsAction(orderId: string) {
   return toActionResult(() => apiFetch<Ticket[]>(`/api/orders/${orderId}/tickets`));

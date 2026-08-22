@@ -196,11 +196,14 @@ export default function AttendanceReport({ report }: { report: EventAttendanceRe
           value={notArrived.toLocaleString("id-ID")}
           hint={`${percent(ticketsSold === 0 ? 0 : notArrived / ticketsSold)} of tickets sold`}
         />
-        <StatTile
-          label="Revenue"
-          value={formatPrice(revenue)}
-          hint={voided > 0 ? `${voided.toLocaleString("id-ID")} ticket(s) refunded & voided` : "From paid orders"}
-        />
+        {/* Gate staff get the report without the organizer's money. */}
+        {revenue !== null && (
+          <StatTile
+            label="Revenue"
+            value={formatPrice(revenue)}
+            hint={voided > 0 ? `${voided.toLocaleString("id-ID")} ticket(s) refunded & voided` : "From paid orders"}
+          />
+        )}
       </div>
 
       {/* ---- Turnout by ticket type ---- */}

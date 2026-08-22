@@ -31,3 +31,10 @@ ticketTypeRouter.patch(
   validate(updateTicketTypeSchema),
   ticketTypeController.update,
 );
+
+ticketTypeRouter.delete(
+  "/:ticketTypeId",
+  requireAuth,
+  requireRole("admin", "super_admin"),
+  ticketTypeController.remove,
+);

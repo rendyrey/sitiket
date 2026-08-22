@@ -73,12 +73,14 @@ export const resendTickets = async (orderId, requester) => {
 };
 
 /**
+ * Shared gate-crew authorization — also reused by the attendance report,
+ * which is visible to exactly the people who can work the gate.
  * @param {string} eventId
  * @param {{ sub: string, role: string }} requester
  * @throws {import("../utils/http-error.js").HttpError} 403 unless the requester owns the event,
- *   is a super_admin, or is delegated `event_staff` for it.
+ *   is a super_admin, or is accepted `event_staff` for it.
  */
-const assertCanScanEvent = async (eventId, requester) => {
+export const assertCanScanEvent = async (eventId, requester) => {
   if (requester.role === "super_admin") return;
 
   const event = await eventsRepository.findById(eventId);

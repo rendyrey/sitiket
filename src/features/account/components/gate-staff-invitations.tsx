@@ -96,9 +96,15 @@ export default function GateStaffInvitations({ invitations }: { invitations: Sta
               </div>
             )}
             {invitation.status === "accepted" && (
-              <div className="mt-4">
+              <div className="mt-4 flex flex-wrap gap-3">
                 <Link href="/dashboard/scan" className="button button-dark">
                   Open the ticket scanner
+                </Link>
+                <Link
+                  href={`/account/gate-staff/${invitation.eventId}`}
+                  className="button border-black/25 bg-transparent text-black hover:border-black"
+                >
+                  View attendance
                 </Link>
               </div>
             )}
