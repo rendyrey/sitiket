@@ -63,7 +63,7 @@ export default function GoogleSignInButton({ clientId, redirectTo = "/" }: Googl
     [redirectTo, router],
   );
 
-  const handleScriptLoad = useCallback(() => {
+  const renderGoogleButton = useCallback(() => {
     if (!clientId || !window.google) return;
     window.google.accounts.id.initialize({
       client_id: clientId,
@@ -73,6 +73,9 @@ export default function GoogleSignInButton({ clientId, redirectTo = "/" }: Googl
     });
     const container = document.getElementById(containerId);
     if (container) {
+      // Idempotent: drop any previously rendered button before re-rendering
+      // (React strict-mode double mounts, back-and-forth navigation).
+      container.replaceChildren();
       window.google.accounts.id.renderButton(container, {
         theme: "filled_black",
         size: "large",
@@ -92,7 +95,11 @@ export default function GoogleSignInButton({ clientId, redirectTo = "/" }: Googl
 
   return (
     <div>
-      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onLoad={handleScriptLoad} />
+      {/* onReady (not onLoad): onLoad fires only the FIRST time the GSI script
+          ever loads, so on a client-side navigation back to /login the
+          remounted component would never render the button until a hard
+          reload. onReady fires after load AND on every remount. */}
+      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={renderGoogleButton} />
       <div id={containerId} className={pending ? "pointer-events-none opacity-60" : ""} />
       {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
     </div>
