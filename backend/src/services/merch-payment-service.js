@@ -13,7 +13,7 @@ import { pushNotification } from "./web-notification-service.js";
 
 const AWAITING_PAYMENT_STATUSES = ["pending_payment", "awaiting_verification"];
 
-const formatRupiah = (amount) => `Rp ${Number(amount).toLocaleString("id-ID")}`;
+const formatRupiah = (amount) => `Rp${Number(amount).toLocaleString("id-ID")}`;
 
 const assertBuyer = (order, requester) => {
   if (order.user_id !== requester.sub) {

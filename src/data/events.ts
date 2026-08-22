@@ -101,12 +101,10 @@ export const events: EventItem[] = [
   },
 ];
 
+// Not Intl's currency style — that renders "Rp 100.000" (with a non-breaking
+// space); house style is "Rp100.000", no space after Rp.
 export const formatPrice = (price: number) =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(price);
+  `Rp${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(price)}`;
 
 export const getEvent = (slug: string) =>
   events.find((event) => event.slug === slug);

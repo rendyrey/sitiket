@@ -311,7 +311,7 @@ export const notifyGateStaffInvited = async (staffUser, event, inviter) => {
 
 const merchOrderUrl = (orderId) => `${env.FRONTEND_URL}/merch-orders/${orderId}`;
 
-const formatRupiah = (amount) => `Rp ${Number(amount).toLocaleString("id-ID")}`;
+const formatRupiah = (amount) => `Rp${Number(amount).toLocaleString("id-ID")}`;
 
 /**
  * Tells the event organizer a ticket buyer clicked "I have paid" and uploaded
@@ -354,7 +354,7 @@ export const notifyTicketPaymentSubmitted = async (order, event, organizer) => {
   });
 };
 
-/** One `infoPanel` row per order line, e.g. "2× Band Tee (Red / M) — Rp 300.000". */
+/** One `infoPanel` row per order line, e.g. "2× Band Tee (Red / M) — Rp300.000". */
 const merchItemRows = (order) =>
   (order.items ?? []).map((item) => ({
     label: `${item.quantity}× ${item.product_name}${item.variant_label ? ` (${item.variant_label})` : ""}`,

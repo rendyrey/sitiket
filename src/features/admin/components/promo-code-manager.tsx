@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { formatPrice } from "@/data/events";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
 import SearchableSelect from "@/components/ui/searchable-select";
@@ -64,7 +65,7 @@ export default function PromoCodeManager({ eventId, promoCodes }: { eventId: str
       header: "Discount",
       sortAccessor: (promoCode) => promoCode.discountValue,
       render: (promoCode) =>
-        promoCode.discountType === "percentage" ? `${promoCode.discountValue}% off` : `Rp ${promoCode.discountValue} off`,
+        promoCode.discountType === "percentage" ? `${promoCode.discountValue}% off` : `${formatPrice(promoCode.discountValue)} off`,
     },
     {
       key: "usage",

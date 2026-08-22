@@ -9,7 +9,7 @@ import { notifyOrderPaid, notifyPaymentProofRejected, notifyTicketPaymentSubmitt
 import { pushNotification } from "./web-notification-service.js";
 import { issueTicketsForOrder } from "./ticket-service.js";
 
-const formatRupiah = (amount) => `Rp ${Number(amount).toLocaleString("id-ID")}`;
+const formatRupiah = (amount) => `Rp${Number(amount).toLocaleString("id-ID")}`;
 
 const AWAITING_PAYMENT_STATUSES = ["pending_payment", "awaiting_verification"];
 

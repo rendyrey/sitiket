@@ -16,7 +16,7 @@ import { resolvePaymentOptionsForSeller } from "./payment-method-service.js";
 import { filterCouriersForOrigin, getCourierOptions, getOriginOrThrow, gramsToBillableKg } from "./shipping-service.js";
 import { pushNotification } from "./web-notification-service.js";
 
-const formatRupiah = (amount) => `Rp ${Number(amount).toLocaleString("id-ID")}`;
+const formatRupiah = (amount) => `Rp${Number(amount).toLocaleString("id-ID")}`;
 
 /**
  * Creates merch checkout orders from a (possibly multi-seller) cart.
