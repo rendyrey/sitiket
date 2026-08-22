@@ -46,6 +46,9 @@ export default function ProductCard({ product }: { product: Product }) {
             {product.name}
           </h3>
         </Link>
+        {product.sellerName && (
+          <p className="mt-1 truncate text-[11px] font-semibold text-black/45">by {product.sellerName}</p>
+        )}
         <div className="mt-3 flex items-end justify-between gap-2 border-t border-black/10 pt-3">
           <div className="min-w-0">
             <strong className="block truncate text-sm text-black sm:text-base">{productPriceLabel(product)}</strong>

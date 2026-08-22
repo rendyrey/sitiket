@@ -46,9 +46,14 @@ export default async function MerchProductPage({ params }: { params: Promise<{ s
           <div className="min-w-0">
             <span className="tag">{product.categoryName ?? "Merch"}</span>
             <h1 className="mt-3 text-3xl font-black uppercase leading-tight sm:text-4xl">{product.name}</h1>
-            {product.quantitySold > 0 && (
+            {(product.sellerName || product.quantitySold > 0) && (
               <p className="mt-2 text-xs font-bold uppercase tracking-widest text-black/40">
-                {product.quantitySold} sold
+                {[
+                  product.sellerName && `Sold by ${product.sellerName}`,
+                  product.quantitySold > 0 && `${product.quantitySold} sold`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             )}
             <div className="mt-6 lg:sticky lg:top-32">

@@ -380,6 +380,8 @@ export interface RawProduct {
   updated_at: IsoDateTimeString;
   category_name: string | null;
   category_slug: string | null;
+  /** The seller's public name (joined from `users`); null only if the account was deleted. */
+  seller_name: string | null;
   /** First gallery image (`/uploads/...`), or null while the product has no photos. */
   thumbnail_url: string | null;
   /** Cheapest active-variant price when variants exist, else the base price. */
@@ -432,12 +434,11 @@ export interface RawProductVariant {
   option_ids: Uuid[];
 }
 
-/** `GET /api/merch/:slug` (public, adds `seller_name`) and `GET /api/products/:id` (owner). */
+/** `GET /api/merch/:slug` (public) and `GET /api/products/:id` (owner). */
 export interface RawProductDetail extends RawProduct {
   images: RawProductImage[];
   groups: RawProductOptionGroup[];
   variants: RawProductVariant[];
-  seller_name?: string;
 }
 
 export interface RawMerchOrderItem {
@@ -678,6 +679,8 @@ export interface Product {
   categoryId: Uuid;
   categoryName: string | null;
   categorySlug: string | null;
+  /** The seller's public name — shown on catalog cards and the detail page. */
+  sellerName: string | null;
   name: string;
   slug: string;
   description: string;
@@ -739,8 +742,6 @@ export interface ProductDetail extends Product {
   images: ProductImage[];
   groups: ProductOptionGroup[];
   variants: ProductVariant[];
-  /** Public detail only. */
-  sellerName?: string;
 }
 
 export interface MerchOrderItem {

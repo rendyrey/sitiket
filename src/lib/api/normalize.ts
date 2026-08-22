@@ -205,6 +205,7 @@ export const toProduct = (raw: RawProduct): Product => ({
   categoryId: raw.category_id,
   categoryName: raw.category_name,
   categorySlug: raw.category_slug,
+  sellerName: raw.seller_name ?? null,
   name: raw.name,
   slug: raw.slug,
   description: raw.description,
@@ -262,7 +263,6 @@ export const toProductDetail = (raw: RawProductDetail): ProductDetail => ({
   images: raw.images.map(toProductImage),
   groups: raw.groups.map(toProductOptionGroup),
   variants: raw.variants.map(toProductVariant),
-  ...(raw.seller_name !== undefined ? { sellerName: raw.seller_name } : {}),
 });
 
 export const toMerchOrderItem = (raw: RawMerchOrderItem): MerchOrderItem => ({

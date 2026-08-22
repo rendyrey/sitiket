@@ -18,10 +18,14 @@ const STOCK_REMAINING_SQL = `COALESCE((SELECT SUM(pv.stock - pv.quantity_sold) F
 const withCatalogColumns = (query) =>
   query
     .leftJoin("merch_categories", "merch_categories.id", "products.category_id")
+    // The seller's public name rides along on every catalog row — product
+    // cards and the detail page show who sells/ships the item.
+    .leftJoin("users as sellers", "sellers.id", "products.owner_id")
     .select(
       "products.*",
       "merch_categories.name as category_name",
       "merch_categories.slug as category_slug",
+      "sellers.name as seller_name",
       db.raw(
         `(SELECT pi.image_url FROM product_images pi WHERE pi.product_id = products.id ORDER BY pi.sort_order ASC, pi.created_at ASC LIMIT 1) as thumbnail_url`,
       ),

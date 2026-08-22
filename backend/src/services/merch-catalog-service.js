@@ -1,7 +1,6 @@
 import * as productImagesRepository from "../repositories/product-images-repository.js";
 import * as productVariantsRepository from "../repositories/product-variants-repository.js";
 import * as productsRepository from "../repositories/products-repository.js";
-import * as usersRepository from "../repositories/users-repository.js";
 import { semanticProductIds } from "./embedding-service.js";
 import { notFound } from "../utils/http-error.js";
 
@@ -33,16 +32,16 @@ export const getBySlug = async (slug) => {
   const product = await productsRepository.findBySlug(slug);
   if (!product || !product.is_active) throw notFound("PRODUCT_NOT_FOUND", "Product not found");
 
-  const [images, config, seller] = await Promise.all([
+  const [images, config] = await Promise.all([
     productImagesRepository.listByProduct(product.id),
     productVariantsRepository.getConfig(product.id),
-    usersRepository.findById(product.owner_id),
   ]);
 
   return {
     ...product,
     images,
     ...config,
-    seller_name: seller?.name ?? "SiTIKET seller",
+    // seller_name comes from the catalog join; fall back for deleted accounts.
+    seller_name: product.seller_name ?? "SiTIKET seller",
   };
 };
