@@ -18,6 +18,7 @@ import { merchOrderPaymentNestedRouter } from "./routes/merch-order-payments-nes
 import { merchOrderPaymentRouter } from "./routes/merch-order-payments.js";
 import { merchOrderRouter } from "./routes/merch-orders.js";
 import { merchRouter } from "./routes/merch.js";
+import { onsiteSalesRouter } from "./routes/onsite-sales.js";
 import { staffInvitationsRouter } from "./routes/staff-invitations.js";
 import { notificationRouter } from "./routes/notifications.js";
 import { orderPaymentNestedRouter } from "./routes/order-payments-nested.js";
@@ -59,6 +60,7 @@ app.use("/api/qris-config", qrisConfigRouter);
 app.use("/api/email-config", emailConfigRouter);
 
 app.use("/api/events/:eventId/attendance", eventAttendanceRouter);
+app.use("/api/events/:eventId/onsite-sales", onsiteSalesRouter);
 app.use("/api/events/:eventId/images", eventImageRouter);
 app.use("/api/events/:eventId/staff", eventStaffRouter);
 app.use("/api/staff-invitations", staffInvitationsRouter);

@@ -1,5 +1,6 @@
 import * as eventAttendanceRepository from "../repositories/event-attendance-repository.js";
 import * as eventsRepository from "../repositories/events-repository.js";
+import * as onsiteSalesRepository from "../repositories/onsite-sales-repository.js";
 import { notFound } from "../utils/http-error.js";
 import { assertCanScanEvent } from "./ticket-service.js";
 
@@ -67,12 +68,13 @@ export const getAttendanceReport = async (eventId, requester) => {
   // organizer's money is not theirs to read.
   const isOwnerView = requester.role === "super_admin" || event.owner_id === requester.sub;
 
-  const [totals, byTicketType, checkInTimes, byScanner, revenue] = await Promise.all([
+  const [totals, byTicketType, checkInTimes, byScanner, revenue, onsite] = await Promise.all([
     eventAttendanceRepository.getTotals(eventId),
     eventAttendanceRepository.getByTicketType(eventId),
     eventAttendanceRepository.listCheckInTimes(eventId),
     eventAttendanceRepository.getByScanner(eventId),
     isOwnerView ? eventAttendanceRepository.getPaidRevenue(eventId) : Promise.resolve(null),
+    onsiteSalesRepository.getTotals(eventId),
   ]);
 
   const notArrived = totals.sold - totals.checkedIn;
@@ -94,6 +96,10 @@ export const getAttendanceReport = async (eventId, requester) => {
     voided: totals.voided,
     attendanceRate,
     revenue,
+    // Door (on-the-spot) tally — no QRs issued, so these buyers never appear
+    // in checkedIn; true headcount is checkedIn + onsiteSold.
+    onsiteSold: onsite.sold,
+    onsiteRevenue: isOwnerView ? onsite.revenue : null,
     byTicketType,
     arrivals: buckets,
     bucketMinutes: BUCKET_MINUTES,

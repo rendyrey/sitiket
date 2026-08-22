@@ -112,6 +112,8 @@ export default function AttendanceReport({ report }: { report: EventAttendanceRe
     voided,
     attendanceRate,
     revenue,
+    onsiteSold,
+    onsiteRevenue,
     byTicketType,
     arrivals,
     bucketMinutes,
@@ -203,6 +205,17 @@ export default function AttendanceReport({ report }: { report: EventAttendanceRe
             value={formatPrice(revenue)}
             hint={voided > 0 ? `${voided.toLocaleString("id-ID")} ticket(s) refunded & voided` : "From paid orders"}
           />
+        )}
+        {/* Door tally — these buyers get no QR, so they never show in "Scanned in". */}
+        {onsiteSold > 0 && (
+          <StatTile
+            label="Door sales (OTS)"
+            value={onsiteSold.toLocaleString("id-ID")}
+            hint={`True headcount ≈ ${(checkedIn + onsiteSold).toLocaleString("id-ID")} (scanned + door)`}
+          />
+        )}
+        {onsiteRevenue !== null && onsiteSold > 0 && (
+          <StatTile label="Door revenue" value={formatPrice(onsiteRevenue)} hint="From the on-the-spot tally" />
         )}
       </div>
 

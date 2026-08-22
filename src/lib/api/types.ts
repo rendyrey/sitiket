@@ -583,6 +583,20 @@ export interface EventStaff {
   userEmail?: string;
 }
 
+/** One recorded door (on-the-spot) sale tally entry — counts only, no buyer data. */
+export interface OnsiteSale {
+  id: Uuid;
+  eventId: Uuid;
+  ticketTypeId: Uuid;
+  ticketTypeName: string | null;
+  quantity: number;
+  unitPrice: RupiahAmount;
+  note: string | null;
+  recordedBy: Uuid | null;
+  recordedByName: string | null;
+  createdAt: IsoDateTimeString;
+}
+
 /** One of the signed-in user's own gate-staff invitations, with event context. */
 export interface StaffInvitation extends Omit<EventStaff, "userName" | "userEmail"> {
   eventName: string;
@@ -1318,6 +1332,10 @@ export interface EventAttendanceReport {
   attendanceRate: number;
   /** Owner/super_admin only — `null` when viewed by gate staff. */
   revenue: RupiahAmount | null;
+  /** Door (on-the-spot) tally — these buyers get no QR, so they never appear in `checkedIn`. */
+  onsiteSold: number;
+  /** Owner/super_admin only — `null` when viewed by gate staff. */
+  onsiteRevenue: RupiahAmount | null;
   byTicketType: AttendanceByTicketType[];
   arrivals: AttendanceArrivalBucket[];
   bucketMinutes: number;

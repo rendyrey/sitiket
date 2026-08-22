@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import AttendanceReport from "@/features/admin/components/attendance-report";
 import { getEventAttendance } from "@/features/admin/lib/api";
+import { listPublicTicketTypes } from "@/features/events/lib/api";
+import OnsiteSalesPanel from "@/features/scanner/components/onsite-sales-panel";
 import { getCurrentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Attendance" };
@@ -25,6 +27,8 @@ export default async function GateStaffAttendancePage({ params }: { params: Prom
     notFound();
   }
 
+  const ticketTypes = await listPublicTicketTypes(eventId);
+
   return (
     <div>
       <Link href="/account/gate-staff" className="text-xs font-black uppercase text-black/50 hover:underline">
@@ -32,8 +36,9 @@ export default async function GateStaffAttendancePage({ params }: { params: Prom
       </Link>
       <h1 className="mt-3 text-3xl font-black uppercase">{report.eventName}</h1>
       <p className="mt-2 max-w-xl text-sm text-black/50">Live turnout for the event you&apos;re scanning.</p>
-      <div className="mt-8 max-w-6xl">
+      <div className="mt-8 max-w-6xl space-y-8">
         <AttendanceReport report={report} />
+        <OnsiteSalesPanel eventId={eventId} ticketTypes={ticketTypes} canDeleteAll={false} viewerId={user.id} />
       </div>
     </div>
   );
