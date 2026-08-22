@@ -21,7 +21,7 @@ export default async function MerchOrderStatusPage({ params }: { params: Promise
         <div className="site-container max-w-lg text-center">
           <h1 className="text-3xl font-black uppercase">Order not found</h1>
           <p className="mt-4 text-black/50">We couldn&apos;t find that merch order, or you don&apos;t have access to it.</p>
-          <Link href="/account" className="text-link mt-6 inline-flex">
+          <Link href="/account/merch-orders" className="text-link mt-6 inline-flex">
             See your orders
           </Link>
         </div>

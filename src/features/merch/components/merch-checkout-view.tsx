@@ -179,7 +179,7 @@ export default function MerchCheckoutView({ user }: { user: User }) {
         <section className="border-2 border-ink bg-white p-5 sm:p-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="tag">Deliver to</span>
-            <Link href="/account#profile" className="text-link text-xs">
+            <Link href="/account/profile" className="text-link text-xs">
               Edit in my account
             </Link>
           </div>
@@ -203,7 +203,7 @@ export default function MerchCheckoutView({ user }: { user: User }) {
           ) : (
             <p className="mt-4 border-2 border-red-500/60 bg-red-500/5 p-4 text-sm font-semibold text-red-700">
               Your profile is missing a phone number or a full delivery address (down to the village).{" "}
-              <Link href="/account#profile" className="underline decoration-2 underline-offset-2">
+              <Link href="/account/profile" className="underline decoration-2 underline-offset-2">
                 Complete it first
               </Link>{" "}
               — shipping costs are calculated from it.

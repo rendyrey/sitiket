@@ -8,5 +8,5 @@ export const footerNavigation = [
   { href: "/events", label: "All events" },
   { href: "/merch", label: "Merch" },
   { href: "/events?category=community", label: "Community" },
-  { href: "/login", label: "My tickets" },
+  { href: "/login", label: "My account" },
 ] as const;

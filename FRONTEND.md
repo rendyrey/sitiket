@@ -25,9 +25,11 @@ Public:
 - `/merch/[slug]`: product detail — Shopee-style photo slider (up to 10), option-group chips with per-combination price/stock, quantity stepper, add-to-cart / buy-now
 - `/cart`: cart grouped per seller (localStorage-persisted Jotai atom — `features/merch/lib/cart.ts`); anyone can fill a cart, checkout requires sign-in
 
-Signed-in:
-- `/account`: "my tickets" (QR codes grouped per event — each group header shows the event name/date/venue/city and the organizer), recent order + merch-order previews, contact & delivery-address profile form (phone + street address + a cascading province→city→district→village region picker, `features/shipping/components/address-picker.tsx` — the village drives shipping quotes, so it's the merch checkout prerequisite), apply-for-Admin form
-- `/account/orders`: full transaction history — every ticket and merch purchase merged newest-first, each with its line items as bought (ticket types / products + variants, unit prices), shipping courier + cost for merch, totals, status, linking to the detail pages
+Signed-in — the account area under `/account` shares the dashboard shell (`components/ui/dashboard-shell.tsx`: sidebar on desktop, nav strip on phones; auth in `app/account/layout.tsx`):
+- `/account`: "My tickets" — QR codes grouped per event; each group header shows the event name/date/venue/city and the organizer
+- `/account/orders`: ticket order history — every event-ticket order with its line items as bought (ticket types, unit prices, promo discount), totals, status, linking to `/orders/[id]`
+- `/account/merch-orders`: merch order history — every merch purchase with its product line items (name, variant, unit price), shipping courier + cost, totals, status, linking to `/merch-orders/[id]`
+- `/account/profile`: editable contact & delivery-address profile form (phone + street address + a cascading province→city→district→village region picker, `features/shipping/components/address-picker.tsx` — the village drives shipping quotes, so it's the merch checkout prerequisite), plus the apply-for-Admin form for `user`-role accounts
 - `/merch/checkout`: profile address + per-seller order summary; each seller group shows its courier options (quoted live via `POST /api/shipping/quotes` from the seller's departure address to the buyer's village, cheapest preselected, only the seller's enabled couriers) with per-seller and grand totals = items + shipping; a multi-seller cart shows a confirmation modal ("N sellers → N separate payments") before creating one order per seller
 - `/merch-orders/[id]`: merch order status — 24h payment-window countdown (reuses the ticket countdown), the seller's bank/QRIS instructions, "I have paid" proof upload, delivery details incl. the chosen courier + estimation, and an items/shipping/total breakdown
 

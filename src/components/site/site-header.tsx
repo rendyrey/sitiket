@@ -52,7 +52,7 @@ export default function SiteHeader() {
               </Link>
             )}
             <Link href="/account" className="nav-link">
-              My tickets
+              My account
             </Link>
             <NotificationBell />
             <CartIndicator />
@@ -121,7 +121,7 @@ export default function SiteHeader() {
                   onClick={() => setOpen(false)}
                   className="border-b border-white/10 py-3 text-lg font-bold uppercase"
                 >
-                  My tickets
+                  My account
                 </Link>
                 <button
                   type="button"
