@@ -186,6 +186,7 @@ export const create = async (input) => {
     description: input.description,
     price: input.price,
     stock: input.stock,
+    weight_grams: input.weightGrams ?? 1000,
     quantity_sold: 0,
     is_active: true,
     created_at: now,
@@ -203,6 +204,7 @@ export const update = async (id, patch) => {
     description: "description",
     price: "price",
     stock: "stock",
+    weightGrams: "weight_grams",
     isActive: "is_active",
   };
   for (const [key, column] of Object.entries(fieldMap)) {

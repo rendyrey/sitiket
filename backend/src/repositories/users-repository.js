@@ -82,12 +82,28 @@ export const updatePhone = (id, phone) => db(TABLE).where({ id }).update({ phone
 
 /**
  * Self-service profile fields (contact + delivery address for merch checkout).
+ * Region names/codes always arrive together, resolved server-side from the
+ * chosen api.co.id village (controllers/auth-controller.js `updateMe`).
  * @param {string} id
- * @param {{ phone?: string, address?: string, city?: string, province?: string, postalCode?: string }} patch
+ * @param {{ phone?: string, address?: string, city?: string, province?: string, district?: string,
+ *   village?: string, provinceCode?: string, cityCode?: string, districtCode?: string,
+ *   villageCode?: string, postalCode?: string | null }} patch
  */
 export const updateProfile = async (id, patch) => {
   const changes = { updated_at: new Date() };
-  const fieldMap = { phone: "phone", address: "address", city: "city", province: "province", postalCode: "postal_code" };
+  const fieldMap = {
+    phone: "phone",
+    address: "address",
+    city: "city",
+    province: "province",
+    district: "district",
+    village: "village",
+    provinceCode: "province_code",
+    cityCode: "city_code",
+    districtCode: "district_code",
+    villageCode: "village_code",
+    postalCode: "postal_code",
+  };
   for (const [key, column] of Object.entries(fieldMap)) {
     if (patch[key] !== undefined) changes[column] = patch[key];
   }

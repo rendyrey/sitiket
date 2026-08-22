@@ -2,6 +2,7 @@ import { merchCategoriesRepository } from "../repositories/merch-categories-repo
 import * as productImagesRepository from "../repositories/product-images-repository.js";
 import * as productVariantsRepository from "../repositories/product-variants-repository.js";
 import * as productsRepository from "../repositories/products-repository.js";
+import * as sellerShippingOriginsRepository from "../repositories/seller-shipping-origins-repository.js";
 import { badRequest, conflict, forbidden, notFound } from "../utils/http-error.js";
 import { slugify } from "../utils/slugify.js";
 
@@ -26,6 +27,22 @@ const generateUniqueSlug = async (name) => {
   }
 
   return candidate;
+};
+
+/**
+ * Selling merch requires a shipping departure address — every checkout quote
+ * is priced from it. Same gate pattern as event-service.js
+ * `assertOwnerHasEmailConfig`.
+ * @param {string} ownerId
+ */
+const assertOwnerHasShippingOrigin = async (ownerId) => {
+  const origin = await sellerShippingOriginsRepository.findByOwner(ownerId);
+  if (!origin) {
+    throw conflict(
+      "SHIPPING_ORIGIN_REQUIRED",
+      "Set your shipping departure address (dashboard → Shipping address) before selling merch",
+    );
+  }
 };
 
 const assertCategoryIsUsable = async (categoryId) => {
@@ -70,9 +87,10 @@ export const getMineDetail = async (productId, requester) => {
 
 /**
  * @param {string} ownerId
- * @param {{ categoryId: string, name: string, description: string, price: number, stock: number }} input
+ * @param {{ categoryId: string, name: string, description: string, price: number, stock: number, weightGrams: number }} input
  */
 export const createProduct = async (ownerId, input) => {
+  await assertOwnerHasShippingOrigin(ownerId);
   await assertCategoryIsUsable(input.categoryId);
   const slug = await generateUniqueSlug(input.name);
   return productsRepository.create({ ...input, ownerId, slug });

@@ -25,3 +25,4 @@ export const unauthorized = (code, message) => new HttpError(401, code, message)
 export const forbidden = (code, message) => new HttpError(403, code, message);
 export const conflict = (code, message) => new HttpError(409, code, message);
 export const notImplemented = (code, message) => new HttpError(501, code, message);
+export const badGateway = (code, message) => new HttpError(502, code, message);

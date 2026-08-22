@@ -10,7 +10,14 @@ const TABLE = "orders";
 export const findById = (id, executor = db) => executor(TABLE).where({ id }).first();
 
 /** @param {string} userId */
-export const listByUser = (userId) => db(TABLE).where({ user_id: userId }).orderBy("created_at", "desc");
+export const listByUser = (userId) =>
+  // Event name/slug ride along so the buyer's transaction history can say
+  // WHICH event each order was for without extra fetches.
+  db(TABLE)
+    .join("events", "events.id", `${TABLE}.event_id`)
+    .select(`${TABLE}.*`, "events.name as event_name", "events.slug as event_slug")
+    .where(`${TABLE}.user_id`, userId)
+    .orderBy(`${TABLE}.created_at`, "desc");
 
 const SORT_COLUMNS = { createdAt: "created_at", buyerName: "buyer_name" };
 

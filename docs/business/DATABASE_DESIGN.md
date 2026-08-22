@@ -441,7 +441,7 @@ Indexes: `(status, available_at)`, `owner_id`.
 
 ### 4.10 Merch store — **[confirmed addition]**
 
-An e-commerce area where every admin/organizer sells physical merch (Shopee/Tokopedia-style), paid by manual transfer to the SELLER's own bank account/QRIS and verified through the same proof-review model as tickets. Confirmed decisions: a multi-seller cart splits into one order per seller (the buyer is warned they'll make multiple payments); merch checkout requires a signed-in buyer with a saved delivery address (no guest flow); stock is held for **24 hours** (`MERCH_PAYMENT_HOLD_HOURS`), not the 10-minute ticket window; sellers arrange delivery themselves (no courier integration).
+An e-commerce area where every admin/organizer sells physical merch (Shopee/Tokopedia-style), paid by manual transfer to the SELLER's own bank account/QRIS and verified through the same proof-review model as tickets. Confirmed decisions: a multi-seller cart splits into one order per seller (the buyer is warned they'll make multiple payments); merch checkout requires a signed-in buyer with a saved delivery address (no guest flow); stock is held for **24 hours** (`MERCH_PAYMENT_HOLD_HOURS`), not the 10-minute ticket window; delivery is by **courier with real shipping costs** quoted through the api.co.id Expedition API from the seller's mandatory departure address to the buyer's village (see § _Shipping & regions_ below — this supersedes the original "sellers arrange delivery themselves" decision).
 
 #### `merch_categories`
 
@@ -457,6 +457,7 @@ Same taxonomy shape as `event_categories` (Super-Admin-managed). Two extras: the
 | `name` / `slug` | text; slug unique | Slug is auto-generated, suffixed on collision. |
 | `description` | text, not null | Feeds the catalog FULLTEXT search together with `name`. |
 | `price` / `stock` / `quantity_sold` | integer | **Base** values — used only while the product has no variants. |
+| `weight_grams` | integer unsigned, not null, default 1000 | Package weight per unit (variants share it) — shipping quotes bill per started kg, min 1kg. |
 | `is_active` | boolean, default true | The seller's enable/disable toggle; disabled products leave the public catalog. |
 | `deleted_at` | timestamptz, nullable | Soft delete (slug is mangled to free it) so `merch_order_items` history keeps resolving. |
 | `created_at` / `updated_at` | timestamptz | |
@@ -480,9 +481,13 @@ One order per SELLER — a multi-seller cart is split at checkout inside a singl
 | `id` | uuid PK | |
 | `seller_id` / `user_id` | uuid FK → `users.id`, not null | Buyer is **never null** — merch checkout requires sign-in. |
 | `buyer_name` / `buyer_email` / `buyer_phone` | text, not null | Snapshot of the buyer's profile at checkout. |
-| `shipping_address` (+ `shipping_city`/`shipping_province`/`shipping_postal_code`) | text | Snapshot of the profile address; the seller ships here themselves. |
+| `shipping_address` (+ `shipping_city`/`shipping_province`/`shipping_postal_code`/`shipping_district`/`shipping_village`/`shipping_village_code`) | text | Snapshot of the buyer's structured profile address (down to the 10-digit village code the quote was priced against). |
+| `origin_village_code` | text, nullable | The seller departure village the shipping quote was priced from. |
+| `courier_code` / `courier_name` / `shipping_estimation` | text, nullable | The buyer's chosen courier snapshot (e.g. `JNE` / "JNE Express" / "1 - 2 days"); null on orders predating courier shipping. |
+| `shipping_cost` | integer unsigned, not null, default 0 | Server-re-priced courier cost at checkout — never taken from the client. |
+| `shipping_weight_grams` | integer unsigned, nullable | Total billed package weight snapshot. |
 | `buyer_note` | text, nullable | Free-form note to the seller. |
-| `subtotal_amount` / `total_amount` | integer | Server-computed; no promo codes for merch in v1. |
+| `subtotal_amount` / `total_amount` | integer | Server-computed; `total_amount = subtotal_amount + shipping_cost`. No promo codes for merch in v1. |
 | `status` | enum (`pending_payment`, `awaiting_verification`, `paid`, `expired`, `cancelled`) | Same machine as ticket orders minus refunds. |
 | `payment_expires_at` | timestamptz, not null | now + `MERCH_PAYMENT_HOLD_HOURS` (default 24h); swept by the same interval as ticket orders. |
 
@@ -501,6 +506,31 @@ Mirror of `order_payments` (one row per proof submission, latest is authoritativ
 Optional semantic-search layer — only populated when an embeddings provider is configured: either `VOYAGE_API_KEY` (Voyage AI), or the `EMBEDDINGS_BASE_URL`/`EMBEDDINGS_API_KEY`/`EMBEDDINGS_MODEL` trio for any OpenAI-compatible `/embeddings` endpoint (the trio wins when both are set). One row per product: `product_id` PK/FK CASCADE, `model` (which embedding model produced the vector — rows from a different model than the configured one are treated as stale and re-embedded, since vectors from different models are not comparable), `content_hash` (= `SHA2(CONCAT(name, 0x0A, description), 256)` — lets the refresh sweep find stale rows in SQL), `embedding` (JSON array of floats; dimension is model-defined — 1536 for OpenAI `text-embedding-3-small`, 1024 for Voyage `voyage-3.5-lite`), `updated_at`.
 
 **There is deliberately no vector database.** MySQL 8 has no vector type, and at merch-catalog scale (hundreds to a few thousand products) cosine similarity computed in Node over all candidate vectors is single-digit milliseconds — an ANN index would be an extra operational dependency for no gain. If the catalog ever reaches tens of thousands of products, swap the candidate load + cosine loop in `services/embedding-service.js` for a real vector index; nothing else in the search flow changes. Search stays fully functional without this table's contents — it is an enhancement layer, never a dependency (an empty candidate set also short-circuits before the query-embedding call, so an idle store makes zero vendor requests).
+
+#### Shipping & regions — **[confirmed addition]**
+
+Merch delivery uses real couriers priced via **api.co.id** (Indonesia Regional API + Expedition API, both authenticated with the `x-api-co-id` header from `API_CO_ID_KEY`). Addresses are structured on Indonesia's region hierarchy — province (2-digit code) → regency/city (4) → district (6) → village (10) — and the **10-digit village code is what shipping quotes key on**. Clients only ever submit a village code; the backend resolves the full hierarchy from cached region data, so region names are never free-typed.
+
+##### `users` (address extension)
+
+`district`, `village`, `province_code`, `city_code`, `district_code`, `village_code` — all nullable — extend the original flat `address`/`city`/`province`/`postal_code`. Merch checkout 409s `PROFILE_INCOMPLETE` until `phone` + `address` + `village_code` are set.
+
+##### `seller_shipping_origins`
+
+One departure address per seller (same one-row-per-owner shape as `qris_configs`): `owner_id` unique FK CASCADE, street `address`, region names + codes (`province`/`city`/`district`/`village` + `*_code`), `postal_code`, and `enabled_couriers` (JSON array of courier codes the seller offers — **NULL = all couriers**; buyers only see and can only order whitelisted ones). **Mandatory before selling merch**: `POST /api/products` throws 409 `SHIPPING_ORIGIN_REQUIRED` without it (same gate pattern as `EMAIL_CONFIG_REQUIRED` on events). No DELETE endpoint on purpose — removing the origin would strand live products.
+
+##### `region_cache` / `shipping_cost_cache`
+
+Both api.co.id plans are **credit-limited**, so every response is cached DB-side in a time window and served from MySQL on repeat reads:
+
+| Table | Key | Payload | Window |
+| --- | --- | --- | --- |
+| `region_cache` | `cache_key` (`provinces`, `regencies:31`, `districts:3172`, `villages:317205`) | the full list (all vendor pages), JSON | `REGION_CACHE_DAYS` (default 30 — region data is near-static) |
+| `shipping_cost_cache` | composite PK (`origin_village_code`, `destination_village_code`, `weight_kg`) | courier list (`courier_code`, `courier_name`, `price`, `estimation`), JSON | `SHIPPING_COST_CACHE_HOURS` (default 24 — prices drift) |
+
+On a vendor failure, a stale cached copy is served instead of erroring (stale beats a 502); with no cache at all, region lookups answer 502 `REGION_LOOKUP_FAILED` / quotes 502 `SHIPPING_QUOTE_FAILED`. `API_CO_ID_KEY` unset → 501 `SHIPPING_NOT_CONFIGURED`, everything else keeps working. The quote cache is shared across sellers per lane; each seller's `enabled_couriers` whitelist is applied on top of the cached list, never baked into it.
+
+**Checkout pricing:** per seller group, weight = Σ `products.weight_grams` × qty → billed kg = `max(1, ceil(grams / 1000))`; the buyer picks a courier per seller (`POST /api/shipping/quotes` lists options); order creation re-prices the chosen `courier_code` server-side and snapshots courier/cost/estimation/weight onto `merch_orders`.
 
 #### `notifications` — in-app (header bell)
 
@@ -524,6 +554,8 @@ Indexes: `(user_id, read_at)`, `(user_id, created_at)`. Written fire-and-log nex
 | Never oversell merch | Same guarded-UPDATE pattern on `products` (base stock) and `product_variants` (per-combination stock), reserved at merch-order creation inside one all-or-nothing transaction spanning every seller's order in the cart. |
 | One merch payment per seller | A multi-seller cart is split into one `merch_orders` row per `seller_id` at checkout — payment is a manual transfer to each seller's own account, so a combined order could never be settled in one payment. |
 | Never trust a client-submitted price/total | `order_items.unit_price` and `orders.total_amount` are always computed server-side from `ticket_types.price` and `promo_codes` at write time. |
+| Never trust a client-submitted shipping cost | Checkout sends only a `courier_code` per seller; the service re-quotes the lane (seller origin village → buyer village, billed kg) and takes the price from the vendor/cache — a courier outside the seller's `enabled_couriers` whitelist is rejected (`COURIER_NOT_AVAILABLE`). |
+| Selling merch requires a departure address | `POST /api/products` throws 409 `SHIPPING_ORIGIN_REQUIRED` until the owner has a `seller_shipping_origins` row — every checkout quote is priced from it. |
 | One buyer identity per order | `buyer_name`/`buyer_email`/`buyer_phone` live once on `orders`, never duplicated onto `tickets`. |
 | Per-event, per-user purchase cap | Enforced in the order-creation service: sum `order_items.quantity` across the buyer's (`user_id` or `buyer_email`) non-cancelled/non-expired orders for the event, reject if it would exceed `events.max_tickets_per_user`. |
 | A ticket can't be scanned twice | `tickets.status` transitions `issued → used` atomically inside the scan transaction; a second scan attempt reads `status = used`, is rejected, and is still logged as a `ticket_check_ins` row with `result = duplicate`. |

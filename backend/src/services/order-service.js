@@ -198,7 +198,14 @@ export const getOrderForGuest = async (orderId, email) => {
 };
 
 /** @param {string} userId */
-export const listMyOrders = (userId) => ordersRepository.listByUser(userId);
+export const listMyOrders = async (userId) => {
+  const orders = await ordersRepository.listByUser(userId);
+  if (orders.length === 0) return orders;
+  // Attach items (with ticket type names) so the buyer's transaction history
+  // can show what each order bought, not just its id and total.
+  const items = await orderItemsRepository.listByOrdersWithTypeNames(orders.map((order) => order.id));
+  return orders.map((order) => ({ ...order, items: items.filter((item) => item.order_id === order.id) }));
+};
 
 /**
  * @param {string} eventId

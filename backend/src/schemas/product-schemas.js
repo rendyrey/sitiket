@@ -8,6 +8,8 @@ const baseFields = {
   price: z.coerce.number().int().nonnegative().max(1_000_000_000),
   // Base stock — ignored for selling once the product has variants.
   stock: z.coerce.number().int().nonnegative().max(1_000_000),
+  // Package weight in grams — shipping quotes bill per started kg (min 1kg).
+  weightGrams: z.coerce.number().int().positive().max(500_000).default(1000),
 };
 
 export const createProductSchema = z.object(baseFields);

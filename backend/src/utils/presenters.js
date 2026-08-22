@@ -12,6 +12,12 @@ export const toPublicUser = (user) => ({
   address: user.address,
   city: user.city,
   province: user.province,
+  district: user.district,
+  village: user.village,
+  provinceCode: user.province_code,
+  cityCode: user.city_code,
+  districtCode: user.district_code,
+  villageCode: user.village_code,
   postalCode: user.postal_code,
   avatarUrl: user.avatar_url,
   role: user.role,
@@ -63,6 +69,10 @@ export const toPublicEvent = (event) => ({
 export const toPublicOrder = (order) => ({
   id: order.id,
   eventId: order.event_id,
+  // Only present on listings whose repository query joins `events`
+  // (e.g. `listByUser` for the buyer's transaction history).
+  eventName: order.event_name,
+  eventSlug: order.event_slug,
   userId: order.user_id,
   buyerName: order.buyer_name,
   buyerEmail: order.buyer_email,
@@ -79,6 +89,8 @@ export const toPublicOrder = (order) => ({
   items: order.items?.map((item) => ({
     id: item.id,
     ticketTypeId: item.ticket_type_id,
+    // Only present when the items were loaded with type names (transaction history).
+    ticketTypeName: item.ticket_type_name,
     quantity: item.quantity,
     unitPrice: item.unit_price,
     subtotal: item.subtotal,
@@ -101,6 +113,15 @@ export const toPublicTicket = (ticket) => ({
   eventId: ticket.event_id,
   ticketTypeId: ticket.ticket_type_id,
   ticketTypeName: ticket.ticket_type_name,
+  // Event + organizer context — lets "My tickets" say which event (and whose)
+  // each QR belongs to without extra fetches.
+  eventName: ticket.event_name,
+  eventSlug: ticket.event_slug,
+  eventStartDate: ticket.event_start_date,
+  eventEndDate: ticket.event_end_date,
+  eventVenueName: ticket.event_venue_name,
+  eventCity: ticket.event_city,
+  organizerName: ticket.organizer_name,
   buyerName: ticket.buyer_name,
   buyerEmail: ticket.buyer_email,
   createdAt: ticket.created_at,

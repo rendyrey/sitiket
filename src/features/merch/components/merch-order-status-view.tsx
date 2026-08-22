@@ -85,11 +85,27 @@ export default function MerchOrderStatusView({ order, paymentInstructions }: Mer
             <div className="flex flex-wrap justify-between gap-2 border-b border-black/10 pb-2">
               <dt className="text-[10px] font-bold uppercase tracking-widest text-black/40">Address</dt>
               <dd className="max-w-[70%] text-right font-semibold">
-                {[order.shippingAddress, order.shippingCity, order.shippingProvince, order.shippingPostalCode]
+                {[
+                  order.shippingAddress,
+                  order.shippingVillage,
+                  order.shippingDistrict,
+                  order.shippingCity,
+                  order.shippingProvince,
+                  order.shippingPostalCode,
+                ]
                   .filter(Boolean)
                   .join(", ")}
               </dd>
             </div>
+            {order.courierName && (
+              <div className="flex flex-wrap justify-between gap-2 border-b border-black/10 pb-2">
+                <dt className="text-[10px] font-bold uppercase tracking-widest text-black/40">Courier</dt>
+                <dd className="max-w-[70%] text-right font-semibold">
+                  {order.courierName}
+                  {order.shippingEstimation && <span className="block text-xs font-normal text-black/45">est. {order.shippingEstimation}</span>}
+                </dd>
+              </div>
+            )}
             {order.buyerNote && (
               <div className="flex flex-wrap justify-between gap-2">
                 <dt className="text-[10px] font-bold uppercase tracking-widest text-black/40">Note</dt>
@@ -98,7 +114,9 @@ export default function MerchOrderStatusView({ order, paymentInstructions }: Mer
             )}
           </dl>
           <p className="mt-4 border-t border-black/10 pt-3 text-xs text-black/45">
-            The seller arranges delivery themselves once your payment is confirmed.
+            {order.courierName
+              ? "The seller hands your package to the courier once your payment is confirmed."
+              : "The seller arranges delivery themselves once your payment is confirmed."}
           </p>
         </div>
       </div>
@@ -120,6 +138,16 @@ export default function MerchOrderStatusView({ order, paymentInstructions }: Mer
               <span className="shrink-0">{formatPrice(item.subtotal)}</span>
             </div>
           ))}
+        </div>
+        <div className="space-y-1 text-sm text-white/65">
+          <div className="flex justify-between gap-3">
+            <span>Items</span>
+            <span>{formatPrice(order.subtotalAmount)}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>Shipping{order.courierName ? ` (${order.courierName})` : ""}</span>
+            <span>{formatPrice(order.shippingCost)}</span>
+          </div>
         </div>
         <div className="mt-3 flex items-end justify-between gap-2">
           <span className="text-xs font-bold uppercase tracking-widest text-white/45">Total</span>

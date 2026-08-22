@@ -29,6 +29,9 @@ import { promoCodeRouter } from "./routes/promo-codes.js";
 import { qrisConfigRouter } from "./routes/qris-config.js";
 import { emailConfigRouter } from "./routes/email-config.js";
 import { refundRequestRouter } from "./routes/refund-requests.js";
+import { regionRouter } from "./routes/regions.js";
+import { shippingOriginRouter } from "./routes/shipping-origin.js";
+import { shippingRouter } from "./routes/shipping.js";
 import { ticketCategoryRouter } from "./routes/ticket-categories.js";
 import { ticketTypeRouter } from "./routes/ticket-types.js";
 import { ticketRouter } from "./routes/tickets.js";
@@ -71,6 +74,10 @@ app.use("/api/order-payments", orderPaymentRouter);
 app.use("/api/refund-requests", refundRequestRouter);
 app.use("/api/tickets", ticketRouter);
 app.use("/api/check-ins", checkInRouter);
+
+app.use("/api/regions", regionRouter);
+app.use("/api/shipping", shippingRouter);
+app.use("/api/shipping-origin", shippingOriginRouter);
 
 app.use("/api/merch-categories", merchCategoryRouter);
 app.use("/api/products", productRouter);

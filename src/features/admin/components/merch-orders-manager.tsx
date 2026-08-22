@@ -324,10 +324,24 @@ function MerchOrderDetail({
         <div className="border-2 border-black/10 bg-white p-3 text-xs">
           <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">Ship to</span>
           <p className="mt-1 text-black/70">
-            {[order.shippingAddress, order.shippingCity, order.shippingProvince, order.shippingPostalCode]
+            {[
+              order.shippingAddress,
+              order.shippingVillage,
+              order.shippingDistrict,
+              order.shippingCity,
+              order.shippingProvince,
+              order.shippingPostalCode,
+            ]
               .filter(Boolean)
               .join(", ")}
           </p>
+          {order.courierName && (
+            <p className="mt-1 font-bold text-black/70">
+              {order.courierName} — {formatPrice(order.shippingCost)}
+              {order.shippingEstimation ? ` (est. ${order.shippingEstimation})` : ""}
+              {order.shippingWeightGrams ? ` · ${order.shippingWeightGrams} g` : ""}
+            </p>
+          )}
           {order.buyerNote && <p className="mt-1 italic text-black/50">“{order.buyerNote}”</p>}
         </div>
       </div>
@@ -345,6 +359,12 @@ function MerchOrderDetail({
               <span className="font-bold">{formatPrice(item.subtotal)}</span>
             </li>
           ))}
+          {order.shippingCost > 0 && (
+            <li className="flex justify-between gap-3 border-t border-black/10 pt-1">
+              <span>Shipping{order.courierName ? ` (${order.courierName})` : ""}</span>
+              <span className="font-bold">{formatPrice(order.shippingCost)}</span>
+            </li>
+          )}
         </ul>
       </div>
 

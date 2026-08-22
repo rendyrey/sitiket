@@ -2,20 +2,22 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAtom } from "jotai";
 import ActionLink from "@/components/ui/action-link";
 import { formatPrice } from "@/data/events";
-import type { MerchOrder, User } from "@/lib/api/types";
+import { getShippingQuotesAction } from "@/features/shipping/lib/actions";
+import type { CourierOption, MerchOrder, ShippingQuote, User } from "@/lib/api/types";
 import { createMerchOrdersAction } from "../lib/actions";
 import { cartAtom, cartLineKey, cartTotal, groupBySeller } from "../lib/cart";
 
 /**
  * Signed-in merch checkout. Shows the delivery address from the buyer's
  * profile (a hard prerequisite — the backend snapshots it onto each order),
- * groups the cart per seller, and — for multi-seller carts — interrupts with
- * a modal making clear that one order per seller is created and each must be
- * paid separately.
+ * groups the cart per seller, quotes each seller's shipping couriers from
+ * their departure address to the buyer's village, and — for multi-seller
+ * carts — interrupts with a modal making clear that one order per seller is
+ * created and each must be paid separately.
  */
 export default function MerchCheckoutView({ user }: { user: User }) {
   const router = useRouter();
@@ -26,18 +28,87 @@ export default function MerchCheckoutView({ user }: { user: User }) {
   const [error, setError] = useState<string | null>(null);
   const [createdOrders, setCreatedOrders] = useState<MerchOrder[] | null>(null);
 
+  /**
+   * The last quote response, tagged with the cart serialization it was
+   * requested for — a mismatched key means the cart changed and a fresh quote
+   * is in flight (that mismatch IS the loading state, so the effect never has
+   * to reset state synchronously).
+   */
+  const [quoteState, setQuoteState] = useState<{ key: string; quotes?: ShippingQuote[]; error?: string } | null>(null);
+  /** Map of sellerId → the buyer's chosen courier code. */
+  const [selectedCouriers, setSelectedCouriers] = useState<Record<string, string>>({});
+
   const groups = groupBySeller(items);
-  const profileComplete = Boolean(user.phone && user.address);
+  // The village code is what shipping quotes key on — without it there is no
+  // shipping cost, so checkout requires the full region-picked address.
+  const profileComplete = Boolean(user.phone && user.address && user.villageCode);
+
+  /** Request payload lines — stable-stringified so the quote effect only refires on real cart changes. */
+  const requestItems = useMemo(
+    () =>
+      items.map((line) => ({
+        productId: line.productId,
+        ...(line.variantId ? { variantId: line.variantId } : {}),
+        quantity: line.quantity,
+      })),
+    [items],
+  );
+  const requestItemsKey = JSON.stringify(requestItems);
+
+  // Quote shipping whenever the cart contents change (server-side DB cache
+  // makes repeat quotes free). Resets stale courier picks for sellers whose
+  // options changed.
+  useEffect(() => {
+    if (!profileComplete || requestItems.length === 0) return;
+    let cancelled = false;
+    void getShippingQuotesAction(requestItems).then((result) => {
+      if (cancelled) return;
+      if (!result.ok) {
+        setQuoteState({ key: requestItemsKey, error: result.message });
+        return;
+      }
+      setQuoteState({ key: requestItemsKey, quotes: result.data });
+      // Preselect the cheapest courier per seller — standard e-commerce default.
+      setSelectedCouriers((previous) => {
+        const next: Record<string, string> = {};
+        for (const quote of result.data) {
+          const stillValid = quote.couriers.some((courier) => courier.courierCode === previous[quote.sellerId]);
+          const cheapest = [...quote.couriers].sort((a, b) => a.price - b.price)[0];
+          const chosen = stillValid ? previous[quote.sellerId] : cheapest?.courierCode;
+          if (chosen) next[quote.sellerId] = chosen;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- requestItemsKey is the stable serialization of requestItems
+  }, [profileComplete, requestItemsKey]);
+
+  // Only a response for the CURRENT cart counts — anything else is stale.
+  const quotes = quoteState?.key === requestItemsKey ? (quoteState.quotes ?? null) : null;
+  const quoteError = quoteState?.key === requestItemsKey ? (quoteState.error ?? null) : null;
+
+  /** The quote for one seller group, or undefined while quotes load. */
+  const quoteFor = (sellerId: string): ShippingQuote | undefined => quotes?.find((quote) => quote.sellerId === sellerId);
+
+  /** The chosen courier entry for one seller, or undefined until picked. */
+  const chosenCourier = (sellerId: string): CourierOption | undefined =>
+    quoteFor(sellerId)?.couriers.find((courier) => courier.courierCode === selectedCouriers[sellerId]);
+
+  const shippingTotal = groups.reduce((sum, group) => sum + (chosenCourier(group.sellerId)?.price ?? 0), 0);
+  const everySellerHasCourier = groups.every((group) => Boolean(chosenCourier(group.sellerId)));
 
   const placeOrders = async () => {
     setConfirmingSplit(false);
     setError(null);
     setSubmitting(true);
     const result = await createMerchOrdersAction({
-      items: items.map((line) => ({
-        productId: line.productId,
-        ...(line.variantId ? { variantId: line.variantId } : {}),
-        quantity: line.quantity,
+      items: requestItems,
+      shipping: groups.map((group) => ({
+        sellerId: group.sellerId,
+        courierCode: selectedCouriers[group.sellerId],
       })),
       ...(buyerNote.trim() ? { buyerNote: buyerNote.trim() } : {}),
     });
@@ -123,45 +194,109 @@ export default function MerchCheckoutView({ user }: { user: User }) {
               <div>
                 <dt className="sr-only">Address</dt>
                 <dd className="text-black/60">
-                  {[user.address, user.city, user.province, user.postalCode].filter(Boolean).join(", ")}
+                  {[user.address, user.village, user.district, user.city, user.province, user.postalCode]
+                    .filter(Boolean)
+                    .join(", ")}
                 </dd>
               </div>
             </dl>
           ) : (
             <p className="mt-4 border-2 border-red-500/60 bg-red-500/5 p-4 text-sm font-semibold text-red-700">
-              Your profile is missing a phone number or delivery address.{" "}
+              Your profile is missing a phone number or a full delivery address (down to the village).{" "}
               <Link href="/account#profile" className="underline decoration-2 underline-offset-2">
                 Complete it first
               </Link>{" "}
-              — sellers need it to ship your merch.
+              — shipping costs are calculated from it.
             </p>
           )}
         </section>
 
-        {/* Per-seller summary */}
-        {groups.map((group) => (
-          <section key={group.sellerId} className="border-2 border-ink bg-white">
-            <header className="border-b-2 border-ink bg-paper px-4 py-3 sm:px-5">
-              <span className="text-xs font-black uppercase tracking-widest">Sold by {group.sellerName}</span>
-            </header>
-            <ul className="divide-y divide-black/10">
-              {group.items.map((line) => (
-                <li key={cartLineKey(line)} className="flex items-baseline justify-between gap-3 px-4 py-3 text-sm sm:px-5">
-                  <span className="min-w-0">
-                    <span className="font-bold">{line.name}</span>
-                    {line.variantLabel && <span className="text-black/45"> — {line.variantLabel}</span>}
-                    <span className="text-black/45"> × {line.quantity}</span>
-                  </span>
-                  <strong className="shrink-0">{formatPrice(line.unitPrice * line.quantity)}</strong>
-                </li>
-              ))}
-            </ul>
-            <footer className="flex items-center justify-between border-t-2 border-ink px-4 py-3 sm:px-5">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">Pay {group.sellerName}</span>
-              <strong>{formatPrice(cartTotal(group.items))}</strong>
-            </footer>
-          </section>
-        ))}
+        {/* Per-seller summary + courier choice */}
+        {groups.map((group) => {
+          const quote = quoteFor(group.sellerId);
+          const courier = chosenCourier(group.sellerId);
+          return (
+            <section key={group.sellerId} className="border-2 border-ink bg-white">
+              <header className="border-b-2 border-ink bg-paper px-4 py-3 sm:px-5">
+                <span className="text-xs font-black uppercase tracking-widest">Sold by {group.sellerName}</span>
+              </header>
+              <ul className="divide-y divide-black/10">
+                {group.items.map((line) => (
+                  <li key={cartLineKey(line)} className="flex items-baseline justify-between gap-3 px-4 py-3 text-sm sm:px-5">
+                    <span className="min-w-0">
+                      <span className="font-bold">{line.name}</span>
+                      {line.variantLabel && <span className="text-black/45"> — {line.variantLabel}</span>}
+                      <span className="text-black/45"> × {line.quantity}</span>
+                    </span>
+                    <strong className="shrink-0">{formatPrice(line.unitPrice * line.quantity)}</strong>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Shipping courier — quoted from the seller's departure address to the buyer's village. */}
+              <div className="border-t-2 border-ink px-4 py-4 sm:px-5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">
+                  Shipping{quote ? ` — ${quote.weightKg} kg` : ""}
+                </span>
+                {!profileComplete ? (
+                  <p className="mt-2 text-xs text-black/45">Complete your delivery address to see shipping options.</p>
+                ) : quoteError ? (
+                  <p className="mt-2 text-sm font-semibold text-red-600">{quoteError}</p>
+                ) : !quote ? (
+                  <p className="mt-2 text-xs text-black/45">Calculating shipping options…</p>
+                ) : quote.couriers.length === 0 ? (
+                  <p className="mt-2 text-sm font-semibold text-red-600">
+                    No courier serves this route yet — this seller can&apos;t ship to your address.
+                  </p>
+                ) : (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {quote.couriers.map((option) => (
+                      <label
+                        key={option.courierCode}
+                        className={`flex cursor-pointer items-center justify-between gap-3 border-2 p-3 text-sm ${
+                          selectedCouriers[group.sellerId] === option.courierCode
+                            ? "border-ink bg-lime/20"
+                            : "border-black/15 hover:border-ink"
+                        }`}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <input
+                            type="radio"
+                            name={`courier-${group.sellerId}`}
+                            checked={selectedCouriers[group.sellerId] === option.courierCode}
+                            onChange={() =>
+                              setSelectedCouriers((previous) => ({ ...previous, [group.sellerId]: option.courierCode }))
+                            }
+                          />
+                          <span className="min-w-0">
+                            <span className="block font-bold">{option.courierName}</span>
+                            {option.estimation && <span className="block text-xs text-black/45">{option.estimation}</span>}
+                          </span>
+                        </span>
+                        <strong className="shrink-0">{formatPrice(option.price)}</strong>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <footer className="space-y-1 border-t-2 border-ink px-4 py-3 sm:px-5">
+                <div className="flex items-center justify-between text-xs text-black/55">
+                  <span>Items</span>
+                  <span>{formatPrice(cartTotal(group.items))}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-black/55">
+                  <span>Shipping{courier ? ` (${courier.courierName})` : ""}</span>
+                  <span>{courier ? formatPrice(courier.price) : "—"}</span>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">Pay {group.sellerName}</span>
+                  <strong>{formatPrice(cartTotal(group.items) + (courier?.price ?? 0))}</strong>
+                </div>
+              </footer>
+            </section>
+          );
+        })}
 
         {/* Note to sellers */}
         <label className="field-label block">
@@ -186,10 +321,14 @@ export default function MerchCheckoutView({ user }: { user: User }) {
               <span className="shrink-0">{formatPrice(cartTotal(group.items))}</span>
             </div>
           ))}
+          <div className="flex justify-between gap-3 border-t border-white/15 pt-2">
+            <span className="min-w-0 truncate">Shipping</span>
+            <span className="shrink-0">{everySellerHasCourier ? formatPrice(shippingTotal) : "—"}</span>
+          </div>
         </div>
         <div className="flex items-end justify-between gap-2">
           <span className="text-xs font-bold uppercase tracking-widest text-white/45">Total</span>
-          <strong className="text-2xl text-lime">{formatPrice(cartTotal(items))}</strong>
+          <strong className="text-2xl text-lime">{formatPrice(cartTotal(items) + shippingTotal)}</strong>
         </div>
         {groups.length > 1 && (
           <p className="mt-4 border-t border-white/15 pt-4 text-xs text-white/50">
@@ -200,7 +339,7 @@ export default function MerchCheckoutView({ user }: { user: User }) {
         <button
           type="button"
           onClick={handlePlaceOrder}
-          disabled={submitting || !profileComplete}
+          disabled={submitting || !profileComplete || !everySellerHasCourier}
           className="button button-lime button-large mt-6 w-full disabled:opacity-40"
         >
           {submitting ? "Placing order…" : "Place order"}
@@ -227,7 +366,9 @@ export default function MerchCheckoutView({ user }: { user: User }) {
               {groups.map((group) => (
                 <li key={group.sellerId} className="flex justify-between gap-3">
                   <span className="min-w-0 truncate font-semibold">{group.sellerName}</span>
-                  <strong className="shrink-0">{formatPrice(cartTotal(group.items))}</strong>
+                  <strong className="shrink-0">
+                    {formatPrice(cartTotal(group.items) + (chosenCourier(group.sellerId)?.price ?? 0))}
+                  </strong>
                 </li>
               ))}
             </ul>

@@ -8,6 +8,11 @@ const withOrderContext = (query) =>
     .join("order_items", "order_items.id", "tickets.order_item_id")
     .join("orders", "orders.id", "order_items.order_id")
     .join("ticket_types", "ticket_types.id", "order_items.ticket_type_id")
+    // Event + organizer context so a ticket is self-describing in "My
+    // tickets" (a buyer with tickets to several events must be able to tell
+    // them apart without opening each order).
+    .join("events", "events.id", "orders.event_id")
+    .leftJoin("users as organizers", "organizers.id", "events.owner_id")
     .select(
       "tickets.*",
       "order_items.order_id",
@@ -16,6 +21,13 @@ const withOrderContext = (query) =>
       "orders.buyer_name",
       "orders.buyer_email",
       "ticket_types.name as ticket_type_name",
+      "events.name as event_name",
+      "events.slug as event_slug",
+      "events.start_date as event_start_date",
+      "events.end_date as event_end_date",
+      "events.venue_name as event_venue_name",
+      "events.city as event_city",
+      "organizers.name as organizer_name",
     );
 
 /**

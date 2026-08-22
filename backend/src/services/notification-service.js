@@ -43,6 +43,28 @@ const eventInfoRows = (event) => {
 };
 
 /**
+ * The organizer's contact person for buyer-facing event emails — so a buyer
+ * who needs help (wrong ticket, gate issue, refund question) can reach the
+ * seller directly instead of dead-ending at a no-reply inbox.
+ * @param {object} event - an `events` row (`contact_person_*` are NOT NULL on events)
+ * @returns {Array<{ label: string, value: string }>} rows for an infoPanel; empty when unavailable
+ */
+const organizerContactRows = (event) => {
+  const rows = [];
+  if (event?.contact_person_name) rows.push({ label: "Contact person", value: event.contact_person_name });
+  if (event?.contact_person_phone) rows.push({ label: "Phone", value: event.contact_person_phone });
+  if (event?.contact_person_email) rows.push({ label: "Email", value: event.contact_person_email });
+  return rows;
+};
+
+/** Plain-text twin of {@link organizerContactRows} for the `text` email body. */
+const organizerContactText = (event) => {
+  const rows = organizerContactRows(event);
+  if (rows.length === 0) return "";
+  return `\n\nNeed help? Contact the organizer:\n${rows.map((row) => `- ${row.label}: ${row.value}`).join("\n")}`;
+};
+
+/**
  * Fire-and-log wrapper around `enqueueEmail` — a notification failing to
  * queue must never fail the state change it's attached to (a payment
  * approval, a refund decision, etc. already committed by the time we
@@ -145,10 +167,12 @@ export const notifyAdminApplicationDecision = async (application, applicant, dec
 export const notifyOrderPaid = async (order, tickets, event) => {
   const eventName = event?.name ?? "your event";
   const infoRows = eventInfoRows(event);
+  const contactRows = organizerContactRows(event);
   const bodyHtml = [
     paragraph(`Hi ${escapeHtml(order.buyer_name)}, your payment for <strong>${escapeHtml(eventName)}</strong> is confirmed. Your ${tickets.length === 1 ? "ticket is" : `${tickets.length} tickets are`} ready — show the QR code${tickets.length === 1 ? "" : "s"} at the gate.`),
     ticketPanel({ eventName, tickets }),
     infoRows.length ? infoPanel({ heading: "Event details", rows: infoRows }) : "",
+    contactRows.length ? infoPanel({ heading: "Need help? Contact the organizer", rows: contactRows }) : "",
     button({ href: orderUrl(order.id, order.buyer_email), label: "View your tickets", variant: "lime" }),
   ].join("");
 
@@ -157,7 +181,7 @@ export const notifyOrderPaid = async (order, tickets, event) => {
     {
       to: order.buyer_email,
       subject: `Your tickets for ${eventName}`,
-      text: `Hi ${order.buyer_name}, your payment for ${eventName} is confirmed.\n\nYour tickets:\n${codeList}\n\nView them at ${orderUrl(order.id, order.buyer_email)}\n\n${SPAM_FOOTNOTE}`,
+      text: `Hi ${order.buyer_name}, your payment for ${eventName} is confirmed.\n\nYour tickets:\n${codeList}\n\nView them at ${orderUrl(order.id, order.buyer_email)}${organizerContactText(event)}\n\n${SPAM_FOOTNOTE}`,
       html: renderBrandedEmail({
         preheader: `Your ${tickets.length === 1 ? "ticket" : "tickets"} for ${eventName}`,
         tag: "Payment confirmed",
@@ -178,16 +202,18 @@ export const notifyOrderPaid = async (order, tickets, event) => {
  */
 export const notifyPaymentProofRejected = async (order, reviewerNotes, event) => {
   const eventName = event?.name ?? "your event";
+  const contactRows = organizerContactRows(event);
   const bodyHtml = [
     paragraph(`Hi ${escapeHtml(order.buyer_name)}, we couldn't verify the payment proof you submitted for <strong>${escapeHtml(eventName)}</strong>. You can upload a new one while the order is still open.`),
     reviewerNotes ? infoPanel({ heading: "Reason", rows: [{ label: "Notes", value: reviewerNotes }] }) : "",
+    contactRows.length ? infoPanel({ heading: "Need help? Contact the organizer", rows: contactRows }) : "",
     button({ href: orderUrl(order.id, order.buyer_email), label: "Upload a new proof" }),
   ].join("");
   await notify(
     {
       to: order.buyer_email,
       subject: `Action needed: payment proof for ${eventName}`,
-      text: `Hi ${order.buyer_name}, the payment proof you submitted for ${eventName} couldn't be verified.${reviewerNotes ? ` Reason: ${reviewerNotes}` : ""} Please upload a new proof at ${orderUrl(order.id, order.buyer_email)}`,
+      text: `Hi ${order.buyer_name}, the payment proof you submitted for ${eventName} couldn't be verified.${reviewerNotes ? ` Reason: ${reviewerNotes}` : ""} Please upload a new proof at ${orderUrl(order.id, order.buyer_email)}${organizerContactText(event)}`,
       html: renderBrandedEmail({
         preheader: `Please re-upload your payment proof for ${eventName}`,
         tag: "Action needed",
@@ -272,10 +298,26 @@ const buyerContactRows = (order) => [
   { label: "Phone", value: order.buyer_phone },
   {
     label: "Ship to",
-    value: [order.shipping_address, order.shipping_city, order.shipping_province, order.shipping_postal_code]
+    value: [
+      order.shipping_address,
+      order.shipping_village,
+      order.shipping_district,
+      order.shipping_city,
+      order.shipping_province,
+      order.shipping_postal_code,
+    ]
       .filter(Boolean)
       .join(", "),
   },
+  // Orders created before courier shipping existed carry no courier snapshot.
+  ...(order.courier_name
+    ? [
+        {
+          label: "Courier",
+          value: `${order.courier_name} — ${formatRupiah(order.shipping_cost)}${order.shipping_estimation ? ` (est. ${order.shipping_estimation})` : ""}`,
+        },
+      ]
+    : []),
 ];
 
 /**

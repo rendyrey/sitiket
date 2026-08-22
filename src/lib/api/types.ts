@@ -68,6 +68,14 @@ export interface User {
   address: string | null;
   city: string | null;
   province: string | null;
+  /** Region names below city level — resolved server-side from the chosen village, never free-typed. */
+  district: string | null;
+  village: string | null;
+  /** api.co.id region codes; `villageCode` (10 digits) is what shipping quotes key on. */
+  provinceCode: string | null;
+  cityCode: string | null;
+  districtCode: string | null;
+  villageCode: string | null;
   postalCode: string | null;
   avatarUrl: string | null;
   role: UserRole;
@@ -118,6 +126,8 @@ export interface Event {
 export interface OrderItem {
   id: Uuid;
   ticketTypeId: Uuid;
+  /** Only present on the buyer's transaction history (`GET /api/orders/mine`). */
+  ticketTypeName?: string;
   quantity: number;
   unitPrice: RupiahAmount;
   subtotal: RupiahAmount;
@@ -130,6 +140,9 @@ export interface OrderItem {
 export interface Order {
   id: Uuid;
   eventId: Uuid;
+  /** Only present on the buyer's transaction history (`GET /api/orders/mine`). */
+  eventName?: string;
+  eventSlug?: string;
   userId: Uuid | null;
   buyerName: string;
   buyerEmail: string;
@@ -159,6 +172,15 @@ export interface Ticket {
   eventId: Uuid;
   ticketTypeId: Uuid;
   ticketTypeName: string;
+  /** Event + organizer context — "My tickets" groups and labels QRs by these. */
+  eventName: string;
+  eventSlug: string;
+  eventStartDate: IsoDateTimeString;
+  eventEndDate: IsoDateTimeString;
+  eventVenueName: string | null;
+  eventCity: string | null;
+  /** The organizer's (event owner's) display name; null if the account was deleted. */
+  organizerName: string | null;
   buyerName: string;
   buyerEmail: string;
   createdAt: IsoDateTimeString;
@@ -349,6 +371,8 @@ export interface RawProduct {
   /** Base price — ignored for selling once the product has variants. */
   price: RupiahAmount;
   stock: number;
+  /** Package weight in grams — shipping quotes bill per started kg. */
+  weight_grams: number;
   quantity_sold: number;
   is_active: MysqlRawBoolean;
   deleted_at: IsoDateTimeString | null;
@@ -443,6 +467,17 @@ export interface RawMerchOrder {
   shipping_city: string | null;
   shipping_province: string | null;
   shipping_postal_code: string | null;
+  shipping_district: string | null;
+  shipping_village: string | null;
+  shipping_village_code: string | null;
+  /** The seller departure village the quote was priced from. */
+  origin_village_code: string | null;
+  /** Courier snapshot — null on orders created before courier shipping existed. */
+  courier_code: string | null;
+  courier_name: string | null;
+  shipping_estimation: string | null;
+  shipping_cost: RupiahAmount;
+  shipping_weight_grams: number | null;
   buyer_note: string | null;
   subtotal_amount: RupiahAmount;
   total_amount: RupiahAmount;
@@ -649,6 +684,8 @@ export interface Product {
   /** Base price — display `effectivePrice` (and the range up to `maxVariantPrice`) instead. */
   price: RupiahAmount;
   stock: number;
+  /** Package weight in grams — shipping quotes bill per started kg. */
+  weightGrams: number;
   quantitySold: number;
   isActive: boolean;
   thumbnailUrl: string | null;
@@ -729,6 +766,16 @@ export interface MerchOrder {
   shippingCity: string | null;
   shippingProvince: string | null;
   shippingPostalCode: string | null;
+  shippingDistrict: string | null;
+  shippingVillage: string | null;
+  shippingVillageCode: string | null;
+  originVillageCode: string | null;
+  /** Courier snapshot — null on orders created before courier shipping existed. */
+  courierCode: string | null;
+  courierName: string | null;
+  shippingEstimation: string | null;
+  shippingCost: RupiahAmount;
+  shippingWeightGrams: number | null;
   buyerNote: string | null;
   subtotalAmount: RupiahAmount;
   totalAmount: RupiahAmount;
@@ -985,6 +1032,8 @@ export interface CreateProductRequest {
   description: string;
   price: number;
   stock: number;
+  /** Package weight in grams (defaults server-side to 1000g = the couriers' 1kg minimum). */
+  weightGrams?: number;
 }
 
 export type UpdateProductRequest = Partial<CreateProductRequest>;
@@ -1024,6 +1073,12 @@ export interface CreateMerchOrderItemRequest {
  */
 export interface CreateMerchOrderRequest {
   items: CreateMerchOrderItemRequest[];
+  /**
+   * One courier choice per seller in the cart. Only the courier CODE is sent —
+   * the backend re-prices it from the seller's departure address and the
+   * cart's weight, never trusting a client-side price.
+   */
+  shipping: { sellerId: Uuid; courierCode: string }[];
   buyerNote?: string;
 }
 
@@ -1038,13 +1093,152 @@ export interface ListSellingMerchOrdersQuery {
   pageSize?: number;
 }
 
-/** `PATCH /api/auth/me` — self-service contact + delivery address. */
+/**
+ * `PATCH /api/auth/me` — self-service contact + delivery address. The region
+ * is submitted as a 10-digit village code; the backend resolves the full
+ * hierarchy (province/city/district/village names + codes) from it, so region
+ * names are never free-typed.
+ */
 export interface UpdateProfileRequest {
   phone?: string;
   address?: string;
-  city?: string;
-  province?: string;
+  villageCode?: string;
+  /** Must be one of the chosen village's own postal codes; defaults to its first. */
   postalCode?: string;
+}
+
+// ---- Shipping & Indonesian regions (api.co.id, proxied + DB-cached by the backend) ----
+
+/**
+ * Region rows come back exactly as api.co.id ships them (snake_case). They are
+ * transient picker data — never stored client-side — so there is no
+ * `normalize.ts` mapping for them.
+ */
+export interface RegionProvince {
+  /** 2-digit province code, e.g. `"31"`. */
+  code: string;
+  name: string;
+}
+
+export interface RegionRegency {
+  /** 4-digit regency/city code, e.g. `"3172"`. */
+  code: string;
+  name: string;
+  province_code: string;
+  province: string;
+}
+
+export interface RegionDistrict {
+  /** 6-digit district (kecamatan) code, e.g. `"317205"`. */
+  code: string;
+  name: string;
+  regency_code: string;
+  regency: string;
+  province_code: string;
+  province: string;
+}
+
+export interface RegionVillage {
+  /** 10-digit village code — what shipping quotes key on. */
+  code: string;
+  name: string;
+  district_code: string;
+  district: string;
+  regency_code: string;
+  regency: string;
+  province_code: string;
+  province: string;
+  postal_codes?: string[];
+  /** False when no courier serves this village yet (vendor flag). */
+  is_courier_support?: boolean;
+}
+
+/** One courier option inside a shipping quote (already normalized camelCase). */
+export interface CourierOption {
+  courierCode: string;
+  courierName: string;
+  price: RupiahAmount;
+  /** e.g. `"2 - 3 days"`; null when the courier reports none. */
+  estimation: string | null;
+}
+
+/** Raw courier entry as the backend relays it from api.co.id. */
+export interface RawCourierOption {
+  courier_code: string;
+  courier_name: string;
+  price: RupiahAmount;
+  weight: number;
+  estimation: string | null;
+}
+
+/** `POST /api/shipping/quotes` — one entry per seller group in the cart. */
+export interface RawShippingQuote {
+  sellerId: Uuid;
+  weightGrams: number;
+  weightKg: number;
+  couriers: RawCourierOption[];
+}
+
+export interface ShippingQuote {
+  sellerId: Uuid;
+  weightGrams: number;
+  weightKg: number;
+  couriers: CourierOption[];
+}
+
+/** One entry of the courier catalog (`GET /api/shipping/couriers`). */
+export interface ShippingCourier {
+  code: string;
+  name: string;
+}
+
+/** `GET/PUT /api/shipping-origin` — raw `seller_shipping_origins` row. */
+export interface RawSellerShippingOrigin {
+  id: Uuid;
+  owner_id: Uuid;
+  address: string;
+  province: string;
+  city: string;
+  district: string;
+  village: string;
+  province_code: string;
+  city_code: string;
+  district_code: string;
+  village_code: string;
+  postal_code: string | null;
+  /** Courier whitelist — null means the seller offers every courier. */
+  enabled_couriers: string[] | null;
+  created_at: IsoDateTimeString;
+  updated_at: IsoDateTimeString;
+}
+
+/** The seller's shipping departure address — mandatory before selling merch. */
+export interface SellerShippingOrigin {
+  id: Uuid;
+  ownerId: Uuid;
+  address: string;
+  province: string;
+  city: string;
+  district: string;
+  village: string;
+  provinceCode: string;
+  cityCode: string;
+  districtCode: string;
+  villageCode: string;
+  postalCode: string | null;
+  /** Courier whitelist — null means the seller offers every courier. */
+  enabledCouriers: string[] | null;
+  createdAt: IsoDateTimeString;
+  updatedAt: IsoDateTimeString;
+}
+
+/** `PUT /api/shipping-origin` — the village choice + street detail; hierarchy resolved server-side. */
+export interface SaveShippingOriginRequest {
+  villageCode: string;
+  address: string;
+  postalCode?: string;
+  /** Courier whitelist (min 1 code); omit or null to offer every courier. */
+  enabledCouriers?: string[] | null;
 }
 
 export interface ScanTicketResult {

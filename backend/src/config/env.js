@@ -59,6 +59,17 @@ const envSchema = z.object({
     z.coerce.number().min(0).max(1).optional(),
   ),
 
+  // Optional: api.co.id API key for Indonesian region data (address pickers)
+  // and expedition shipping-cost quotes (services/regional-service.js,
+  // services/shipping-service.js). Unset, region/shipping endpoints answer
+  // 501 SHIPPING_NOT_CONFIGURED while the rest of the app keeps working.
+  API_CO_ID_KEY: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  // Time-window sizes for the DB-side api.co.id caches (both vendor plans are
+  // credit-limited). Region lists are near-static → days; courier prices
+  // drift → hours.
+  REGION_CACHE_DAYS: z.coerce.number().positive().default(30),
+  SHIPPING_COST_CACHE_HOURS: z.coerce.number().positive().default(24),
+
   // Optional: outgoing SMTP for the guest-checkout OTP email. Unset in dev,
   // the OTP just logs server-side (and echoes in the response) instead.
   SMTP_HOST: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),

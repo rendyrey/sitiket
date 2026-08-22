@@ -18,6 +18,8 @@ export default async function AccountPage() {
 
   const [orders, tickets, merchOrders] = await Promise.all([listMyOrders(), listMyTickets(), listMyMerchOrders()]);
   const upcomingTickets = tickets.filter((ticket) => ticket.status !== "void");
+  /** The account page previews recent activity; the full list lives at /account/orders. */
+  const RECENT_LIMIT = 5;
 
   return (
     <div className="bg-paper py-10 sm:py-16">
@@ -28,7 +30,7 @@ export default async function AccountPage() {
         </h1>
         <p className="mt-3 text-black/50">{user.email}</p>
 
-        <div className="mt-12 grid gap-12 lg:grid-cols-[1fr_360px]">
+        <div className="mt-12 grid gap-12 lg:grid-cols-[1fr_420px]">
           <div className="space-y-12">
             <section>
               <h2 className="text-xl font-black uppercase">Your tickets</h2>
@@ -48,18 +50,27 @@ export default async function AccountPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-black uppercase">Order history</h2>
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <h2 className="text-xl font-black uppercase">Order history</h2>
+                <Link href="/account/orders" className="text-link text-xs">
+                  View full transaction history
+                </Link>
+              </div>
               <div className="mt-5 space-y-3">
                 {orders.length === 0 && <p className="text-sm text-black/50">No orders yet.</p>}
-                {orders.map((order) => (
+                {orders.slice(0, RECENT_LIMIT).map((order) => (
                   <Link
                     key={order.id}
                     href={`/orders/${order.id}`}
                     className="flex flex-wrap items-center justify-between gap-3 border-2 border-ink bg-white p-4 transition-colors hover:bg-paper"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-bold">#{order.id}</p>
-                      <p className="text-xs text-black/40">{new Date(order.createdAt).toLocaleDateString("en-GB")}</p>
+                      <p className="truncate text-sm font-bold">{order.eventName ?? `#${order.id}`}</p>
+                      <p className="text-xs text-black/40">
+                        {order.items?.map((item) => `${item.quantity}× ${item.ticketTypeName ?? "Ticket"}`).join(", ")}
+                        {order.items?.length ? " · " : ""}
+                        {new Date(order.createdAt).toLocaleDateString("en-GB")}
+                      </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <strong>{formatPrice(order.totalAmount)}</strong>
@@ -71,7 +82,12 @@ export default async function AccountPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-black uppercase">Merch orders</h2>
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <h2 className="text-xl font-black uppercase">Merch orders</h2>
+                <Link href="/account/orders" className="text-link text-xs">
+                  View full transaction history
+                </Link>
+              </div>
               <div className="mt-5 space-y-3">
                 {merchOrders.length === 0 && (
                   <p className="text-sm text-black/50">
@@ -82,7 +98,7 @@ export default async function AccountPage() {
                     .
                   </p>
                 )}
-                {merchOrders.map((order) => (
+                {merchOrders.slice(0, RECENT_LIMIT).map((order) => (
                   <Link
                     key={order.id}
                     href={`/merch-orders/${order.id}`}

@@ -13,6 +13,18 @@ export const createMerchOrderSchema = z.object({
     )
     .min(1)
     .max(50),
+  // One courier choice per seller in the cart — coverage of every seller
+  // group is enforced in the service, which knows the grouping. Prices are
+  // never accepted from the client; the service re-prices the courier code.
+  shipping: z
+    .array(
+      z.object({
+        sellerId: z.string().uuid(),
+        courierCode: z.string().min(1).max(32),
+      }),
+    )
+    .min(1)
+    .max(50),
   buyerNote: z.string().max(500).optional(),
 });
 

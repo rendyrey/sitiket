@@ -7,6 +7,17 @@ const TABLE = "order_items";
 export const listByOrder = (orderId) => db(TABLE).where({ order_id: orderId });
 
 /**
+ * Items for many orders at once, each with its ticket type's display name —
+ * the buyer transaction history shows "2× VIP" style lines per order.
+ * @param {string[]} orderIds
+ */
+export const listByOrdersWithTypeNames = (orderIds) =>
+  db(TABLE)
+    .whereIn("order_id", orderIds)
+    .join("ticket_types", "ticket_types.id", `${TABLE}.ticket_type_id`)
+    .select(`${TABLE}.*`, "ticket_types.name as ticket_type_name");
+
+/**
  * @param {Array<{ ticketTypeId: string, quantity: number, unitPrice: number }>} items
  * @param {string} orderId
  * @param {import("knex").Knex} executor - must be an open transaction

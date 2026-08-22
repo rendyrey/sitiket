@@ -24,6 +24,7 @@ export default function ProductForm({ categories, product }: ProductFormProps) {
   const [description, setDescription] = useState(product?.description ?? "");
   const [price, setPrice] = useState(product ? String(product.price) : "");
   const [stock, setStock] = useState(product ? String(product.stock) : "");
+  const [weightGrams, setWeightGrams] = useState(product ? String(product.weightGrams) : "1000");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -37,8 +38,13 @@ export default function ProductForm({ categories, product }: ProductFormProps) {
     }
     const priceValue = Number(price);
     const stockValue = Number(stock || 0);
+    const weightValue = Number(weightGrams);
     if (!Number.isFinite(priceValue) || priceValue < 0) {
       setError("Enter a valid price in whole Rupiah.");
+      return;
+    }
+    if (!Number.isFinite(weightValue) || weightValue <= 0) {
+      setError("Enter the package weight in grams (greater than 0).");
       return;
     }
 
@@ -49,6 +55,7 @@ export default function ProductForm({ categories, product }: ProductFormProps) {
       description: description.trim(),
       price: Math.floor(priceValue),
       stock: Math.max(0, Math.floor(stockValue)),
+      weightGrams: Math.floor(weightValue),
     };
     const result = product ? await updateProductAction(product.id, input) : await createProductAction(input);
     setSubmitting(false);
@@ -110,6 +117,16 @@ export default function ProductForm({ categories, product }: ProductFormProps) {
             placeholder="20"
           />
         </div>
+        <FormField
+          label="Package weight (grams)"
+          name="weightGrams"
+          type="number"
+          min={1}
+          inputMode="numeric"
+          value={weightGrams}
+          onChange={(event) => setWeightGrams(event.target.value)}
+          placeholder="1000"
+        />
         <label className="field-label sm:col-span-2">
           Description
           <textarea

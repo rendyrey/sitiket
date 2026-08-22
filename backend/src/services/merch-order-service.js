@@ -6,12 +6,14 @@ import * as productVariantsRepository from "../repositories/product-variants-rep
 import * as productsRepository from "../repositories/products-repository.js";
 import * as usersRepository from "../repositories/users-repository.js";
 import { badRequest, conflict, forbidden, notFound } from "../utils/http-error.js";
+import { groupLinesBySeller, resolveCartLines, totalWeightGrams } from "./merch-cart-service.js";
 import {
   notifyMerchOrderCancelled,
   notifyMerchOrderExpired,
   notifyMerchOrderPlaced,
 } from "./notification-service.js";
 import { resolvePaymentOptionsForSeller } from "./payment-method-service.js";
+import { filterCouriersForOrigin, getCourierOptions, getOriginOrThrow, gramsToBillableKg } from "./shipping-service.js";
 import { pushNotification } from "./web-notification-service.js";
 
 const formatRupiah = (amount) => `Rp ${Number(amount).toLocaleString("id-ID")}`;
@@ -28,59 +30,62 @@ const formatRupiah = (amount) => `Rp ${Number(amount).toLocaleString("id-ID")}`;
  *
  * Server-side invariants (mirroring ticket order-service.js):
  * - unit prices always come from the products/variants tables, never the client;
+ * - the shipping cost is re-priced server-side from the seller's departure
+ *   village and the cart's weight — the client only names a courier code;
  * - stock is reserved via guarded atomic UPDATEs so overselling is impossible;
  * - the buyer's identity/contact/shipping details come from their signed-in
  *   profile (merch checkout requires an account and a saved address).
  *
  * @param {{ sub: string }} requester - merch checkout is signed-in only
- * @param {{ items: Array<{ productId: string, variantId?: string, quantity: number }>, buyerNote?: string }} input
+ * @param {{ items: Array<{ productId: string, variantId?: string, quantity: number }>,
+ *   shipping: Array<{ sellerId: string, courierCode: string }>, buyerNote?: string }} input
  * @returns {Promise<object[]>} the created orders (one per seller), each with its `items`
  */
 export const createOrders = async (requester, input) => {
   const buyer = await usersRepository.findById(requester.sub);
-  if (!buyer.phone || !buyer.address) {
+  if (!buyer.phone || !buyer.address || !buyer.village_code) {
     throw conflict(
       "PROFILE_INCOMPLETE",
-      "Add your phone number and delivery address to your account before checking out merch",
+      "Add your phone number and delivery address (down to the village) to your account before checking out merch",
     );
   }
 
-  // Resolve every line against the live catalog, server-side.
-  const lines = [];
-  for (const item of input.items) {
-    const product = await productsRepository.findById(item.productId);
-    if (!product || !product.is_active) {
-      throw badRequest("PRODUCT_NOT_AVAILABLE", `Product ${item.productId} is not available`);
-    }
+  // Resolve every line against the live catalog, server-side, and group per
+  // seller (one order + one shipment per seller).
+  const lines = await resolveCartLines(input.items);
+  const linesBySeller = groupLinesBySeller(lines);
 
-    let variant = null;
-    if (product.has_variants) {
-      if (!item.variantId) throw badRequest("VARIANT_REQUIRED", `"${product.name}" requires choosing a variant`);
-      variant = await productVariantsRepository.findVariantById(item.variantId);
-      if (!variant || variant.product_id !== product.id || !variant.is_active) {
-        throw badRequest("VARIANT_NOT_AVAILABLE", `The chosen variant of "${product.name}" is not available`);
-      }
-    } else if (item.variantId) {
-      throw badRequest("VARIANT_NOT_AVAILABLE", `"${product.name}" has no variants`);
-    }
-
-    lines.push({
-      product,
-      variant,
-      quantity: item.quantity,
-      unitPrice: variant ? variant.price : product.price,
-    });
-  }
-
-  // Group per seller; fail fast if any seller has no way to get paid,
-  // BEFORE reserving anyone's stock.
-  const linesBySeller = new Map();
-  for (const line of lines) {
-    const sellerId = line.product.owner_id;
-    if (!linesBySeller.has(sellerId)) linesBySeller.set(sellerId, []);
-    linesBySeller.get(sellerId).push(line);
-  }
+  // Fail fast if any seller has no way to get paid, BEFORE reserving stock.
   await Promise.all([...linesBySeller.keys()].map((sellerId) => resolvePaymentOptionsForSeller(sellerId)));
+
+  /** Map of sellerId → the buyer's chosen courier code for that seller's shipment. */
+  const courierBySeller = new Map(input.shipping.map((choice) => [choice.sellerId, choice.courierCode]));
+
+  // Price every seller's shipment BEFORE the transaction: the quote comes
+  // from the DB cache the checkout page already primed, so this normally
+  // spends no vendor credit and never holds stock while waiting on a vendor.
+  const shipmentBySeller = new Map();
+  for (const [sellerId, sellerLines] of linesBySeller) {
+    const courierCode = courierBySeller.get(sellerId);
+    if (!courierCode) {
+      throw badRequest("COURIER_REQUIRED", "Choose a shipping courier for every seller in the cart");
+    }
+
+    const seller = await usersRepository.findById(sellerId);
+    const origin = await getOriginOrThrow(sellerId, seller?.name);
+    const weightGrams = totalWeightGrams(sellerLines);
+    // Same whitelist filter as the quote endpoint — a courier the seller
+    // disabled can never be smuggled in by code.
+    const couriers = filterCouriersForOrigin(
+      origin,
+      await getCourierOptions(origin.village_code, buyer.village_code, gramsToBillableKg(weightGrams)),
+    );
+    const courier = couriers.find((option) => option.courier_code === courierCode);
+    if (!courier) {
+      throw badRequest("COURIER_NOT_AVAILABLE", `Courier "${courierCode}" is not available for this shipment`);
+    }
+    shipmentBySeller.set(sellerId, { origin, courier, weightGrams });
+  }
 
   const paymentExpiresAt = new Date(Date.now() + env.MERCH_PAYMENT_HOLD_HOURS * 60 * 60 * 1000);
 
@@ -98,6 +103,7 @@ export const createOrders = async (requester, input) => {
       }
 
       const subtotalAmount = sellerLines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
+      const { origin, courier, weightGrams } = shipmentBySeller.get(sellerId);
       const orderId = await merchOrdersRepository.create(
         {
           sellerId,
@@ -109,9 +115,18 @@ export const createOrders = async (requester, input) => {
           shippingCity: buyer.city,
           shippingProvince: buyer.province,
           shippingPostalCode: buyer.postal_code,
+          shippingDistrict: buyer.district,
+          shippingVillage: buyer.village,
+          shippingVillageCode: buyer.village_code,
+          originVillageCode: origin.village_code,
+          courierCode: courier.courier_code,
+          courierName: courier.courier_name,
+          shippingEstimation: courier.estimation,
+          shippingCost: courier.price,
+          shippingWeightGrams: weightGrams,
           buyerNote: input.buyerNote,
           subtotalAmount,
-          totalAmount: subtotalAmount,
+          totalAmount: subtotalAmount + courier.price,
           paymentExpiresAt,
         },
         trx,
