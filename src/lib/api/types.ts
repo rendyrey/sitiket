@@ -225,11 +225,14 @@ export interface RawEventImage {
   created_at: IsoDateTimeString;
 }
 
+export type EventStaffStatus = "pending" | "accepted" | "declined";
+
 export interface RawEventStaff {
   id: Uuid;
   event_id: Uuid;
   user_id: Uuid;
   role: EventStaffRole;
+  status: EventStaffStatus;
   invited_by: Uuid;
   created_at: IsoDateTimeString;
 }
@@ -238,6 +241,16 @@ export interface RawEventStaff {
 export interface RawEventStaffWithUser extends RawEventStaff {
   user_name: string;
   user_email: string;
+}
+
+/** `GET /staff-invitations` — the caller's own invitations, with event + inviter context. */
+export interface RawStaffInvitation extends RawEventStaff {
+  event_name: string;
+  event_slug: string;
+  event_start_date: IsoDateTimeString;
+  event_venue_name: string | null;
+  event_city: string | null;
+  inviter_name: string | null;
 }
 
 export interface RawTicketType {
@@ -562,11 +575,22 @@ export interface EventStaff {
   eventId: Uuid;
   userId: Uuid;
   role: EventStaffRole;
+  status: EventStaffStatus;
   invitedBy: Uuid;
   createdAt: IsoDateTimeString;
   /** Only present from the list endpoint (joins the invited user). */
   userName?: string;
   userEmail?: string;
+}
+
+/** One of the signed-in user's own gate-staff invitations, with event context. */
+export interface StaffInvitation extends Omit<EventStaff, "userName" | "userEmail"> {
+  eventName: string;
+  eventSlug: string;
+  eventStartDate: IsoDateTimeString;
+  eventVenueName: string | null;
+  eventCity: string | null;
+  inviterName: string | null;
 }
 
 export interface TicketType {

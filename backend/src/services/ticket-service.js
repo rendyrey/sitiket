@@ -62,7 +62,7 @@ const assertCanScanEvent = async (eventId, requester) => {
   if (event?.owner_id === requester.sub) return;
 
   const staffRow = await eventStaffRepository.findByEventAndUser(eventId, requester.sub);
-  if (staffRow) return;
+  if (staffRow?.status === "accepted") return;
 
   throw forbidden("NOT_EVENT_STAFF", "Only the event owner, its delegated staff, or a super_admin can scan tickets");
 };

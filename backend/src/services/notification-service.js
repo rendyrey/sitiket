@@ -273,6 +273,42 @@ export const notifyOrderExpired = async (order, event) => {
   );
 };
 
+/**
+ * Invites a user to scan tickets at an event's gate — sent when an organizer
+ * adds them as gate staff. Organizer-side mail, so it rides the platform SMTP.
+ * @param {object} staffUser - the invited user's row
+ * @param {object} event - the `events` row they'll scan for
+ * @param {object} inviter - the inviting organizer's user row
+ */
+export const notifyGateStaffInvited = async (staffUser, event, inviter) => {
+  if (!staffUser?.email) return;
+  const eventName = event?.name ?? "an event";
+  const inviterName = inviter?.name ?? "The event organizer";
+  const infoRows = eventInfoRows(event);
+  const invitationsUrl = `${env.FRONTEND_URL}/account/gate-staff`;
+  const bodyHtml = [
+    paragraph(
+      `Hi ${escapeHtml(staffUser.name)}, <strong>${escapeHtml(inviterName)}</strong> invited you to work the gate at <strong>${escapeHtml(eventName)}</strong> — scanning buyers' ticket QR codes at the entrance. Accept the invitation to unlock the scanner, or decline if this isn't for you.`,
+    ),
+    infoRows.length ? infoPanel({ heading: "Event details", rows: infoRows }) : "",
+    button({ href: invitationsUrl, label: "Accept invitation", variant: "lime" }),
+    button({ href: invitationsUrl, label: "Decline", variant: "dark" }),
+  ].join("");
+
+  const infoText = infoRows.length ? `\n\n${infoRows.map((row) => `- ${row.label}: ${row.value}`).join("\n")}` : "";
+  await notify({
+    to: staffUser.email,
+    subject: `Gate staff invitation: ${eventName}`,
+    text: `Hi ${staffUser.name}, ${inviterName} invited you to scan tickets at the gate of ${eventName}.${infoText}\n\nAccept or decline (signed in as ${staffUser.email}): ${invitationsUrl}`,
+    html: renderBrandedEmail({
+      preheader: `${inviterName} invited you to the gate crew for ${eventName}`,
+      tag: "Gate staff invitation",
+      heading: "You're invited to the gate crew",
+      bodyHtml,
+    }),
+  });
+};
+
 const merchOrderUrl = (orderId) => `${env.FRONTEND_URL}/merch-orders/${orderId}`;
 
 const formatRupiah = (amount) => `Rp ${Number(amount).toLocaleString("id-ID")}`;

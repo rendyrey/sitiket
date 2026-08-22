@@ -3,16 +3,25 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
 import { inviteEventStaffAction, removeEventStaffAction } from "@/features/admin/lib/actions";
-import type { EventStaff } from "@/lib/api/types";
+import type { EventStaff, EventStaffStatus } from "@/lib/api/types";
+
+const STATUS_BADGE: Record<EventStaffStatus, { label: string; className: string }> = {
+  pending: { label: "Pending", className: "bg-ink text-white" },
+  accepted: { label: "Accepted", className: "bg-lime text-ink" },
+  declined: { label: "Declined", className: "border border-red-300 bg-red-100 text-red-700" },
+};
 
 export default function StaffManager({ eventId, staff }: { eventId: string; staff: EventStaff[] }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<EventStaff | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
 
   const handleInvite = async () => {
     setError(null);
@@ -34,8 +43,17 @@ export default function StaffManager({ eventId, staff }: { eventId: string; staf
     router.refresh();
   };
 
-  const handleRemove = async (staffId: string) => {
-    await removeEventStaffAction(eventId, staffId);
+  const handleRemove = async () => {
+    if (!removing) return;
+    setRemoveBusy(true);
+    const result = await removeEventStaffAction(eventId, removing.id);
+    setRemoveBusy(false);
+    setRemoving(null);
+    if (!result.ok) {
+      toast.error(result.message);
+      return;
+    }
+    toast.success("Gate staff removed.");
     router.refresh();
   };
 
@@ -54,11 +72,24 @@ export default function StaffManager({ eventId, staff }: { eventId: string; staf
       render: (member) => <span className="text-black/40">{member.userEmail} · scanner</span>,
     },
     {
+      key: "status",
+      header: "Status",
+      sortAccessor: (member) => member.status,
+      render: (member) => {
+        const badge = STATUS_BADGE[member.status];
+        return (
+          <span className={`inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${badge.className}`}>
+            {badge.label}
+          </span>
+        );
+      },
+    },
+    {
       key: "actions",
       header: "",
       align: "right",
       render: (member) => (
-        <button type="button" onClick={() => void handleRemove(member.id)} className="text-xs font-black uppercase text-red-600 hover:underline">
+        <button type="button" onClick={() => setRemoving(member)} className="text-xs font-black uppercase text-red-600 hover:underline">
           Remove
         </button>
       ),
@@ -94,6 +125,22 @@ export default function StaffManager({ eventId, staff }: { eventId: string; staf
           {submitting ? "Inviting…" : "Invite"}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={removing !== null}
+        tag="Remove gate staff"
+        title={`Remove ${removing?.userName ?? "this person"}?`}
+        confirmLabel="Remove"
+        danger
+        busy={removeBusy}
+        onConfirm={() => void handleRemove()}
+        onCancel={() => setRemoving(null)}
+      >
+        <p>
+          <strong>{removing?.userEmail}</strong> will immediately lose scanner access for this event. You can invite
+          them again later.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

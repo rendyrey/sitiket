@@ -17,3 +17,15 @@ export const remove = async (request, response) => {
   await eventStaffService.remove(request.params.eventId, request.user, request.params.staffId);
   response.status(204).send();
 };
+
+/** GET /api/staff-invitations — the caller's own gate-staff invitations. */
+export const listMine = async (request, response) => {
+  const invitations = await eventStaffService.listMine(request.user.sub);
+  response.status(200).json({ data: invitations });
+};
+
+/** POST /api/staff-invitations/:staffId/respond — accept or decline. */
+export const respond = async (request, response) => {
+  const staff = await eventStaffService.respond(request.params.staffId, request.user, request.body.decision);
+  response.status(200).json({ data: staff });
+};

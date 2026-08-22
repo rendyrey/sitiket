@@ -4,6 +4,7 @@ import type {
   BankAccount,
   EventImage,
   EventStaff,
+  StaffInvitation,
   MerchCategory,
   MerchOrder,
   MerchOrderItem,
@@ -22,6 +23,7 @@ import type {
   RawEventImage,
   RawEventStaff,
   RawEventStaffWithUser,
+  RawStaffInvitation,
   RawMerchCategory,
   RawMerchOrder,
   RawMerchOrderItem,
@@ -96,9 +98,26 @@ export const toEventStaff = (raw: RawEventStaff | RawEventStaffWithUser): EventS
   eventId: raw.event_id,
   userId: raw.user_id,
   role: raw.role,
+  status: raw.status,
   invitedBy: raw.invited_by,
   createdAt: raw.created_at,
   ...("user_name" in raw ? { userName: raw.user_name, userEmail: raw.user_email } : {}),
+});
+
+export const toStaffInvitation = (raw: RawStaffInvitation): StaffInvitation => ({
+  id: raw.id,
+  eventId: raw.event_id,
+  userId: raw.user_id,
+  role: raw.role,
+  status: raw.status,
+  invitedBy: raw.invited_by,
+  createdAt: raw.created_at,
+  eventName: raw.event_name,
+  eventSlug: raw.event_slug,
+  eventStartDate: raw.event_start_date,
+  eventVenueName: raw.event_venue_name,
+  eventCity: raw.event_city,
+  inviterName: raw.inviter_name,
 });
 
 export const toTicketType = (raw: RawTicketType): TicketType => ({

@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/super-admin/event-categories", label: "Event categories" },
   { href: "/dashboard/super-admin/ticket-categories", label: "Ticket categories" },
   { href: "/dashboard/super-admin/merch-categories", label: "Merch categories" },
+  { href: "/dashboard/scan", label: "Scan tickets" },
 ];
 
 export default async function SuperAdminDashboardLayout({ children }: { children: React.ReactNode }) {

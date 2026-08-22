@@ -18,6 +18,7 @@ import { merchOrderPaymentNestedRouter } from "./routes/merch-order-payments-nes
 import { merchOrderPaymentRouter } from "./routes/merch-order-payments.js";
 import { merchOrderRouter } from "./routes/merch-orders.js";
 import { merchRouter } from "./routes/merch.js";
+import { staffInvitationsRouter } from "./routes/staff-invitations.js";
 import { notificationRouter } from "./routes/notifications.js";
 import { orderPaymentNestedRouter } from "./routes/order-payments-nested.js";
 import { productRouter } from "./routes/products.js";
@@ -60,6 +61,7 @@ app.use("/api/email-config", emailConfigRouter);
 app.use("/api/events/:eventId/attendance", eventAttendanceRouter);
 app.use("/api/events/:eventId/images", eventImageRouter);
 app.use("/api/events/:eventId/staff", eventStaffRouter);
+app.use("/api/staff-invitations", staffInvitationsRouter);
 app.use("/api/events/:eventId/ticket-types", ticketTypeRouter);
 app.use("/api/events/:eventId/promo-codes", promoCodeRouter);
 app.use("/api/events/:eventId/orders", eventOrderRouter);
