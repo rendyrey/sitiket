@@ -5,6 +5,7 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
+import SearchableSelect from "@/components/ui/searchable-select";
 import { createPromoCodeAction, updatePromoCodeAction } from "@/features/admin/lib/actions";
 import type { DiscountType, PromoCode } from "@/lib/api/types";
 
@@ -109,15 +110,14 @@ export default function PromoCodeManager({ eventId, promoCodes }: { eventId: str
           />
           <label className="field-label">
             Discount type *
-            <select
-              required
-              className="text-field mt-2"
+            <SearchableSelect
               value={discountType}
-              onChange={(e) => setDiscountType(e.target.value as DiscountType)}
-            >
-              <option value="percentage">Percentage</option>
-              <option value="fixed_amount">Fixed amount (IDR)</option>
-            </select>
+              onChange={(value) => setDiscountType(value as DiscountType)}
+              options={[
+                { value: "percentage", label: "Percentage" },
+                { value: "fixed_amount", label: "Fixed amount (IDR)" },
+              ]}
+            />
           </label>
           <FormField
             required

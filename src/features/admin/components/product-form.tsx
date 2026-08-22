@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import FormField from "@/components/ui/form-field";
+import SearchableSelect from "@/components/ui/searchable-select";
 import { createProductAction, updateProductAction } from "@/features/admin/lib/actions";
 import type { MerchCategory, Product } from "@/lib/api/types";
 
@@ -86,14 +87,12 @@ export default function ProductForm({ categories, product }: ProductFormProps) {
         />
         <label className="field-label">
           Category
-          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="text-field">
-            {categories.length === 0 && <option value="">No categories yet — ask a super admin</option>}
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            value={categoryId}
+            onChange={setCategoryId}
+            placeholder={categories.length === 0 ? "No categories yet — ask a super admin" : "Select category"}
+            options={categories.map((category) => ({ value: category.id, label: category.name }))}
+          />
         </label>
         <div className="grid grid-cols-2 gap-4">
           <FormField

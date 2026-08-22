@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition, type ReactNode } from "react";
+import SearchableSelect from "@/components/ui/searchable-select";
 import { formatPrice } from "@/data/events";
 import { formatEventDate, formatEventTime } from "@/features/events/lib/format";
 import {
@@ -123,22 +124,17 @@ export default function MerchOrdersManager() {
           placeholder="Search by buyer name or email…"
           className="text-field mt-0 h-11 w-full max-w-xs"
         />
-        <label className="field-label">
+        <label className="field-label w-56 max-w-full">
           Status
-          <select
-            className="text-field mt-2 h-11"
+          <SearchableSelect
+            className="h-11"
             value={status}
-            onChange={(e) => {
-              setStatus(e.target.value as MerchOrderStatus | "all");
+            onChange={(value) => {
+              setStatus(value as MerchOrderStatus | "all");
               setPage(1);
             }}
-          >
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            options={STATUS_OPTIONS}
+          />
         </label>
       </div>
 

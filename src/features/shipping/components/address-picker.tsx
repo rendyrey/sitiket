@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import SearchableSelect from "@/components/ui/searchable-select";
 import type { RegionDistrict, RegionProvince, RegionRegency, RegionVillage } from "@/lib/api/types";
 import {
   listDistrictsAction,
@@ -139,93 +140,71 @@ export default function AddressPicker({ initial, onChange, disabled }: AddressPi
     <div className="grid gap-4 @md:grid-cols-2">
       <label className="field-label">
         Province
-        <select
+        <SearchableSelect
           value={provinceCode}
           disabled={disabled || !provinces}
-          onChange={(event) => {
+          placeholder={provinces ? "Select province" : "Loading…"}
+          options={(provinces ?? []).map((province) => ({ value: province.code, label: province.name }))}
+          onChange={(code) => {
             setError(null);
-            setProvinceCode(event.target.value);
+            setProvinceCode(code);
             setCityCode("");
             setDistrictCode("");
             setVillageCode("");
             onChange(null);
           }}
-          className="text-field"
-        >
-          <option value="">{provinces ? "Select province" : "Loading…"}</option>
-          {provinces?.map((province) => (
-            <option key={province.code} value={province.code}>
-              {province.name}
-            </option>
-          ))}
-        </select>
+        />
       </label>
 
       <label className="field-label">
         City / regency
-        <select
+        <SearchableSelect
           value={cityCode}
           disabled={disabled || !provinceCode}
-          onChange={(event) => {
+          placeholder={regenciesLoading ? "Loading…" : "Select city"}
+          options={regencies.map((regency) => ({ value: regency.code, label: regency.name }))}
+          onChange={(code) => {
             setError(null);
-            setCityCode(event.target.value);
+            setCityCode(code);
             setDistrictCode("");
             setVillageCode("");
             onChange(null);
           }}
-          className="text-field"
-        >
-          <option value="">{regenciesLoading ? "Loading…" : "Select city"}</option>
-          {regencies.map((regency) => (
-            <option key={regency.code} value={regency.code}>
-              {regency.name}
-            </option>
-          ))}
-        </select>
+        />
       </label>
 
       <label className="field-label">
         District (kecamatan)
-        <select
+        <SearchableSelect
           value={districtCode}
           disabled={disabled || !cityCode}
-          onChange={(event) => {
+          placeholder={districtsLoading ? "Loading…" : "Select district"}
+          options={districts.map((district) => ({ value: district.code, label: district.name }))}
+          onChange={(code) => {
             setError(null);
-            setDistrictCode(event.target.value);
+            setDistrictCode(code);
             setVillageCode("");
             onChange(null);
           }}
-          className="text-field"
-        >
-          <option value="">{districtsLoading ? "Loading…" : "Select district"}</option>
-          {districts.map((district) => (
-            <option key={district.code} value={district.code}>
-              {district.name}
-            </option>
-          ))}
-        </select>
+        />
       </label>
 
       <label className="field-label">
         Village (kelurahan/desa)
-        <select
+        <SearchableSelect
           value={villageCode}
           disabled={disabled || !districtCode}
-          onChange={(event) => {
+          placeholder={villagesLoading ? "Loading…" : "Select village"}
+          options={villages.map((village) => ({
+            value: village.code,
+            label: `${village.name}${village.is_courier_support === false ? " (no courier support yet)" : ""}`,
+          }))}
+          onChange={(code) => {
             setError(null);
-            setVillageCode(event.target.value);
-            emitVillage(event.target.value, villages);
+            setVillageCode(code);
+            emitVillage(code, villages);
           }}
-          className="text-field"
-        >
-          <option value="">{villagesLoading ? "Loading…" : "Select village"}</option>
-          {villages.map((village) => (
-            <option key={village.code} value={village.code}>
-              {village.name}
-              {village.is_courier_support === false ? " (no courier support yet)" : ""}
-            </option>
-          ))}
-        </select>
+        />
       </label>
 
       {error && <p className="text-sm font-semibold text-red-600 @md:col-span-2">{error}</p>}

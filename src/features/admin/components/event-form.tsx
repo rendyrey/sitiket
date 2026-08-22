@@ -5,6 +5,7 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import cn from "@/utils/class-names";
 import FormField from "@/components/ui/form-field";
+import SearchableSelect from "@/components/ui/searchable-select";
 import Link from "next/link";
 import { createEventAction, updateEventAction } from "@/features/admin/lib/actions";
 import type { BankAccount, CreateEventRequest, Event, MeetingPlatform, QrisConfig, TaxonomyItem, ValidationIssue } from "@/lib/api/types";
@@ -201,19 +202,13 @@ export default function EventForm({ bankAccounts, categories, event, qrisConfig 
         </label>
         <label className="field-label">
           Category *
-          <select
-            required
+          <SearchableSelect
             id="categoryId"
-            className={cn("text-field mt-2", fieldErrors.categoryId && "!border-red-500")}
+            className={cn(fieldErrors.categoryId && "!border-red-500")}
             value={values.categoryId}
-            onChange={(e) => set("categoryId", e.target.value)}
-          >
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => set("categoryId", value)}
+            options={categories.map((category) => ({ value: category.id, label: category.name }))}
+          />
           {fieldErrors.categoryId && (
             <span className="mt-1.5 block text-xs font-semibold normal-case tracking-normal text-red-600">
               {fieldErrors.categoryId}
@@ -266,16 +261,16 @@ export default function EventForm({ bankAccounts, categories, event, qrisConfig 
         />
         <label className="field-label">
           Meeting platform
-          <select
-            className="text-field mt-2"
+          <SearchableSelect
             value={values.meetingPlatform}
-            onChange={(e) => set("meetingPlatform", e.target.value as MeetingPlatform | "")}
-          >
-            <option value="">Not online</option>
-            <option value="zoom">Zoom</option>
-            <option value="google_meet">Google Meet</option>
-            <option value="other">Other</option>
-          </select>
+            onChange={(value) => set("meetingPlatform", value as MeetingPlatform | "")}
+            options={[
+              { value: "", label: "Not online" },
+              { value: "zoom", label: "Zoom" },
+              { value: "google_meet", label: "Google Meet" },
+              { value: "other", label: "Other" },
+            ]}
+          />
         </label>
       </Section>
 
@@ -310,14 +305,14 @@ export default function EventForm({ bankAccounts, categories, event, qrisConfig 
       <Section title="Payout">
         <label className="field-label sm:col-span-2">
           Bank account
-          <select className="text-field mt-2" value={values.bankAccountId} onChange={(e) => set("bankAccountId", e.target.value)}>
-            <option value="">Use my default account</option>
-            {bankAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.bankName} · {account.accountNumber}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            value={values.bankAccountId}
+            onChange={(value) => set("bankAccountId", value)}
+            options={[
+              { value: "", label: "Use my default account" },
+              ...bankAccounts.map((account) => ({ value: account.id, label: `${account.bankName} · ${account.accountNumber}` })),
+            ]}
+          />
           {bankAccounts.length === 0 && (
             <span className="mt-2 block text-xs font-semibold text-red-600">
               You have no bank accounts yet — add one under Bank accounts before buyers can pay you.

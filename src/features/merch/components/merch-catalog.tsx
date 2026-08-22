@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import FormField from "@/components/ui/form-field";
+import SearchableSelect from "@/components/ui/searchable-select";
 import type { ApiPageMeta, ListMerchCatalogQuery, MerchCatalogSort, MerchCategory, Product } from "@/lib/api/types";
 import { loadMoreMerchAction } from "../lib/actions";
 import ProductCard from "./product-card";
@@ -185,15 +186,15 @@ export default function MerchCatalog({ categories, filters, initialMeta, initial
         )}
         <label className="field-label ml-auto w-44">
           Sort by
-          <select
+          <SearchableSelect
             value={filters.sortBy ?? "newest"}
-            onChange={(event) => router.replace(filterHref(filters, { sortBy: event.target.value as MerchCatalogSort }), { scroll: false })}
-            className="text-field"
-          >
-            <option value="newest">Newest</option>
-            <option value="price_asc">Price: low to high</option>
-            <option value="price_desc">Price: high to low</option>
-          </select>
+            onChange={(value) => router.replace(filterHref(filters, { sortBy: value as MerchCatalogSort }), { scroll: false })}
+            options={[
+              { value: "newest", label: "Newest" },
+              { value: "price_asc", label: "Price: low to high" },
+              { value: "price_desc", label: "Price: high to low" },
+            ]}
+          />
         </label>
       </div>
 

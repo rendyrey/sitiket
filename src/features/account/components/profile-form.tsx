@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import FormField from "@/components/ui/form-field";
+import SearchableSelect from "@/components/ui/searchable-select";
 import { updateProfileAction } from "@/features/account/lib/actions";
 import AddressPicker, { type AddressPickerSelection } from "@/features/shipping/components/address-picker";
 import type { User } from "@/lib/api/types";
@@ -81,13 +82,11 @@ export default function ProfileForm({ user }: { user: User }) {
           <label className="field-label">
             Postal code
             {selection && selection.postalCodes.length > 1 ? (
-              <select value={postalCode} onChange={(event) => setPostalCode(event.target.value)} className="text-field">
-                {selection.postalCodes.map((code) => (
-                  <option key={code} value={code}>
-                    {code}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={postalCode}
+                onChange={setPostalCode}
+                options={selection.postalCodes.map((code) => ({ value: code, label: code }))}
+              />
             ) : (
               <input value={postalCode} readOnly placeholder="Auto-filled from the village" className="text-field bg-paper" />
             )}

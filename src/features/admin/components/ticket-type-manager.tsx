@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { formatPrice } from "@/data/events";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
 import FormField from "@/components/ui/form-field";
+import SearchableSelect from "@/components/ui/searchable-select";
 import { createTicketTypeAction, updateTicketTypeAction } from "@/features/admin/lib/actions";
 import { getSalesStatus, type SalesStatus } from "@/lib/tickets/sales-window";
 import type { TaxonomyItem, TicketType } from "@/lib/api/types";
@@ -212,13 +213,11 @@ export default function TicketTypeManager({ categories, eventId, eventStartAt, e
           <FormField required label="Name *" name="ticketTypeName" value={name} onChange={(e) => setName(e.target.value)} placeholder="Early Bird" />
           <label className="field-label">
             Category *
-            <select required className="text-field mt-2" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={categoryId}
+              onChange={setCategoryId}
+              options={categories.map((category) => ({ value: category.id, label: category.name }))}
+            />
           </label>
           <FormField required label="Price (IDR) *" name="price" type="number" min={0} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
           <FormField required label="Quantity *" name="quantityTotal" type="number" min={1} value={quantityTotal} onChange={(e) => setQuantityTotal(Number(e.target.value))} />

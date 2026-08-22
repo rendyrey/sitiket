@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import SearchableSelect from "@/components/ui/searchable-select";
 import type { SellerShippingOrigin, ShippingCourier } from "@/lib/api/types";
 import { saveShippingOriginAction } from "../lib/actions";
 import AddressPicker, { type AddressPickerSelection } from "./address-picker";
@@ -118,13 +119,11 @@ export default function ShippingOriginForm({ origin, couriers }: ShippingOriginF
           <label className="field-label">
             Postal code
             {selection && selection.postalCodes.length > 1 ? (
-              <select value={postalCode} onChange={(event) => setPostalCode(event.target.value)} className="text-field">
-                {selection.postalCodes.map((code) => (
-                  <option key={code} value={code}>
-                    {code}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={postalCode}
+                onChange={setPostalCode}
+                options={selection.postalCodes.map((code) => ({ value: code, label: code }))}
+              />
             ) : (
               <input value={postalCode} readOnly placeholder="Auto-filled from the village" className="text-field bg-paper" />
             )}
