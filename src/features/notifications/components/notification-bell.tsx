@@ -21,7 +21,8 @@ const timeAgo = (iso: string) => {
 /**
  * The top-right notification bell (spec: dropdown listing new ticket/merch
  * buyers). Renders only for signed-in users — the header mounts it
- * conditionally. Unread rows are highlighted; "Mark all read" clears them.
+ * conditionally. Opening the dropdown counts as reading: the badge clears,
+ * while rows keep their unread highlight until the next open.
  */
 export default function NotificationBell({ variant = "dark" }: { variant?: "dark" | "light" }) {
   const [open, setOpen] = useState(false);
@@ -65,18 +66,23 @@ export default function NotificationBell({ variant = "dark" }: { variant?: "dark
     };
   }, [open]);
 
+  // Opening the list is what "reads" it: fetch the fresh rows, then mark them
+  // read server-side. Local readAt values are left untouched so the unread
+  // highlight survives while the dropdown stays open.
+  const openAndMarkRead = useCallback(async () => {
+    const result = await fetchNotificationsAction();
+    if (!result.ok) return;
+    setNotifications(result.data.notifications);
+    setUnreadCount(result.data.unreadCount);
+    if (result.data.unreadCount === 0) return;
+    const marked = await markNotificationsReadAction();
+    if (marked.ok) setUnreadCount(marked.data.unreadCount);
+  }, []);
+
   const toggleOpen = () => {
     const next = !open;
     setOpen(next);
-    if (next) void refresh();
-  };
-
-  const markAllRead = async () => {
-    const result = await markNotificationsReadAction();
-    if (result.ok) {
-      setUnreadCount(result.data.unreadCount);
-      setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })));
-    }
+    if (next) void openAndMarkRead();
   };
 
   const buttonClasses =
@@ -104,13 +110,8 @@ export default function NotificationBell({ variant = "dark" }: { variant?: "dark
 
       {open && (
         <div className="absolute right-0 top-[calc(100%+8px)] z-[70] w-[min(92vw,380px)] border-2 border-ink bg-white text-black shadow-[6px_6px_0_0_#0a0a0a]">
-          <header className="flex items-center justify-between gap-3 border-b-2 border-ink bg-paper px-4 py-3">
+          <header className="border-b-2 border-ink bg-paper px-4 py-3">
             <span className="text-xs font-black uppercase tracking-widest">Notifications</span>
-            {unreadCount > 0 && (
-              <button type="button" onClick={() => void markAllRead()} className="text-xs font-bold uppercase tracking-wide text-black/50 underline decoration-2 underline-offset-2 hover:text-black">
-                Mark all read
-              </button>
-            )}
           </header>
           <ul className="max-h-[60vh] overflow-y-auto">
             {notifications.length === 0 && (
