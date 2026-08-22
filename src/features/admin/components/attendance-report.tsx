@@ -1,6 +1,6 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatPrice } from "@/data/events";
 import { formatEventDate, formatEventTime } from "@/features/events/lib/format";
 import type { EventAttendanceReport } from "@/lib/api/types";
@@ -90,6 +90,17 @@ function ChartPanel({
   );
 }
 
+/** One timestamp in the "entry pace" strip under the room-fill curve. */
+function PaceStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-white/40">{label}</p>
+      <p className="mt-1.5 font-lexend text-xl font-black tabular-nums text-white sm:text-2xl">{value}</p>
+      {hint && <p className="mt-0.5 text-[11px] font-semibold text-lime">{hint}</p>}
+    </div>
+  );
+}
+
 /** Shared legend swatch — identity is never carried by colour alone. */
 function LegendKey({ items }: { items: Array<{ color: string; label: string }> }) {
   return (
@@ -146,6 +157,10 @@ export default function AttendanceReport({ report }: { report: EventAttendanceRe
   }));
 
   const arrivalRows = arrivals.map((bucket) => ({ ...bucket, label: bucketLabel(bucket.startsAt) }));
+
+  // Entry-pace narrative: when was half the crowd through the gate?
+  const halfTarget = Math.ceil(checkedIn / 2);
+  const halfBucket = checkedIn > 0 ? arrivals.find((bucket) => bucket.cumulative >= halfTarget) : undefined;
 
   return (
     <div className="space-y-8">
@@ -362,6 +377,90 @@ export default function AttendanceReport({ report }: { report: EventAttendanceRe
           </p>
         )}
       </ChartPanel>
+
+      {/* ---- Room fill over time ---- */}
+      {hasScans && arrivalRows.length > 1 && (
+        <ChartPanel
+          title="Room fill"
+          subtitle={
+            halfBucket
+              ? `Everyone inside so far, minute by minute. Half the crowd was in by ${bucketLabel(halfBucket.startsAt)}.`
+              : "Everyone inside so far, minute by minute."
+          }
+        >
+          <div className="h-[260px] w-full sm:h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={arrivalRows} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
+                <defs>
+                  {/* One hue doing magnitude: lime, fading to the surface. */}
+                  <linearGradient id="roomFillLime" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={SCANNED} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={SCANNED} stopOpacity={0.03} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke={GRID} />
+                <XAxis
+                  dataKey="label"
+                  stroke={AXIS}
+                  tick={{ fill: AXIS, fontSize: 10, fontWeight: 700 }}
+                  tickLine={false}
+                  axisLine={{ stroke: GRID }}
+                  interval="preserveStartEnd"
+                  minTickGap={24}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  domain={[0, Math.max(ticketsSold, 1)]}
+                  stroke={AXIS}
+                  tick={{ fill: AXIS, fontSize: 11, fontWeight: 700 }}
+                  tickLine={false}
+                  axisLine={{ stroke: GRID }}
+                  width={36}
+                />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(255,255,255,0.25)" }} />
+                {/* The ceiling this curve is climbing toward. */}
+                <ReferenceLine
+                  y={ticketsSold}
+                  stroke={ABSENT}
+                  strokeDasharray="5 4"
+                  label={{
+                    value: `Sold · ${ticketsSold.toLocaleString("id-ID")}`,
+                    position: "insideTopRight",
+                    fill: AXIS,
+                    fontSize: 10,
+                    fontWeight: 800,
+                  }}
+                />
+                <Area
+                  type="stepAfter"
+                  dataKey="cumulative"
+                  name="Inside"
+                  stroke={SCANNED}
+                  strokeWidth={2}
+                  fill="url(#roomFillLime)"
+                  dot={false}
+                  activeDot={{ r: 4, fill: SCANNED, stroke: SURFACE, strokeWidth: 2 }}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Entry pace: the gate's story in four timestamps. */}
+          <div className="mt-6 grid grid-cols-2 gap-4 border-t border-white/10 pt-5 sm:grid-cols-4">
+            {firstCheckInAt && <PaceStat label="First scan" value={formatEventTime(firstCheckInAt)} />}
+            {halfBucket && <PaceStat label="Half inside by" value={bucketLabel(halfBucket.startsAt)} />}
+            {peakBucket && (
+              <PaceStat
+                label={`Busiest ${bucketMinutes} min`}
+                value={bucketLabel(peakBucket.startsAt)}
+                hint={`${peakBucket.arrivals} arrivals`}
+              />
+            )}
+            {lastCheckInAt && <PaceStat label="Latest scan" value={formatEventTime(lastCheckInAt)} />}
+          </div>
+        </ChartPanel>
+      )}
 
       {/* ---- Who scanned ---- */}
       {byScanner.length > 0 && (
