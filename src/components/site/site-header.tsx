@@ -19,6 +19,11 @@ export default function SiteHeader() {
   const user = useSession();
   const [open, setOpen] = useState(false);
 
+  // "/" must match exactly; every other link also owns its subpaths, so
+  // /events/123 keeps Events highlighted.
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+
   const handleSignOut = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     setOpen(false);
@@ -38,7 +43,8 @@ export default function SiteHeader() {
             <Link
               key={link.href}
               href={link.href}
-              className={`nav-link ${pathname === link.href ? "text-lime" : ""}`}
+              aria-current={isActive(link.href) ? "page" : undefined}
+              className={`nav-link ${isActive(link.href) ? "text-lime" : ""}`}
             >
               {link.label}
             </Link>
@@ -47,11 +53,19 @@ export default function SiteHeader() {
         {user ? (
           <div className="hidden items-center gap-5 lg:flex">
             {user.role !== "user" && (
-              <Link href={dashboardHrefForRole(user.role)} className="nav-link">
+              <Link
+                href={dashboardHrefForRole(user.role)}
+                aria-current={isActive("/dashboard") ? "page" : undefined}
+                className={`nav-link ${isActive("/dashboard") ? "text-lime" : ""}`}
+              >
                 Dashboard
               </Link>
             )}
-            <Link href="/account" className="nav-link">
+            <Link
+              href="/account"
+              aria-current={isActive("/account") ? "page" : undefined}
+              className={`nav-link ${isActive("/account") ? "text-lime" : ""}`}
+            >
               My account
             </Link>
             <NotificationBell />
@@ -100,7 +114,8 @@ export default function SiteHeader() {
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="border-b border-white/10 py-3 text-lg font-bold uppercase"
+                aria-current={isActive(link.href) ? "page" : undefined}
+                className={`border-b border-white/10 py-3 text-lg font-bold uppercase ${isActive(link.href) ? "text-lime" : ""}`}
               >
                 {link.label}
               </Link>
@@ -111,7 +126,8 @@ export default function SiteHeader() {
                   <Link
                     href={dashboardHrefForRole(user.role)}
                     onClick={() => setOpen(false)}
-                    className="border-b border-white/10 py-3 text-lg font-bold uppercase text-lime"
+                    aria-current={isActive("/dashboard") ? "page" : undefined}
+                    className={`border-b border-white/10 py-3 text-lg font-bold uppercase ${isActive("/dashboard") ? "text-lime" : ""}`}
                   >
                     Dashboard
                   </Link>
@@ -119,7 +135,8 @@ export default function SiteHeader() {
                 <Link
                   href="/account"
                   onClick={() => setOpen(false)}
-                  className="border-b border-white/10 py-3 text-lg font-bold uppercase"
+                  aria-current={isActive("/account") ? "page" : undefined}
+                  className={`border-b border-white/10 py-3 text-lg font-bold uppercase ${isActive("/account") ? "text-lime" : ""}`}
                 >
                   My account
                 </Link>
