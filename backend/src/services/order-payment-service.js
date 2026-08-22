@@ -1,10 +1,11 @@
 import * as eventsRepository from "../repositories/events-repository.js";
 import * as orderPaymentsRepository from "../repositories/order-payments-repository.js";
 import * as ordersRepository from "../repositories/orders-repository.js";
+import * as usersRepository from "../repositories/users-repository.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
 import { conflict, forbidden, notFound } from "../utils/http-error.js";
 import { resolvePaymentOptionsForEvent } from "./payment-method-service.js";
-import { notifyOrderPaid, notifyPaymentProofRejected } from "./notification-service.js";
+import { notifyOrderPaid, notifyPaymentProofRejected, notifyTicketPaymentSubmitted } from "./notification-service.js";
 import { pushNotification } from "./web-notification-service.js";
 import { issueTicketsForOrder } from "./ticket-service.js";
 
@@ -65,6 +66,11 @@ export const submitProof = async (orderId, identity, submission) => {
     body: `${order.buyer_name} says they paid ${formatRupiah(order.total_amount)} for ${event.name} — review the proof.`,
     href: `/dashboard/admin/events/${event.slug}/orders`,
   });
+
+  // Email the organizer too — the proof queue is only visible when they're
+  // in the dashboard, and stale proofs block buyers from getting tickets.
+  const organizer = await usersRepository.findById(event.owner_id);
+  await notifyTicketPaymentSubmitted(order, event, organizer);
 
   return payment;
 };

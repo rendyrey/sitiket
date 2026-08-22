@@ -277,6 +277,47 @@ const merchOrderUrl = (orderId) => `${env.FRONTEND_URL}/merch-orders/${orderId}`
 
 const formatRupiah = (amount) => `Rp ${Number(amount).toLocaleString("id-ID")}`;
 
+/**
+ * Tells the event organizer a ticket buyer clicked "I have paid" and uploaded
+ * a payment proof — the ticket twin of {@link notifyMerchPaymentSubmitted}.
+ * Organizer-facing, so it rides the platform SMTP.
+ * @param {object} order - an `orders` row
+ * @param {object} event - the order's `events` row
+ * @param {object} organizer - the event owner's user row
+ */
+export const notifyTicketPaymentSubmitted = async (order, event, organizer) => {
+  if (!organizer?.email) return;
+  const eventName = event?.name ?? "your event";
+  const reviewUrl = `${env.FRONTEND_URL}/dashboard/admin/events/${event.slug}/orders`;
+  const bodyHtml = [
+    paragraph(
+      `<strong>${escapeHtml(order.buyer_name)}</strong> confirmed they paid ${formatRupiah(order.total_amount)} for <strong>${escapeHtml(eventName)}</strong> and uploaded a transfer proof. Review it to issue their tickets.`,
+    ),
+    infoPanel({
+      heading: "Order",
+      rows: [
+        { label: "Event", value: eventName },
+        { label: "Buyer", value: order.buyer_name },
+        { label: "Email", value: order.buyer_email },
+        { label: "Amount", value: formatRupiah(order.total_amount) },
+      ],
+    }),
+    button({ href: reviewUrl, label: "Review the proof", variant: "lime" }),
+  ].join("");
+
+  await notify({
+    to: organizer.email,
+    subject: `Payment proof submitted by ${order.buyer_name} — ${eventName}`,
+    text: `${order.buyer_name} (${order.buyer_email}) confirmed they paid ${formatRupiah(order.total_amount)} for ${eventName} and uploaded a proof. Review it at ${reviewUrl}`,
+    html: renderBrandedEmail({
+      preheader: `${order.buyer_name} says they've paid — review the proof`,
+      tag: "Payment submitted",
+      heading: "A ticket buyer confirmed their payment",
+      bodyHtml,
+    }),
+  });
+};
+
 /** One `infoPanel` row per order line, e.g. "2× Band Tee (Red / M) — Rp 300.000". */
 const merchItemRows = (order) =>
   (order.items ?? []).map((item) => ({
