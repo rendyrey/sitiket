@@ -149,6 +149,10 @@ export interface Order {
   buyerPhone: string;
   guestEmailVerifiedAt: IsoDateTimeString | null;
   promoCodeId: Uuid | null;
+  /** Event-owner listing only — live (non-void) tickets this order holds. */
+  ticketsTotal?: number;
+  /** Event-owner listing only — how many of those were scanned at the gate. */
+  ticketsUsed?: number;
   subtotalAmount: RupiahAmount;
   discountAmount: RupiahAmount;
   totalAmount: RupiahAmount;

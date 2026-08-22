@@ -86,6 +86,11 @@ export const toPublicOrder = (order) => ({
   paymentExpiresAt: order.payment_expires_at,
   createdAt: order.created_at,
   updatedAt: order.updated_at,
+  // Only present on the event-owner listing (repository adds the ticket
+  // counts there) — powers the orders table's "Attended" column.
+  ...(order.tickets_total !== undefined
+    ? { ticketsTotal: Number(order.tickets_total), ticketsUsed: Number(order.tickets_used ?? 0) }
+    : {}),
   items: order.items?.map((item) => ({
     id: item.id,
     ticketTypeId: item.ticket_type_id,

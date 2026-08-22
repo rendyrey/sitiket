@@ -28,6 +28,25 @@ const SEARCH_DEBOUNCE_MS = 350;
 /** Statuses under which the order holds live (non-void) tickets to show/forward. */
 const TICKETED_STATUSES: OrderStatus[] = ["paid", "refund_requested", "refund_rejected"];
 
+/** "Attended" cell: did this order's ticket holders actually walk through the gate? */
+function AttendanceBadge({ order }: { order: Order }) {
+  const total = order.ticketsTotal ?? 0;
+  if (total === 0) return <span className="text-xs font-bold text-black/25">—</span>;
+  const used = order.ticketsUsed ?? 0;
+  const label = `${used}/${total}`;
+  const classes =
+    used === 0
+      ? "bg-black/10 text-black/50"
+      : used < total
+        ? "bg-ink text-white"
+        : "bg-lime text-ink";
+  return (
+    <span className={`inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${classes}`}>
+      {used === 0 ? `Not in · ${label}` : used < total ? `Partial · ${label}` : `In · ${label}`}
+    </span>
+  );
+}
+
 type SortKey = "createdAt" | "buyerName";
 type ReviewData = { payments: OrderPayment[]; refundRequests: RefundRequest[] };
 
@@ -154,6 +173,7 @@ export default function OrderReviewPanel({ eventId }: { eventId: string }) {
               <SortableHeader label="Buyer" sortKey="buyerName" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
               <th className="p-3 text-right">Amount</th>
               <th className="p-3 text-right">Status</th>
+              <th className="p-3 text-right">Attended</th>
               <SortableHeader label="Date" sortKey="createdAt" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" />
               <th className="p-3 text-right" />
             </tr>
@@ -161,7 +181,7 @@ export default function OrderReviewPanel({ eventId }: { eventId: string }) {
           <tbody>
             {!loading && orders.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-6 text-center text-sm font-semibold text-black/40">
+                <td colSpan={6} className="p-6 text-center text-sm font-semibold text-black/40">
                   No orders match these filters.
                 </td>
               </tr>
@@ -265,6 +285,9 @@ function OrderRow({
           <OrderStatusBadge status={order.status} />
         </td>
         <td className="p-3 text-right">
+          <AttendanceBadge order={order} />
+        </td>
+        <td className="p-3 text-right">
           <p className="font-bold">{formatEventDate(order.createdAt)}</p>
           <p className="text-xs text-black/40">{formatEventTime(order.createdAt)}</p>
         </td>
@@ -276,7 +299,7 @@ function OrderRow({
       </tr>
       {expanded && (
         <tr className="border-b border-black/10">
-          <td colSpan={5} className="p-0">
+          <td colSpan={6} className="p-0">
             {children}
           </td>
         </tr>

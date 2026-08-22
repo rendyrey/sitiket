@@ -51,7 +51,23 @@ export const listByEvent = async (
 
   const [{ total }] = await applyFilters(db(TABLE)).count({ total: "id" });
 
+  // Per-order attendance for the table's "Attended" column: how many live
+  // tickets the order holds and how many were scanned at the gate.
+  const ticketCount = (extra) => {
+    const query = db("tickets")
+      .join("order_items", "order_items.id", "tickets.order_item_id")
+      .whereRaw(`order_items.order_id = ${TABLE}.id`)
+      .whereNot("tickets.status", "void")
+      .count("*");
+    return extra ? extra(query) : query;
+  };
+
   const rows = await applyFilters(db(TABLE))
+    .select(`${TABLE}.*`)
+    .select(
+      ticketCount().as("tickets_total"),
+      ticketCount((query) => query.where("tickets.status", "used")).as("tickets_used"),
+    )
     .orderBy(SORT_COLUMNS[sortBy] ?? "created_at", sortDir)
     .limit(pageSize)
     .offset((page - 1) * pageSize);
