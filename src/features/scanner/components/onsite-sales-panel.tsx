@@ -126,7 +126,12 @@ export default function OnsiteSalesPanel({ canDeleteAll, eventId, ticketTypes, v
           <SearchableSelect
             value={ticketTypeId}
             onChange={pickTier}
-            options={ticketTypes.map((tier) => ({ value: tier.id, label: `${tier.name} — ${formatPrice(tier.price)}` }))}
+            options={ticketTypes.map((tier) => ({
+              value: tier.id,
+              // Hidden tiers are how door-only "OTS" pricing is set up — show
+              // them here even though the public page never does.
+              label: `${tier.name} — ${formatPrice(tier.price)}${tier.isActive ? "" : " (hidden)"}`,
+            }))}
             placeholder={ticketTypes.length === 0 ? "No ticket types yet" : "Select ticket type"}
           />
         </label>

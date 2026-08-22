@@ -16,6 +16,10 @@ ticketTypeRouter.get(
   ticketTypeController.listMine,
 );
 
+// No requireRole — gate staff can be plain "user" accounts; the service
+// authorizes via the shared gate-crew check.
+ticketTypeRouter.get("/gate", requireAuth, ticketTypeController.listForGate);
+
 ticketTypeRouter.post(
   "/",
   requireAuth,

@@ -1,6 +1,7 @@
 import { ticketCategoriesRepository } from "../repositories/ticket-categories-repository.js";
 import * as ticketTypesRepository from "../repositories/ticket-types-repository.js";
 import { getOwnedEventOrThrow } from "./event-service.js";
+import { assertCanScanEvent } from "./ticket-service.js";
 import { badRequest, conflict, notFound } from "../utils/http-error.js";
 
 const assertCategoryIsUsable = async (categoryId) => {
@@ -12,6 +13,18 @@ const assertCategoryIsUsable = async (categoryId) => {
 
 /** Public — only tiers currently on sale, for the event's buyer-facing page. */
 export const listPublic = (eventId) => ticketTypesRepository.listByEvent(eventId, { activeOnly: true });
+
+/**
+ * Gate-crew view — ALL tiers, hidden ones included. Door sales are often
+ * recorded against a hidden "OTS" tier that never appears on the public
+ * page, so the tally dropdown needs the full list.
+ * @param {string} eventId
+ * @param {{ sub: string, role: string }} requester
+ */
+export const listForGate = async (eventId, requester) => {
+  await assertCanScanEvent(eventId, requester);
+  return ticketTypesRepository.listByEvent(eventId);
+};
 
 /**
  * @param {string} eventId

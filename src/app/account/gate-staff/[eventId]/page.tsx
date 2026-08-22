@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import AttendanceReport from "@/features/admin/components/attendance-report";
 import { getEventAttendance } from "@/features/admin/lib/api";
-import { listPublicTicketTypes } from "@/features/events/lib/api";
 import OnsiteSalesPanel from "@/features/scanner/components/onsite-sales-panel";
+import { listGateTicketTypes } from "@/features/scanner/lib/api";
 import { getCurrentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Attendance" };
@@ -27,7 +27,7 @@ export default async function GateStaffAttendancePage({ params }: { params: Prom
     notFound();
   }
 
-  const ticketTypes = await listPublicTicketTypes(eventId);
+  const ticketTypes = await listGateTicketTypes(eventId);
 
   return (
     <div>

@@ -3,8 +3,9 @@ import { notFound, redirect } from "next/navigation";
 import AttendanceReport from "@/features/admin/components/attendance-report";
 import EventTabs from "@/features/admin/components/event-tabs";
 import { getEventAttendance } from "@/features/admin/lib/api";
-import { getEventBySlug, listPublicTicketTypes } from "@/features/events/lib/api";
+import { getEventBySlug } from "@/features/events/lib/api";
 import OnsiteSalesPanel from "@/features/scanner/components/onsite-sales-panel";
+import { listGateTicketTypes } from "@/features/scanner/lib/api";
 import { getCurrentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Attendance" };
@@ -16,7 +17,7 @@ export default async function AdminEventAttendancePage({ params }: { params: Pro
   const event = await getEventBySlug(slug);
   if (!event) notFound();
 
-  const [report, ticketTypes] = await Promise.all([getEventAttendance(event.id), listPublicTicketTypes(event.id)]);
+  const [report, ticketTypes] = await Promise.all([getEventAttendance(event.id), listGateTicketTypes(event.id)]);
 
   return (
     <div>

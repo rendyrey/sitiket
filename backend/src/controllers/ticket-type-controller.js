@@ -12,6 +12,12 @@ export const listMine = async (request, response) => {
   response.status(200).json({ data: ticketTypes });
 };
 
+/** GET /api/events/:eventId/ticket-types/gate — gate-crew view, all tiers incl. hidden. */
+export const listForGate = async (request, response) => {
+  const ticketTypes = await ticketTypeService.listForGate(request.params.eventId, request.user);
+  response.status(200).json({ data: ticketTypes });
+};
+
 /** POST /api/events/:eventId/ticket-types */
 export const create = async (request, response) => {
   const ticketType = await ticketTypeService.create(request.params.eventId, request.user, request.body);
