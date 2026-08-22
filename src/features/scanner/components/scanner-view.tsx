@@ -259,7 +259,12 @@ export default function ScannerView() {
                 {soundOn ? "Sound on" : "Sound off"}
               </button>
             </div>
-            <div className="relative mt-4 aspect-video overflow-hidden border-2 border-ink bg-black">
+            {/*
+              Portrait 3:4 on phones — a 16:9 box on a ~350px-wide portrait
+              screen leaves a ~190px-tall letterboxed strip, far too tight to
+              aim at a QR. Desktop keeps the familiar 16:9.
+            */}
+            <div className="relative mt-4 aspect-[3/4] overflow-hidden border-2 border-ink bg-black sm:aspect-video">
               <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
               {cameraActive && !holdingResult && (
                 <span className="absolute left-3 top-3 bg-lime px-2 py-1 text-[10px] font-black uppercase tracking-wider text-black">
