@@ -13,6 +13,12 @@ export const listForOrder = async (request, response) => {
   response.status(200).json({ data: tickets.map(toPublicTicket) });
 };
 
+/** POST /api/orders/:orderId/tickets/resend — organizer re-sends the buyer's ticket email. */
+export const resendForOrder = async (request, response) => {
+  const result = await ticketService.resendTickets(request.params.orderId, request.user);
+  response.status(200).json({ data: result });
+};
+
 /** POST /api/check-ins/scan — gate staff scans a buyer's QR. */
 export const scan = async (request, response) => {
   const { result, ticket } = await ticketService.scanTicket(request.user, request.body);

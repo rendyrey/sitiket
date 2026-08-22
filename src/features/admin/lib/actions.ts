@@ -48,6 +48,7 @@ import type {
   RawTicketType,
   ReplaceVariantsRequest,
   SaveEmailConfigRequest,
+  Ticket,
   UpdateBankAccountRequest,
   UpdateEventRequest,
   UpdateProductRequest,
@@ -195,6 +196,16 @@ export async function completeRefundAction(refundRequestId: string, notes?: stri
 /** Called directly from the client on every search/filter/sort/page change — keeps the orders table AJAX-driven. */
 export async function listEventOrdersAction(eventId: string, query?: ListEventOrdersQuery) {
   return toActionResult(() => listEventOrders(eventId, query));
+}
+
+/** The issued tickets (with QR payloads) of one order — organizer/super_admin only, fetched on expand. */
+export async function getOrderTicketsAction(orderId: string) {
+  return toActionResult(() => apiFetch<Ticket[]>(`/api/orders/${orderId}/tickets`));
+}
+
+/** Re-sends the buyer's ticket email for a paid order — the fix when the original never arrived. */
+export async function resendOrderTicketsAction(orderId: string) {
+  return toActionResult(() => apiFetch<{ sentTo: string; ticketCount: number }>(`/api/orders/${orderId}/tickets/resend`, { method: "POST" }));
 }
 
 /** Lazily fetched only when a row is expanded — payment proofs + refund requests for one order. */

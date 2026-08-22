@@ -5,9 +5,10 @@ import * as ordersRepository from "../repositories/orders-repository.js";
 import * as ticketCheckInsRepository from "../repositories/ticket-check-ins-repository.js";
 import * as ticketsRepository from "../repositories/tickets-repository.js";
 import { db } from "../config/db.js";
-import { forbidden, notFound } from "../utils/http-error.js";
+import { conflict, forbidden, notFound } from "../utils/http-error.js";
 import { newTicketCode } from "../utils/id.js";
 import { signQrPayload, verifyQrPayload } from "../utils/qr-token.js";
+import { notifyOrderPaid } from "./notification-service.js";
 
 /**
  * Generates one `tickets` row (with its own signed QR) per purchased unit
@@ -47,6 +48,28 @@ export const listForOrder = async (orderId, requester) => {
   if (!isOwnOrder && !isEventOwnerOrSuperAdmin) throw forbidden("NOT_ORDER_OWNER", "You do not have access to this order");
 
   return ticketsRepository.listByOrderWithContext(orderId);
+};
+
+/**
+ * Re-sends the buyer their ticket email (same email as payment approval) —
+ * the organizer's fallback when the original never reached the inbox.
+ * @param {string} orderId
+ * @param {{ sub: string, role: string }} requester - must own the event or be super_admin
+ * @returns {Promise<{ sentTo: string, ticketCount: number }>}
+ */
+export const resendTickets = async (orderId, requester) => {
+  const order = await ordersRepository.findById(orderId);
+  if (!order) throw notFound("ORDER_NOT_FOUND", "Order not found");
+
+  const event = await eventsRepository.findById(order.event_id);
+  const isEventOwnerOrSuperAdmin = requester.role === "super_admin" || event.owner_id === requester.sub;
+  if (!isEventOwnerOrSuperAdmin) throw forbidden("NOT_EVENT_OWNER", "Only the event organizer can resend tickets");
+
+  const tickets = (await ticketsRepository.listByOrderWithContext(orderId)).filter((ticket) => ticket.status !== "void");
+  if (tickets.length === 0) throw conflict("NO_TICKETS", "This order has no issued tickets to send");
+
+  await notifyOrderPaid(order, tickets, event);
+  return { sentTo: order.buyer_email, ticketCount: tickets.length };
 };
 
 /**

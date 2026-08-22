@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import SearchableSelect from "@/components/ui/searchable-select";
 import OrderDetail from "@/features/admin/components/order-detail";
+import OrderTicketsPanel from "@/features/admin/components/order-tickets-panel";
 import { getOrderReviewAction, listEventOrdersAction } from "@/features/admin/lib/actions";
 import { formatPrice } from "@/data/events";
 import { formatEventDate, formatEventTime } from "@/features/events/lib/format";
@@ -23,6 +24,9 @@ const STATUS_OPTIONS: Array<{ value: OrderStatus | "all"; label: string }> = [
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
+
+/** Statuses under which the order holds live (non-void) tickets to show/forward. */
+const TICKETED_STATUSES: OrderStatus[] = ["paid", "refund_requested", "refund_rejected"];
 
 type SortKey = "createdAt" | "buyerName";
 type ReviewData = { payments: OrderPayment[]; refundRequests: RefundRequest[] };
@@ -164,19 +168,24 @@ export default function OrderReviewPanel({ eventId }: { eventId: string }) {
             )}
             {orders.map((order) => (
               <OrderRow key={order.id} order={order} expanded={expandedId === order.id} onToggle={() => toggleExpand(order.id)}>
-                {expandedId === order.id &&
-                  (reviewLoading || !review ? (
-                    <p className="p-4 text-xs font-semibold text-black/40">Loading…</p>
-                  ) : (
-                    <OrderDetail
-                      payments={review.payments}
-                      refundRequests={review.refundRequests}
-                      onChanged={() => {
-                        fetchOrders();
-                        fetchReview(order.id);
-                      }}
-                    />
-                  ))}
+                {expandedId === order.id && (
+                  <>
+                    {reviewLoading || !review ? (
+                      <p className="p-4 text-xs font-semibold text-black/40">Loading…</p>
+                    ) : (
+                      <OrderDetail
+                        payments={review.payments}
+                        refundRequests={review.refundRequests}
+                        onChanged={() => {
+                          fetchOrders();
+                          fetchReview(order.id);
+                        }}
+                      />
+                    )}
+                    {/* Tickets exist only once a proof was approved. */}
+                    {TICKETED_STATUSES.includes(order.status) && <OrderTicketsPanel order={order} />}
+                  </>
+                )}
               </OrderRow>
             ))}
           </tbody>
