@@ -109,7 +109,13 @@ export default function NotificationBell({ variant = "dark" }: { variant?: "dark
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-[70] w-[min(92vw,380px)] border-2 border-ink bg-white text-black shadow-[6px_6px_0_0_#0a0a0a]">
+        /*
+          Phones: fixed + inset-x, spanning the viewport just below the 72px
+          header — anchoring right-0 to the bell would push the panel off the
+          left edge, since the cart and menu buttons sit between the bell and
+          the screen edge. sm+ goes back to hanging off the bell itself.
+        */
+        <div className="fixed inset-x-3 top-[80px] z-[70] border-2 border-ink bg-white text-black shadow-[6px_6px_0_0_#0a0a0a] sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-[min(92vw,380px)]">
           <header className="border-b-2 border-ink bg-paper px-4 py-3">
             <span className="text-xs font-black uppercase tracking-widest">Notifications</span>
           </header>
