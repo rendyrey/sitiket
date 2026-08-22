@@ -113,8 +113,13 @@ export const scanTicket = async (scanner, { qrPayload, deviceLabel }) => {
   const event = await eventsRepository.findById(ticket.event_id);
   const now = new Date();
 
+  // Doors open before kickoff — people queue at the gate well before
+  // start_date, so entry scanning opens this long before it.
+  const ENTRY_GRACE_BEFORE_START_MS = 2 * 60 * 60 * 1000;
+  const entryOpensAt = new Date(new Date(event.start_date).getTime() - ENTRY_GRACE_BEFORE_START_MS);
+
   let result;
-  if (now < new Date(event.start_date) || now > new Date(event.end_date)) {
+  if (now < entryOpensAt || now > new Date(event.end_date)) {
     result = "expired";
   } else if (ticket.status === "void") {
     result = "invalid";
