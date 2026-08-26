@@ -201,6 +201,7 @@ export interface RawBankAccount {
   account_number: string;
   account_holder_name: string;
   is_default: MysqlRawBoolean;
+  is_visible: MysqlRawBoolean;
   created_at: IsoDateTimeString;
   updated_at: IsoDateTimeString;
 }
@@ -546,6 +547,7 @@ export interface BankAccount {
   accountNumber: string;
   accountHolderName: string;
   isDefault: boolean;
+  isVisible: boolean;
   createdAt: IsoDateTimeString;
   updatedAt: IsoDateTimeString;
 }
@@ -946,6 +948,7 @@ export interface CreateBankAccountRequest {
   accountNumber: string;
   accountHolderName: string;
   isDefault?: boolean;
+  isVisible?: boolean;
 }
 
 export type UpdateBankAccountRequest = Partial<CreateBankAccountRequest>;

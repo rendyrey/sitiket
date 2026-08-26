@@ -65,6 +65,7 @@ export const toBankAccount = (raw: RawBankAccount): BankAccount => ({
   accountNumber: raw.account_number,
   accountHolderName: raw.account_holder_name,
   isDefault: raw.is_default === 1,
+  isVisible: raw.is_visible === 1,
   createdAt: raw.created_at,
   updatedAt: raw.updated_at,
 });

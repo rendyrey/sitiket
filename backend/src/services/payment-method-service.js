@@ -49,7 +49,7 @@ export const resolvePaymentOptionsForEvent = async (event) => {
  */
 export const resolvePaymentOptionsForSeller = async (sellerId) => {
   const [bankAccounts, qrisConfig] = await Promise.all([
-    bankAccountsRepository.listByOwner(sellerId),
+    bankAccountsRepository.listVisibleByOwner(sellerId),
     qrisConfigsRepository.findByOwner(sellerId),
   ]);
 

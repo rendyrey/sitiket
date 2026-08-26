@@ -47,6 +47,11 @@ export default function BankAccountManager({ accounts }: { accounts: BankAccount
     router.refresh();
   };
 
+  const handleToggleVisible = async (account: BankAccount) => {
+    await updateBankAccountAction(account.id, { isVisible: !account.isVisible });
+    router.refresh();
+  };
+
   const columns: DataTableColumn<BankAccount>[] = [
     {
       key: "bankName",
@@ -66,6 +71,26 @@ export default function BankAccountManager({ accounts }: { accounts: BankAccount
       header: "Holder name",
       sortAccessor: (account) => account.accountHolderName.toLowerCase(),
       render: (account) => account.accountHolderName,
+    },
+    {
+      key: "isVisible",
+      header: "Shown to buyers",
+      align: "right",
+      sortAccessor: (account) => (account.isVisible ? 0 : 1),
+      render: (account) => (
+        <button
+          type="button"
+          onClick={() => void handleToggleVisible(account)}
+          className={`button ${account.isVisible ? "button-lime" : "button-dark"}`}
+          title={
+            account.isVisible
+              ? "Shown to buyers at checkout — click to hide"
+              : "Hidden from buyers at checkout — click to show"
+          }
+        >
+          {account.isVisible ? "Visible" : "Hidden"}
+        </button>
+      ),
     },
     {
       key: "isDefault",

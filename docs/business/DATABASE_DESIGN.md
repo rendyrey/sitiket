@@ -160,6 +160,7 @@ Both tables are CRUD-managed exclusively by `super_admin` — enforce at the API
 | `account_number` | text, not null | |
 | `account_holder_name` | text, not null | |
 | `is_default` | boolean, default false | The account pre-selected when creating a new event; an event can still override with a different one of the owner's accounts. |
+| `is_visible` | boolean, default true | Whether the account is shown to buyers in payment instructions. Hidden accounts are excluded from checkout entirely, even when pinned as an event's override. |
 | `created_at` / `updated_at` | timestamptz | |
 
 Index: `owner_id`. Application rule: exactly one `is_default = true` row per owner (enforce with a partial unique index `WHERE is_default`).

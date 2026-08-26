@@ -5,6 +5,7 @@ export const createBankAccountSchema = z.object({
   accountNumber: z.string().min(4).max(64),
   accountHolderName: z.string().min(2).max(255),
   isDefault: z.boolean().optional(),
+  isVisible: z.boolean().optional(),
 });
 
 export const updateBankAccountSchema = z
@@ -13,6 +14,7 @@ export const updateBankAccountSchema = z
     accountNumber: z.string().min(4).max(64),
     accountHolderName: z.string().min(2).max(255),
     isDefault: z.boolean(),
+    isVisible: z.boolean(),
   })
   .partial()
   .refine((data) => Object.keys(data).length > 0, { message: "At least one field must be provided" });
