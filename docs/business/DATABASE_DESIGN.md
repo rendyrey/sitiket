@@ -215,7 +215,7 @@ Deleting the config is allowed and degrades gracefully: events with `qris_enable
 
 Indexes: `owner_id`, `category_id`, `status`, `is_visible`.
 
-**Lifecycle:** `draft → published → completed`, or `→ cancelled` from either `draft` or `published`. Cancelling stops new sales; existing paid orders move to the manual refund flow (see `refund_requests`). `is_visible` can flip independently at any status.
+**Lifecycle:** `draft → published → completed`, or `→ cancelled` from either `draft` or `published`. Cancelling stops new sales; existing paid orders move to the manual refund flow (see `refund_requests`). `is_visible` can flip independently at any status. The `published → completed` step also happens automatically: a server sweep archives published events `EVENT_AUTO_COMPLETE_GRACE_DAYS` (default 2) days after `end_date`, dropping them from the public catalog; an owner can re-publish manually if needed.
 
 #### `event_images`
 

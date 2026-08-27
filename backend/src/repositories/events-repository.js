@@ -161,6 +161,17 @@ export const update = async (id, patch) => {
 /** @param {string} id @param {"draft" | "published" | "cancelled" | "completed"} status */
 export const updateStatus = (id, status) => db(TABLE).where({ id }).update({ status, updated_at: new Date() });
 
+/**
+ * Bulk-completes published events whose end_date passed before `cutoff` —
+ * the auto-archive sweep in server.js. Returns the number of events flipped.
+ * @param {Date} cutoff
+ */
+export const completePastPublished = (cutoff) =>
+  db(TABLE)
+    .where({ status: "published" })
+    .andWhere("end_date", "<", cutoff)
+    .update({ status: "completed", updated_at: new Date() });
+
 /** @param {string} id @param {boolean} isVisible */
 export const updateVisibility = (id, isVisible) =>
   db(TABLE).where({ id }).update({ is_visible: isVisible, updated_at: new Date() });

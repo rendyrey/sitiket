@@ -1,6 +1,7 @@
 import { app } from "./app.js";
 import { env } from "./config/env.js";
 import { isSemanticSearchEnabled, refreshStaleProductEmbeddings } from "./services/embedding-service.js";
+import { completePastEvents } from "./services/event-service.js";
 import { expireStaleMerchOrders } from "./services/merch-order-service.js";
 import { expireStalePendingOrders } from "./services/order-service.js";
 import { processEmailJobQueue } from "./services/email-job-service.js";
@@ -29,6 +30,18 @@ setInterval(() => {
 setInterval(() => {
   processEmailJobQueue().catch((error) => console.error("Failed to process email job queue:", error));
 }, EMAIL_QUEUE_POLL_INTERVAL_MS);
+
+// Auto-archives events: published + end_date more than
+// EVENT_AUTO_COMPLETE_GRACE_DAYS (default 2) in the past → "completed", which
+// drops them from the public catalog. Hourly rather than daily on purpose:
+// the grace-period cutoff does the precision work and the no-op query is
+// cheap, while a 24h timer would lag a full day after every pm2 restart. The
+// immediate first run catches anything that lapsed while the server was down.
+const EVENT_COMPLETION_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+const sweepPastEvents = () =>
+  completePastEvents().catch((error) => console.error("Failed to auto-complete past events:", error));
+sweepPastEvents();
+setInterval(sweepPastEvents, EVENT_COMPLETION_SWEEP_INTERVAL_MS);
 
 // Semantic-search vectors refresh pull-based (new/edited products converge
 // here) so product writes never block on the embeddings vendor. Interval only

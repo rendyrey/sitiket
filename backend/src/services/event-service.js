@@ -3,6 +3,7 @@ import * as bankAccountsRepository from "../repositories/bank-accounts-repositor
 import * as eventsRepository from "../repositories/events-repository.js";
 import * as organizerEmailConfigsRepository from "../repositories/organizer-email-configs-repository.js";
 import * as qrisConfigsRepository from "../repositories/qris-configs-repository.js";
+import { env } from "../config/env.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
 import { badRequest, conflict, notFound } from "../utils/http-error.js";
 import { slugify } from "../utils/slugify.js";
@@ -103,6 +104,19 @@ export const changeEventStatus = async (eventId, requester, nextStatus) => {
   // state machine — e.g. completed can go back to published.
   await eventsRepository.updateStatus(eventId, nextStatus);
   return eventsRepository.findById(eventId);
+};
+
+/**
+ * Auto-archive: flips published events to "completed" once their end date is
+ * more than EVENT_AUTO_COMPLETE_GRACE_DAYS in the past, which drops them from
+ * the public catalog (that only shows status "published"). Draft/cancelled
+ * events are left alone — they were never public — and an owner can always
+ * re-publish manually since changeEventStatus has no one-way state machine.
+ * Called by the server.js sweep; returns the number of events archived.
+ */
+export const completePastEvents = () => {
+  const cutoff = new Date(Date.now() - env.EVENT_AUTO_COMPLETE_GRACE_DAYS * 24 * 60 * 60 * 1000);
+  return eventsRepository.completePastPublished(cutoff);
 };
 
 /**

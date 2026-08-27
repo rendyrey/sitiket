@@ -32,6 +32,11 @@ const envSchema = z.object({
   // bank-transfer window follows the e-commerce norm (24h) instead of 10 min.
   MERCH_PAYMENT_HOLD_HOURS: z.coerce.number().int().positive().default(24),
   GUEST_EMAIL_OTP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
+  // How long after end_date a published event stays in the public catalog
+  // before the server.js sweep flips it to "completed". The grace period
+  // keeps a just-finished event reachable for late payment proofs and
+  // check-in reconciliation.
+  EVENT_AUTO_COMPLETE_GRACE_DAYS: z.coerce.number().positive().default(2),
 
   // Optional: dedicated key for encrypting organizer SMTP passwords at rest
   // (utils/secret-box.js). Falls back to a JWT_SECRET-derived key when unset.
