@@ -173,7 +173,7 @@ export default function ProductPurchasePanel({ product }: { product: ProductDeta
       )}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <button type="button" onClick={handleAddToCart} disabled={!canBuy} className="button button-outline button-large disabled:opacity-40">
+        <button type="button" onClick={handleAddToCart} disabled={!canBuy} className="button button-outline-ink button-large disabled:opacity-40">
           Add to cart
         </button>
         <button type="button" onClick={handleBuyNow} disabled={!canBuy} className="button button-lime button-large disabled:opacity-40">

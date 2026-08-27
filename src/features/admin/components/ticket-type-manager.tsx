@@ -195,7 +195,7 @@ export default function TicketTypeManager({ categories, eventId, eventStartAt, e
       align: "right",
       render: (ticketType) => (
         <div className="flex items-center justify-end gap-2">
-          <button type="button" onClick={() => startEdit(ticketType)} className="button button-outline">
+          <button type="button" onClick={() => startEdit(ticketType)} className="button button-outline-ink">
             Edit
           </button>
           <button

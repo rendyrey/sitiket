@@ -61,6 +61,10 @@ h6 {
   .button-outline {
     @apply border-white/30 bg-transparent text-white hover:border-white;
   }
+  /* button-outline's counterpart for light (white/paper) surfaces. */
+  .button-outline-ink {
+    @apply border-ink/30 bg-transparent text-ink hover:border-ink;
+  }
   .button-ghost {
     @apply text-white hover:text-lime;
   }

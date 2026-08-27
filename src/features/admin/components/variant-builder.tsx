@@ -214,7 +214,7 @@ export default function VariantBuilder({ product }: { product: ProductDetail }) 
                 className="text-field mt-0 h-11 flex-1"
                 aria-label={`New ${group.name} option`}
               />
-              <button type="button" onClick={() => addOption(groupIndex)} className="button button-outline">
+              <button type="button" onClick={() => addOption(groupIndex)} className="button button-outline-ink">
                 Add option
               </button>
             </div>

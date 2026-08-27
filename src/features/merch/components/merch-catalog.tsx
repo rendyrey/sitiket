@@ -223,7 +223,7 @@ export default function MerchCatalog({ categories, filters, initialMeta, initial
       <div ref={sentinelRef} aria-hidden="true" />
       {hasMore && (
         <div className="mt-10 text-center">
-          <button type="button" onClick={() => void loadMore()} disabled={loadingMore} className="button button-outline disabled:opacity-50">
+          <button type="button" onClick={() => void loadMore()} disabled={loadingMore} className="button button-outline-ink disabled:opacity-50">
             {loadingMore ? "Loading…" : "Load more"}
           </button>
         </div>
