@@ -41,23 +41,25 @@ export const resolvePaymentOptionsForEvent = async (event) => {
  * The merch counterpart of {@link resolvePaymentOptionsForEvent}: every way a
  * buyer can pay a SELLER directly — their payout bank accounts (default one
  * recommended) and their QRIS config. Unlike events there is no per-entity
- * QRIS opt-in: a seller with a QRIS config always offers it for merch.
- * Shared by merch order creation, payment instructions, and proof submission
- * so all three always agree. Throws only when NEITHER method exists.
+ * QRIS opt-in: a seller's QRIS is offered for merch whenever its own
+ * merch-checkout toggle is on. Shared by merch order creation, payment
+ * instructions, and proof submission so all three always agree. Throws only
+ * when NEITHER method exists.
  * @param {string} sellerId
  * @returns {Promise<{ recommendedBankAccount: object | null, bankAccounts: object[], qrisConfig: object | null }>}
  */
 export const resolvePaymentOptionsForSeller = async (sellerId) => {
-  const [bankAccounts, qrisConfig] = await Promise.all([
-    bankAccountsRepository.listVisibleByOwner(sellerId),
+  const [bankAccounts, rawQrisConfig] = await Promise.all([
+    bankAccountsRepository.listVisibleByOwner(sellerId, "merch"),
     qrisConfigsRepository.findByOwner(sellerId),
   ]);
 
+  const qrisConfig = rawQrisConfig?.show_on_merch_checkout ? rawQrisConfig : null;
   const recommendedBankAccount = bankAccounts.find((account) => account.is_default) ?? bankAccounts[0] ?? null;
 
   if (!recommendedBankAccount && !qrisConfig) {
     throw conflict("SELLER_NO_PAYMENT_METHOD", "This seller has not set up a payment method yet");
   }
 
-  return { recommendedBankAccount, bankAccounts, qrisConfig: qrisConfig ?? null };
+  return { recommendedBankAccount, bankAccounts, qrisConfig };
 };

@@ -33,5 +33,18 @@ export const upsert = async (ownerId, { merchantName, qrisImageUrl }) => {
   return findByOwner(ownerId);
 };
 
+/**
+ * @param {string} ownerId
+ * @param {{ showOnTicketCheckout?: boolean, showOnMerchCheckout?: boolean }} patch
+ */
+export const updateChannels = async (ownerId, { showOnTicketCheckout, showOnMerchCheckout }) => {
+  const changes = { updated_at: new Date() };
+  if (showOnTicketCheckout !== undefined) changes.show_on_ticket_checkout = showOnTicketCheckout;
+  if (showOnMerchCheckout !== undefined) changes.show_on_merch_checkout = showOnMerchCheckout;
+
+  await db(TABLE).where({ owner_id: ownerId }).update(changes);
+  return findByOwner(ownerId);
+};
+
 /** @param {string} ownerId */
 export const removeByOwner = (ownerId) => db(TABLE).where({ owner_id: ownerId }).del();

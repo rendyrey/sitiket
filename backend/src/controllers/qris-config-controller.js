@@ -15,6 +15,12 @@ export const save = async (request, response) => {
   response.status(200).json({ data: config });
 };
 
+/** PATCH /api/qris-config — where the code is shown (ticket/merch checkout). */
+export const update = async (request, response) => {
+  const config = await qrisConfigService.updateChannels(request.user.sub, request.body);
+  response.status(200).json({ data: config });
+};
+
 /** DELETE /api/qris-config */
 export const remove = async (request, response) => {
   await qrisConfigService.remove(request.user.sub);

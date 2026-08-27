@@ -65,7 +65,8 @@ export const toBankAccount = (raw: RawBankAccount): BankAccount => ({
   accountNumber: raw.account_number,
   accountHolderName: raw.account_holder_name,
   isDefault: raw.is_default === 1,
-  isVisible: raw.is_visible === 1,
+  showOnTicketCheckout: raw.show_on_ticket_checkout === 1,
+  showOnMerchCheckout: raw.show_on_merch_checkout === 1,
   createdAt: raw.created_at,
   updatedAt: raw.updated_at,
 });
@@ -156,6 +157,8 @@ export const toQrisConfig = (raw: RawQrisConfig): QrisConfig => ({
   ownerId: raw.owner_id,
   merchantName: raw.merchant_name,
   qrisImageUrl: raw.qris_image_url,
+  showOnTicketCheckout: raw.show_on_ticket_checkout === 1,
+  showOnMerchCheckout: raw.show_on_merch_checkout === 1,
   createdAt: raw.created_at,
   updatedAt: raw.updated_at,
 });

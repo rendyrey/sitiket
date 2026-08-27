@@ -53,6 +53,7 @@ import type {
   UpdateEventRequest,
   UpdateProductRequest,
   UpdatePromoCodeRequest,
+  UpdateQrisConfigRequest,
   UpdateTicketTypeRequest,
 } from "@/lib/api/types";
 
@@ -136,6 +137,10 @@ export async function updateBankAccountAction(bankAccountId: string, input: Upda
 /** `formData` must contain `merchantName`, plus a `qrisImage` file field (optional when only renaming). */
 export async function saveQrisConfigAction(formData: FormData) {
   return toActionResult(() => apiFetch<RawQrisConfig>("/api/qris-config", { method: "PUT", formData }), toQrisConfig);
+}
+
+export async function updateQrisConfigAction(input: UpdateQrisConfigRequest) {
+  return toActionResult(() => apiFetch<RawQrisConfig>("/api/qris-config", { method: "PATCH", body: input }), toQrisConfig);
 }
 
 export async function removeQrisConfigAction() {

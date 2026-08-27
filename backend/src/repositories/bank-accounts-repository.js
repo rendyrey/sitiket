@@ -6,9 +6,20 @@ const TABLE = "bank_accounts";
 /** @param {string} ownerId */
 export const listByOwner = (ownerId) => db(TABLE).where({ owner_id: ownerId }).orderBy("created_at", "asc");
 
-/** @param {string} ownerId - accounts the owner has chosen to show to buyers */
-export const listVisibleByOwner = (ownerId) =>
-  db(TABLE).where({ owner_id: ownerId, is_visible: true }).orderBy("created_at", "asc");
+/** Buyer-facing surface an account can be shown on, keyed by checkout channel. */
+export const CHECKOUT_CHANNEL_COLUMNS = {
+  ticket: "show_on_ticket_checkout",
+  merch: "show_on_merch_checkout",
+};
+
+/**
+ * @param {string} ownerId
+ * @param {"ticket" | "merch"} channel - accounts the owner shows on that checkout
+ */
+export const listVisibleByOwner = (ownerId, channel) =>
+  db(TABLE)
+    .where({ owner_id: ownerId, [CHECKOUT_CHANNEL_COLUMNS[channel]]: true })
+    .orderBy("created_at", "asc");
 
 /**
  * @param {string} id
@@ -16,12 +27,17 @@ export const listVisibleByOwner = (ownerId) =>
  */
 export const findById = (id, executor = db) => executor(TABLE).where({ id }).first();
 
-/** @param {string} ownerId */
-export const findDefaultVisibleByOwner = (ownerId) =>
-  db(TABLE).where({ owner_id: ownerId, is_default: true, is_visible: true }).first();
+/**
+ * @param {string} ownerId
+ * @param {"ticket" | "merch"} channel
+ */
+export const findDefaultVisibleByOwner = (ownerId, channel) =>
+  db(TABLE)
+    .where({ owner_id: ownerId, is_default: true, [CHECKOUT_CHANNEL_COLUMNS[channel]]: true })
+    .first();
 
 /**
- * @param {{ ownerId: string, bankName: string, accountNumber: string, accountHolderName: string, isDefault?: boolean, isVisible?: boolean }} input
+ * @param {{ ownerId: string, bankName: string, accountNumber: string, accountHolderName: string, isDefault?: boolean, showOnTicketCheckout?: boolean, showOnMerchCheckout?: boolean }} input
  */
 export const create = async ({
   ownerId,
@@ -29,7 +45,8 @@ export const create = async ({
   accountNumber,
   accountHolderName,
   isDefault = false,
-  isVisible = true,
+  showOnTicketCheckout = true,
+  showOnMerchCheckout = true,
 }) => {
   const id = newId();
   const now = new Date();
@@ -45,7 +62,8 @@ export const create = async ({
       account_number: accountNumber,
       account_holder_name: accountHolderName,
       is_default: isDefault,
-      is_visible: isVisible,
+      show_on_ticket_checkout: showOnTicketCheckout,
+      show_on_merch_checkout: showOnMerchCheckout,
       created_at: now,
       updated_at: now,
     });
@@ -57,9 +75,13 @@ export const create = async ({
 /**
  * @param {string} id
  * @param {string} ownerId
- * @param {{ bankName?: string, accountNumber?: string, accountHolderName?: string, isDefault?: boolean, isVisible?: boolean }} patch
+ * @param {{ bankName?: string, accountNumber?: string, accountHolderName?: string, isDefault?: boolean, showOnTicketCheckout?: boolean, showOnMerchCheckout?: boolean }} patch
  */
-export const update = async (id, ownerId, { bankName, accountNumber, accountHolderName, isDefault, isVisible }) => {
+export const update = async (
+  id,
+  ownerId,
+  { bankName, accountNumber, accountHolderName, isDefault, showOnTicketCheckout, showOnMerchCheckout },
+) => {
   await db.transaction(async (trx) => {
     if (isDefault === true) {
       await trx(TABLE).where({ owner_id: ownerId }).update({ is_default: false });
@@ -70,7 +92,8 @@ export const update = async (id, ownerId, { bankName, accountNumber, accountHold
     if (accountNumber !== undefined) changes.account_number = accountNumber;
     if (accountHolderName !== undefined) changes.account_holder_name = accountHolderName;
     if (isDefault !== undefined) changes.is_default = isDefault;
-    if (isVisible !== undefined) changes.is_visible = isVisible;
+    if (showOnTicketCheckout !== undefined) changes.show_on_ticket_checkout = showOnTicketCheckout;
+    if (showOnMerchCheckout !== undefined) changes.show_on_merch_checkout = showOnMerchCheckout;
 
     await trx(TABLE).where({ id }).update(changes);
   });

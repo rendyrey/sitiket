@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import FormField from "@/components/ui/form-field";
-import { removeQrisConfigAction, saveQrisConfigAction } from "@/features/admin/lib/actions";
+import { removeQrisConfigAction, saveQrisConfigAction, updateQrisConfigAction } from "@/features/admin/lib/actions";
 import { normalizeImageForUpload, toUploadErrorMessage } from "@/lib/image/normalize-image";
 import type { QrisConfig } from "@/lib/api/types";
 import { toAssetUrl } from "@/lib/public-env";
@@ -56,6 +56,16 @@ export default function QrisConfigManager({ config }: { config: QrisConfig | nul
     }
   };
 
+  const handleToggleChannel = async (channel: "showOnTicketCheckout" | "showOnMerchCheckout") => {
+    if (!config) return;
+    const result = await updateQrisConfigAction({ [channel]: !config[channel] });
+    if (!result.ok) {
+      toast.error(result.message);
+      return;
+    }
+    router.refresh();
+  };
+
   const handleRemove = async () => {
     setError(null);
     setRemoving(true);
@@ -90,6 +100,39 @@ export default function QrisConfigManager({ config }: { config: QrisConfig | nul
             >
               {removing ? "Removing…" : "Remove"}
             </button>
+          </div>
+          <div className="mt-5">
+            <p className="text-xs font-black uppercase">Shown at checkout</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void handleToggleChannel("showOnTicketCheckout")}
+                className={`button ${config.showOnTicketCheckout ? "button-lime" : "button-dark"}`}
+                title={
+                  config.showOnTicketCheckout
+                    ? "Offered to ticket buyers (on QRIS-enabled events) — click to hide from ticket checkout"
+                    : "Hidden from ticket buyers, even on QRIS-enabled events — click to show on ticket checkout"
+                }
+              >
+                Tickets
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleToggleChannel("showOnMerchCheckout")}
+                className={`button ${config.showOnMerchCheckout ? "button-lime" : "button-dark"}`}
+                title={
+                  config.showOnMerchCheckout
+                    ? "Offered to merch buyers — click to hide from merch checkout"
+                    : "Hidden from merch buyers — click to show on merch checkout"
+                }
+              >
+                Merch
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-black/45">
+              Choose where buyers can pay with this QRIS code. Ticket checkout also requires QRIS to be enabled on the
+              event itself.
+            </p>
           </div>
           <div className="mt-5 flex w-full max-w-[320px] justify-center border-2 border-black/10 bg-white p-3">
             {/* eslint-disable-next-line @next/next/no-img-element -- QRIS is a scannable payment code with a variable aspect ratio (the standard printout is portrait). A raw <img> sizes to the code's natural ratio without a fixed box, and avoids next/image re-encoding a dense QR. */}

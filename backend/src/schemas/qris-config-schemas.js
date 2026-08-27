@@ -5,3 +5,12 @@ import { z } from "zod";
 export const saveQrisConfigSchema = z.object({
   merchantName: z.string().min(2).max(255),
 });
+
+// Plain JSON PATCH (no file), so real booleans are fine here.
+export const updateQrisConfigSchema = z
+  .object({
+    showOnTicketCheckout: z.boolean(),
+    showOnMerchCheckout: z.boolean(),
+  })
+  .partial()
+  .refine((data) => Object.keys(data).length > 0, { message: "At least one field must be provided" });

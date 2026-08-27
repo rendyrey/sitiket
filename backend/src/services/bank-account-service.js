@@ -34,17 +34,17 @@ export const update = async (id, requester, patch) => {
  * Resolves the payout account a buyer should transfer to for an event: the
  * event's explicit override, or its owner's default account. Shared by
  * order creation and payment-proof submission so both always agree. An
- * override that points at an account the owner has since hidden is treated
- * as unset — hidden means invisible to buyers everywhere, even a specific
- * event's pinned choice.
+ * override that points at an account the owner has since hidden from ticket
+ * checkout is treated as unset — the per-checkout toggle wins everywhere,
+ * even over a specific event's pinned choice.
  * @param {{ owner_id: string, bank_account_id: string | null }} event
  */
 export const resolveForEvent = async (event) => {
   const account = event.bank_account_id
     ? await bankAccountsRepository.findById(event.bank_account_id)
-    : await bankAccountsRepository.findDefaultVisibleByOwner(event.owner_id);
+    : await bankAccountsRepository.findDefaultVisibleByOwner(event.owner_id, "ticket");
 
-  if (!account || !account.is_visible) {
+  if (!account || !account.show_on_ticket_checkout) {
     throw conflict("EVENT_OWNER_NO_BANK_ACCOUNT", "This event's organizer has not set up a payout bank account yet");
   }
 
@@ -52,13 +52,13 @@ export const resolveForEvent = async (event) => {
 };
 
 /**
- * Lists every visible payout account the event's organizer has configured,
+ * Lists every payout account the event's organizer shows on ticket checkout,
  * so a buyer can choose which one to transfer to instead of only ever
  * seeing the single account `resolveForEvent` picks.
  * @param {{ owner_id: string }} event
  */
 export const resolveAllForEvent = async (event) => {
-  const accounts = await bankAccountsRepository.listVisibleByOwner(event.owner_id);
+  const accounts = await bankAccountsRepository.listVisibleByOwner(event.owner_id, "ticket");
   if (accounts.length === 0) {
     throw conflict("EVENT_OWNER_NO_BANK_ACCOUNT", "This event's organizer has not set up a payout bank account yet");
   }

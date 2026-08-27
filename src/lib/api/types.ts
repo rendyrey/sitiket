@@ -201,7 +201,8 @@ export interface RawBankAccount {
   account_number: string;
   account_holder_name: string;
   is_default: MysqlRawBoolean;
-  is_visible: MysqlRawBoolean;
+  show_on_ticket_checkout: MysqlRawBoolean;
+  show_on_merch_checkout: MysqlRawBoolean;
   created_at: IsoDateTimeString;
   updated_at: IsoDateTimeString;
 }
@@ -324,12 +325,14 @@ export interface RawRefundRequestWithOrderContext extends RawRefundRequest {
   total_amount: RupiahAmount;
 }
 
-/** The organizer's static QRIS code — one per owner, `GET/PUT/DELETE /qris-config`. */
+/** The organizer's static QRIS code — one per owner, `GET/PUT/PATCH/DELETE /qris-config`. */
 export interface RawQrisConfig {
   id: Uuid;
   owner_id: Uuid;
   merchant_name: string;
   qris_image_url: string;
+  show_on_ticket_checkout: MysqlRawBoolean;
+  show_on_merch_checkout: MysqlRawBoolean;
   created_at: IsoDateTimeString;
   updated_at: IsoDateTimeString;
 }
@@ -547,7 +550,10 @@ export interface BankAccount {
   accountNumber: string;
   accountHolderName: string;
   isDefault: boolean;
-  isVisible: boolean;
+  /** Shown to ticket buyers at checkout — even an event's pinned override is skipped when off. */
+  showOnTicketCheckout: boolean;
+  /** Shown to merch buyers at checkout. Both flags off = hidden from buyers everywhere. */
+  showOnMerchCheckout: boolean;
   createdAt: IsoDateTimeString;
   updatedAt: IsoDateTimeString;
 }
@@ -681,6 +687,10 @@ export interface QrisConfig {
   ownerId: Uuid;
   merchantName: string;
   qrisImageUrl: string;
+  /** Offered to ticket buyers (on top of each event's own `qrisEnabled` opt-in). */
+  showOnTicketCheckout: boolean;
+  /** Offered to merch buyers. Both flags off = QRIS hidden everywhere without deleting it. */
+  showOnMerchCheckout: boolean;
   createdAt: IsoDateTimeString;
   updatedAt: IsoDateTimeString;
 }
@@ -948,10 +958,17 @@ export interface CreateBankAccountRequest {
   accountNumber: string;
   accountHolderName: string;
   isDefault?: boolean;
-  isVisible?: boolean;
+  showOnTicketCheckout?: boolean;
+  showOnMerchCheckout?: boolean;
 }
 
 export type UpdateBankAccountRequest = Partial<CreateBankAccountRequest>;
+
+/** `PATCH /qris-config` — where the owner's QRIS code is shown to buyers. */
+export interface UpdateQrisConfigRequest {
+  showOnTicketCheckout?: boolean;
+  showOnMerchCheckout?: boolean;
+}
 
 export interface CreateEventRequest {
   name: string;

@@ -47,8 +47,8 @@ export default function BankAccountManager({ accounts }: { accounts: BankAccount
     router.refresh();
   };
 
-  const handleToggleVisible = async (account: BankAccount) => {
-    await updateBankAccountAction(account.id, { isVisible: !account.isVisible });
+  const handleToggleChannel = async (account: BankAccount, channel: "showOnTicketCheckout" | "showOnMerchCheckout") => {
+    await updateBankAccountAction(account.id, { [channel]: !account[channel] });
     router.refresh();
   };
 
@@ -73,23 +73,37 @@ export default function BankAccountManager({ accounts }: { accounts: BankAccount
       render: (account) => account.accountHolderName,
     },
     {
-      key: "isVisible",
-      header: "Shown to buyers",
+      key: "shownAtCheckout",
+      header: "Shown at checkout",
       align: "right",
-      sortAccessor: (account) => (account.isVisible ? 0 : 1),
+      sortAccessor: (account) => Number(!account.showOnTicketCheckout) + Number(!account.showOnMerchCheckout),
       render: (account) => (
-        <button
-          type="button"
-          onClick={() => void handleToggleVisible(account)}
-          className={`button ${account.isVisible ? "button-lime" : "button-dark"}`}
-          title={
-            account.isVisible
-              ? "Shown to buyers at checkout — click to hide"
-              : "Hidden from buyers at checkout — click to show"
-          }
-        >
-          {account.isVisible ? "Visible" : "Hidden"}
-        </button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => void handleToggleChannel(account, "showOnTicketCheckout")}
+            className={`button ${account.showOnTicketCheckout ? "button-lime" : "button-dark"}`}
+            title={
+              account.showOnTicketCheckout
+                ? "Shown to ticket buyers — click to hide from ticket checkout"
+                : "Hidden from ticket buyers — click to show on ticket checkout"
+            }
+          >
+            Tickets
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleToggleChannel(account, "showOnMerchCheckout")}
+            className={`button ${account.showOnMerchCheckout ? "button-lime" : "button-dark"}`}
+            title={
+              account.showOnMerchCheckout
+                ? "Shown to merch buyers — click to hide from merch checkout"
+                : "Hidden from merch buyers — click to show on merch checkout"
+            }
+          >
+            Merch
+          </button>
+        </div>
       ),
     },
     {

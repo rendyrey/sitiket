@@ -160,7 +160,8 @@ Both tables are CRUD-managed exclusively by `super_admin` — enforce at the API
 | `account_number` | text, not null | |
 | `account_holder_name` | text, not null | |
 | `is_default` | boolean, default false | The account pre-selected when creating a new event; an event can still override with a different one of the owner's accounts. |
-| `is_visible` | boolean, default true | Whether the account is shown to buyers in payment instructions. Hidden accounts are excluded from checkout entirely, even when pinned as an event's override. |
+| `show_on_ticket_checkout` | boolean, default true | Whether the account is shown to ticket buyers in payment instructions. When off, the account is excluded from ticket checkout entirely, even when pinned as an event's override. |
+| `show_on_merch_checkout` | boolean, default true | Same, for merch checkout. Both flags off = hidden from buyers everywhere (the account stays on file). |
 | `created_at` / `updated_at` | timestamptz | |
 
 Index: `owner_id`. Application rule: exactly one `is_default = true` row per owner (enforce with a partial unique index `WHERE is_default`).
@@ -175,6 +176,8 @@ One static QRIS code per organizer — the image exported from their bank/PSP me
 | `owner_id` | uuid FK → `users.id`, not null, **unique** | One config per organizer; ON DELETE CASCADE. |
 | `merchant_name` | text, not null | Shown to the buyer next to the code ("pay to …"). |
 | `qris_image_url` | text, not null | `/uploads/…` path of the uploaded QRIS image. |
+| `show_on_ticket_checkout` | boolean, default true | Whether the code is offered to ticket buyers (on top of the per-event `qris_enabled` opt-in). |
+| `show_on_merch_checkout` | boolean, default true | Whether the code is offered to merch buyers. Both flags off = QRIS hidden from buyers everywhere without deleting the config. |
 | `created_at` / `updated_at` | timestamptz | |
 
 Deleting the config is allowed and degrades gracefully: events with `qris_enabled = true` simply stop offering QRIS (resolved at read time, never stored on the order).
@@ -206,7 +209,7 @@ Deleting the config is allowed and degrades gracefully: events with `qris_enable
 | `contact_person_email` | text, not null | |
 | `contact_person_phone` | text, not null | |
 | `bank_account_id` | uuid FK → `bank_accounts.id`, nullable | If null, resolve to the owner's `is_default` account at checkout time. |
-| `qris_enabled` | boolean, default false | Per-event opt-in for QRIS payment. Enabling requires the owner to have a `qris_configs` row (service-layer check `QRIS_CONFIG_MISSING`); offering it to buyers additionally requires the row to still exist at checkout time. |
+| `qris_enabled` | boolean, default false | Per-event opt-in for QRIS payment. Enabling requires the owner to have a `qris_configs` row (service-layer check `QRIS_CONFIG_MISSING`); offering it to buyers additionally requires the row to still exist at checkout time with `show_on_ticket_checkout = true`. |
 | `max_tickets_per_user` | integer, not null, default 10 | Owner-configurable cap enforced when creating an order (spec §"maximum tickets purchase... the owner deciding it"). |
 | `created_at` / `updated_at` | timestamptz | |
 
@@ -500,7 +503,7 @@ One cart line per (product, variant) pair — the same product with different op
 
 #### `merch_order_payments`
 
-Mirror of `order_payments` (one row per proof submission, latest is authoritative, `pending_review → approved | rejected`), with the seller (or super_admin) as reviewer. `bank_account_id` is null for QRIS proofs. Unlike events there is no per-entity QRIS opt-in: a seller with a `qris_configs` row always offers QRIS for merch.
+Mirror of `order_payments` (one row per proof submission, latest is authoritative, `pending_review → approved | rejected`), with the seller (or super_admin) as reviewer. `bank_account_id` is null for QRIS proofs. Unlike events there is no per-entity QRIS opt-in: a seller's `qris_configs` row is offered for merch whenever its `show_on_merch_checkout` flag is on.
 
 #### `product_embeddings`
 
