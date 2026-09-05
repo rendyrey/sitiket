@@ -9,6 +9,8 @@ import type {
   MerchOrder,
   MerchOrderItem,
   MerchOrderPayment,
+  MerchPromoCode,
+  MerchPromoValidation,
   OrderPayment,
   OrganizerEmailConfig,
   Product,
@@ -28,6 +30,8 @@ import type {
   RawMerchOrder,
   RawMerchOrderItem,
   RawMerchOrderPayment,
+  RawMerchPromoCode,
+  RawMerchPromoValidation,
   RawNotification,
   RawOrderPayment,
   RawOrganizerEmailConfig,
@@ -321,13 +325,36 @@ export const toMerchOrder = (raw: RawMerchOrder): MerchOrder => ({
   shippingCost: raw.shipping_cost,
   shippingWeightGrams: raw.shipping_weight_grams,
   buyerNote: raw.buyer_note,
+  promoCodeId: raw.promo_code_id,
   subtotalAmount: raw.subtotal_amount,
+  discountAmount: raw.discount_amount,
   totalAmount: raw.total_amount,
   status: raw.status,
   paymentExpiresAt: raw.payment_expires_at,
   createdAt: raw.created_at,
   updatedAt: raw.updated_at,
   ...(raw.items ? { items: raw.items.map(toMerchOrderItem) } : {}),
+});
+
+export const toMerchPromoCode = (raw: RawMerchPromoCode): MerchPromoCode => ({
+  id: raw.id,
+  sellerId: raw.seller_id,
+  code: raw.code,
+  discountType: raw.discount_type,
+  discountValue: Number(raw.discount_value),
+  maxUses: raw.max_uses,
+  usedCount: raw.used_count,
+  validFrom: raw.valid_from,
+  validUntil: raw.valid_until,
+  isActive: raw.is_active === 1,
+  createdAt: raw.created_at,
+  updatedAt: raw.updated_at,
+});
+
+export const toMerchPromoValidation = (raw: RawMerchPromoValidation): MerchPromoValidation => ({
+  code: raw.code,
+  discountType: raw.discount_type,
+  discountValue: Number(raw.discount_value),
 });
 
 export const toMerchOrderPayment = (raw: RawMerchOrderPayment): MerchOrderPayment => ({

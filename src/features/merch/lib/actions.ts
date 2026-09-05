@@ -2,16 +2,19 @@
 
 import { toActionResult, type ActionResult } from "@/lib/api/action-result";
 import { apiFetch, apiFetchPage } from "@/lib/api/client";
-import { toMerchOrder, toMerchOrderPayment, toProduct } from "@/lib/api/normalize";
+import { toMerchOrder, toMerchOrderPayment, toMerchPromoValidation, toProduct } from "@/lib/api/normalize";
 import type {
   ApiPageMeta,
   CreateMerchOrderRequest,
   ListMerchCatalogQuery,
   MerchOrder,
+  MerchPromoValidation,
   Product,
   RawMerchOrder,
   RawMerchOrderPayment,
+  RawMerchPromoValidation,
   RawProduct,
+  ValidateMerchPromoCodeRequest,
 } from "@/lib/api/types";
 
 /**
@@ -22,6 +25,19 @@ export async function createMerchOrdersAction(input: CreateMerchOrderRequest): P
   return toActionResult(
     () => apiFetch<RawMerchOrder[]>("/api/merch-orders", { method: "POST", body: input }),
     (raw) => raw.map(toMerchOrder),
+  );
+}
+
+/**
+ * Buyer-facing checkout preview of a seller's promo code. The authoritative
+ * discount is recomputed (and the use consumed) when the order is created.
+ */
+export async function validateMerchPromoCodeAction(
+  input: ValidateMerchPromoCodeRequest,
+): Promise<ActionResult<MerchPromoValidation>> {
+  return toActionResult(
+    () => apiFetch<RawMerchPromoValidation>("/api/merch-promo-codes/validate", { method: "POST", body: input }),
+    toMerchPromoValidation,
   );
 }
 

@@ -7,9 +7,16 @@ import { useAtom } from "jotai";
 import ActionLink from "@/components/ui/action-link";
 import { formatPrice } from "@/data/events";
 import { getShippingQuotesAction } from "@/features/shipping/lib/actions";
-import type { CourierOption, MerchOrder, ShippingQuote, User } from "@/lib/api/types";
-import { createMerchOrdersAction } from "../lib/actions";
+import type { CourierOption, MerchOrder, MerchPromoValidation, ShippingQuote, User } from "@/lib/api/types";
+import { createMerchOrdersAction, validateMerchPromoCodeAction } from "../lib/actions";
 import { cartAtom, cartLineKey, cartTotal, groupBySeller } from "../lib/cart";
+
+/** Whole-Rupiah discount for a seller subtotal — mirrors the backend `calculateDiscount`, clamped to the subtotal. */
+const previewDiscount = (promo: MerchPromoValidation, subtotal: number): number => {
+  const raw =
+    promo.discountType === "percentage" ? Math.round((subtotal * promo.discountValue) / 100) : Math.round(promo.discountValue);
+  return Math.min(raw, subtotal);
+};
 
 /**
  * Signed-in merch checkout. Shows the delivery address from the buyer's
@@ -37,6 +44,15 @@ export default function MerchCheckoutView({ user }: { user: User }) {
   const [quoteState, setQuoteState] = useState<{ key: string; quotes?: ShippingQuote[]; error?: string } | null>(null);
   /** Map of sellerId → the buyer's chosen courier code. */
   const [selectedCouriers, setSelectedCouriers] = useState<Record<string, string>>({});
+
+  // Per-seller promo code state (codes are seller-scoped; a cart splits into one
+  // order per seller). `promoDrafts` is the input text; `appliedPromos` holds a
+  // validated code once "Apply" succeeds — the authoritative discount is still
+  // recomputed server-side at checkout.
+  const [promoDrafts, setPromoDrafts] = useState<Record<string, string>>({});
+  const [appliedPromos, setAppliedPromos] = useState<Record<string, MerchPromoValidation>>({});
+  const [promoErrors, setPromoErrors] = useState<Record<string, string | null>>({});
+  const [applyingPromo, setApplyingPromo] = useState<Record<string, boolean>>({});
 
   const groups = groupBySeller(items);
   // The village code is what shipping quotes key on — without it there is no
@@ -100,16 +116,53 @@ export default function MerchCheckoutView({ user }: { user: User }) {
   const shippingTotal = groups.reduce((sum, group) => sum + (chosenCourier(group.sellerId)?.price ?? 0), 0);
   const everySellerHasCourier = groups.every((group) => Boolean(chosenCourier(group.sellerId)));
 
+  /** The applied discount for one seller group, priced against its current subtotal. */
+  const discountFor = (sellerId: string): number => {
+    const promo = appliedPromos[sellerId];
+    const group = groups.find((entry) => entry.sellerId === sellerId);
+    if (!promo || !group) return 0;
+    return previewDiscount(promo, cartTotal(group.items));
+  };
+  const discountTotal = groups.reduce((sum, group) => sum + discountFor(group.sellerId), 0);
+
+  const applyPromo = async (sellerId: string) => {
+    const code = (promoDrafts[sellerId] ?? "").trim();
+    if (!code) return;
+    setApplyingPromo((previous) => ({ ...previous, [sellerId]: true }));
+    setPromoErrors((previous) => ({ ...previous, [sellerId]: null }));
+    const result = await validateMerchPromoCodeAction({ sellerId, code });
+    setApplyingPromo((previous) => ({ ...previous, [sellerId]: false }));
+    if (!result.ok) {
+      setPromoErrors((previous) => ({ ...previous, [sellerId]: result.message }));
+      return;
+    }
+    setAppliedPromos((previous) => ({ ...previous, [sellerId]: result.data }));
+  };
+
+  const removePromo = (sellerId: string) => {
+    setAppliedPromos((previous) => {
+      const next = { ...previous };
+      delete next[sellerId];
+      return next;
+    });
+    setPromoDrafts((previous) => ({ ...previous, [sellerId]: "" }));
+    setPromoErrors((previous) => ({ ...previous, [sellerId]: null }));
+  };
+
   const placeOrders = async () => {
     setConfirmingSplit(false);
     setError(null);
     setSubmitting(true);
+    const promoCodes = groups
+      .filter((group) => appliedPromos[group.sellerId])
+      .map((group) => ({ sellerId: group.sellerId, code: appliedPromos[group.sellerId].code }));
     const result = await createMerchOrdersAction({
       items: requestItems,
       shipping: groups.map((group) => ({
         sellerId: group.sellerId,
         courierCode: selectedCouriers[group.sellerId],
       })),
+      ...(promoCodes.length > 0 ? { promoCodes } : {}),
       ...(buyerNote.trim() ? { buyerNote: buyerNote.trim() } : {}),
     });
     setSubmitting(false);
@@ -280,18 +333,69 @@ export default function MerchCheckoutView({ user }: { user: User }) {
                 )}
               </div>
 
+              {/* Promo code — seller-scoped, discounts this seller's items only. */}
+              <div className="border-t-2 border-ink px-4 py-4 sm:px-5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">Promo code</span>
+                {appliedPromos[group.sellerId] ? (
+                  <div className="mt-2 flex items-center justify-between gap-3 border-2 border-lime bg-lime/15 p-3 text-sm">
+                    <span className="min-w-0">
+                      <span className="font-black uppercase">{appliedPromos[group.sellerId].code}</span>
+                      <span className="text-green-700"> — {formatPrice(discountFor(group.sellerId))} off</span>
+                    </span>
+                    <button type="button" onClick={() => removePromo(group.sellerId)} className="text-link shrink-0 text-xs">
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={promoDrafts[group.sellerId] ?? ""}
+                      onChange={(event) =>
+                        setPromoDrafts((previous) => ({ ...previous, [group.sellerId]: event.target.value.toUpperCase() }))
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void applyPromo(group.sellerId);
+                        }
+                      }}
+                      placeholder="Have a code?"
+                      className="text-field flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void applyPromo(group.sellerId)}
+                      disabled={applyingPromo[group.sellerId] || !(promoDrafts[group.sellerId] ?? "").trim()}
+                      className="button button-dark shrink-0 disabled:opacity-40"
+                    >
+                      {applyingPromo[group.sellerId] ? "…" : "Apply"}
+                    </button>
+                  </div>
+                )}
+                {promoErrors[group.sellerId] && (
+                  <p className="mt-2 text-xs font-semibold text-red-600">{promoErrors[group.sellerId]}</p>
+                )}
+              </div>
+
               <footer className="space-y-1 border-t-2 border-ink px-4 py-3 sm:px-5">
                 <div className="flex items-center justify-between text-xs text-black/55">
                   <span>Items</span>
                   <span>{formatPrice(cartTotal(group.items))}</span>
                 </div>
+                {discountFor(group.sellerId) > 0 && (
+                  <div className="flex items-center justify-between text-xs text-green-700">
+                    <span>Discount ({appliedPromos[group.sellerId].code})</span>
+                    <span>-{formatPrice(discountFor(group.sellerId))}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-xs text-black/55">
                   <span>Shipping{courier ? ` (${courier.courierName})` : ""}</span>
                   <span>{courier ? formatPrice(courier.price) : "—"}</span>
                 </div>
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">Pay {group.sellerName}</span>
-                  <strong>{formatPrice(cartTotal(group.items) + (courier?.price ?? 0))}</strong>
+                  <strong>{formatPrice(cartTotal(group.items) - discountFor(group.sellerId) + (courier?.price ?? 0))}</strong>
                 </div>
               </footer>
             </section>
@@ -321,6 +425,12 @@ export default function MerchCheckoutView({ user }: { user: User }) {
               <span className="shrink-0">{formatPrice(cartTotal(group.items))}</span>
             </div>
           ))}
+          {discountTotal > 0 && (
+            <div className="flex justify-between gap-3 border-t border-white/15 pt-2 text-lime">
+              <span className="min-w-0 truncate">Discount</span>
+              <span className="shrink-0">-{formatPrice(discountTotal)}</span>
+            </div>
+          )}
           <div className="flex justify-between gap-3 border-t border-white/15 pt-2">
             <span className="min-w-0 truncate">Shipping</span>
             <span className="shrink-0">{everySellerHasCourier ? formatPrice(shippingTotal) : "—"}</span>
@@ -328,7 +438,7 @@ export default function MerchCheckoutView({ user }: { user: User }) {
         </div>
         <div className="flex items-end justify-between gap-2">
           <span className="text-xs font-bold uppercase tracking-widest text-white/45">Total</span>
-          <strong className="text-2xl text-lime">{formatPrice(cartTotal(items) + shippingTotal)}</strong>
+          <strong className="text-2xl text-lime">{formatPrice(cartTotal(items) - discountTotal + shippingTotal)}</strong>
         </div>
         {groups.length > 1 && (
           <p className="mt-4 border-t border-white/15 pt-4 text-xs text-white/50">
@@ -367,7 +477,7 @@ export default function MerchCheckoutView({ user }: { user: User }) {
                 <li key={group.sellerId} className="flex justify-between gap-3">
                   <span className="min-w-0 truncate font-semibold">{group.sellerName}</span>
                   <strong className="shrink-0">
-                    {formatPrice(cartTotal(group.items) + (chosenCourier(group.sellerId)?.price ?? 0))}
+                    {formatPrice(cartTotal(group.items) - discountFor(group.sellerId) + (chosenCourier(group.sellerId)?.price ?? 0))}
                   </strong>
                 </li>
               ))}

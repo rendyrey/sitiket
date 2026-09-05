@@ -17,6 +17,7 @@ import { merchCategoryRouter } from "./routes/merch-categories.js";
 import { merchOrderPaymentNestedRouter } from "./routes/merch-order-payments-nested.js";
 import { merchOrderPaymentRouter } from "./routes/merch-order-payments.js";
 import { merchOrderRouter } from "./routes/merch-orders.js";
+import { merchPromoCodeRouter } from "./routes/merch-promo-codes.js";
 import { merchRouter } from "./routes/merch.js";
 import { onsiteSalesRouter } from "./routes/onsite-sales.js";
 import { staffInvitationsRouter } from "./routes/staff-invitations.js";
@@ -89,6 +90,7 @@ app.use("/api/merch", merchRouter);
 app.use("/api/merch-orders/:orderId/payments", merchOrderPaymentNestedRouter);
 app.use("/api/merch-orders", merchOrderRouter);
 app.use("/api/merch-order-payments", merchOrderPaymentRouter);
+app.use("/api/merch-promo-codes", merchPromoCodeRouter);
 app.use("/api/notifications", notificationRouter);
 
 app.use(notFoundHandler);

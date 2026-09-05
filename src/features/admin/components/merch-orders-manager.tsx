@@ -355,6 +355,12 @@ function MerchOrderDetail({
               <span className="font-bold">{formatPrice(item.subtotal)}</span>
             </li>
           ))}
+          {order.discountAmount > 0 && (
+            <li className="flex justify-between gap-3 border-t border-black/10 pt-1 text-green-700">
+              <span>Discount</span>
+              <span className="font-bold">-{formatPrice(order.discountAmount)}</span>
+            </li>
+          )}
           {order.shippingCost > 0 && (
             <li className="flex justify-between gap-3 border-t border-black/10 pt-1">
               <span>Shipping{order.courierName ? ` (${order.courierName})` : ""}</span>

@@ -1,0 +1,157 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import toast from "react-hot-toast";
+import { formatPrice } from "@/data/events";
+import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
+import FormField from "@/components/ui/form-field";
+import SearchableSelect from "@/components/ui/searchable-select";
+import { createMerchPromoCodeAction, updateMerchPromoCodeAction } from "@/features/admin/lib/actions";
+import type { DiscountType, MerchPromoCode } from "@/lib/api/types";
+
+/**
+ * Seller-scoped merch promo code manager — the merch analogue of
+ * `promo-code-manager.tsx`. Codes here apply to this seller's own merch orders
+ * (the cart splits per seller at checkout, so a buyer applies one code per
+ * seller). Deactivation is a soft `isActive` toggle — there is no delete.
+ */
+export default function MerchPromoCodeManager({ promoCodes }: { promoCodes: MerchPromoCode[] }) {
+  const router = useRouter();
+  const [code, setCode] = useState("");
+  const [discountType, setDiscountType] = useState<DiscountType>("percentage");
+  const [discountValue, setDiscountValue] = useState(0);
+  const [maxUses, setMaxUses] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCreate = async () => {
+    setError(null);
+    if (!code.trim() || discountValue <= 0 || maxUses <= 0) {
+      const message = "Fill in a code, a positive discount value, and a positive usage limit.";
+      setError(message);
+      toast.error(message);
+      return;
+    }
+    if (discountType === "percentage" && discountValue > 100) {
+      const message = "A percentage discount cannot exceed 100.";
+      setError(message);
+      toast.error(message);
+      return;
+    }
+    setSubmitting(true);
+    const result = await createMerchPromoCodeAction({ code: code.trim(), discountType, discountValue, maxUses });
+    setSubmitting(false);
+    if (!result.ok) {
+      setError(result.message);
+      toast.error(result.message);
+      return;
+    }
+    setCode("");
+    setDiscountValue(0);
+    setMaxUses(1);
+    router.refresh();
+  };
+
+  const handleToggleActive = async (promoCode: MerchPromoCode) => {
+    await updateMerchPromoCodeAction(promoCode.id, { isActive: !promoCode.isActive });
+    router.refresh();
+  };
+
+  const columns: DataTableColumn<MerchPromoCode>[] = [
+    {
+      key: "code",
+      header: "Code",
+      sortAccessor: (promoCode) => promoCode.code.toLowerCase(),
+      searchAccessor: (promoCode) => promoCode.code,
+      render: (promoCode) => <span className="font-black uppercase">{promoCode.code}</span>,
+    },
+    {
+      key: "discount",
+      header: "Discount",
+      sortAccessor: (promoCode) => promoCode.discountValue,
+      render: (promoCode) =>
+        promoCode.discountType === "percentage"
+          ? `${promoCode.discountValue}% off`
+          : `${formatPrice(promoCode.discountValue)} off`,
+    },
+    {
+      key: "usage",
+      header: "Usage",
+      sortAccessor: (promoCode) => promoCode.usedCount / promoCode.maxUses,
+      render: (promoCode) => `${promoCode.usedCount}/${promoCode.maxUses} used`,
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "right",
+      sortAccessor: (promoCode) => (promoCode.isActive ? 0 : 1),
+      render: (promoCode) => (
+        <button
+          type="button"
+          onClick={() => void handleToggleActive(promoCode)}
+          className={`button ${promoCode.isActive ? "button-dark" : "button-lime"}`}
+        >
+          {promoCode.isActive ? "Active" : "Inactive"}
+        </button>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {promoCodes.length === 0 ? (
+        <p className="text-sm text-black/50">No promo codes yet — add one below.</p>
+      ) : (
+        <DataTable columns={columns} data={promoCodes} getRowKey={(promoCode) => promoCode.id} searchPlaceholder="Search promo codes…" />
+      )}
+
+      <div className="border-2 border-ink bg-white p-5 sm:p-7">
+        <span className="tag">Add promo code</span>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <FormField
+            required
+            label="Code *"
+            name="code"
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="MERCH10"
+          />
+          <label className="field-label">
+            Discount type *
+            <SearchableSelect
+              value={discountType}
+              onChange={(value) => setDiscountType(value as DiscountType)}
+              options={[
+                { value: "percentage", label: "Percentage" },
+                { value: "fixed_amount", label: "Fixed amount (IDR)" },
+              ]}
+            />
+          </label>
+          <FormField
+            required
+            label={discountType === "percentage" ? "Discount (%) *" : "Discount (IDR) *"}
+            name="discountValue"
+            type="number"
+            min={0}
+            value={discountValue}
+            onChange={(e) => setDiscountValue(Number(e.target.value))}
+          />
+          <FormField
+            required
+            label="Usage limit *"
+            name="maxUses"
+            type="number"
+            min={1}
+            value={maxUses}
+            onChange={(e) => setMaxUses(Number(e.target.value))}
+          />
+        </div>
+        {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
+        <button type="button" onClick={() => void handleCreate()} disabled={submitting} className="button button-dark mt-5 disabled:opacity-50">
+          {submitting ? "Adding…" : "Add promo code"}
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -501,7 +501,10 @@ export interface RawMerchOrder {
   shipping_cost: RupiahAmount;
   shipping_weight_grams: number | null;
   buyer_note: string | null;
+  /** Seller-scoped promo code applied at checkout — null when none was used. */
+  promo_code_id: Uuid | null;
   subtotal_amount: RupiahAmount;
+  discount_amount: RupiahAmount;
   total_amount: RupiahAmount;
   status: MerchOrderStatus;
   payment_expires_at: IsoDateTimeString;
@@ -525,6 +528,31 @@ export interface RawMerchOrderPayment {
   reviewed_at: IsoDateTimeString | null;
   reviewer_notes: string | null;
   submitted_at: IsoDateTimeString;
+}
+
+/** A seller-scoped merch promo code (`GET /api/merch-promo-codes`). */
+export interface RawMerchPromoCode {
+  id: Uuid;
+  seller_id: Uuid;
+  code: string;
+  discount_type: DiscountType;
+  /** `DECIMAL(12,2)` — arrives as a STRING, e.g. `"10.00"`. */
+  discount_value: string;
+  max_uses: number;
+  used_count: number;
+  valid_from: IsoDateTimeString | null;
+  valid_until: IsoDateTimeString | null;
+  is_active: MysqlRawBoolean;
+  created_at: IsoDateTimeString;
+  updated_at: IsoDateTimeString;
+}
+
+/** Buyer-facing checkout preview of a code (`POST /api/merch-promo-codes/validate`). */
+export interface RawMerchPromoValidation {
+  code: string;
+  discount_type: DiscountType;
+  /** `DECIMAL(12,2)` — arrives as a STRING. */
+  discount_value: string;
 }
 
 /** One header-bell notification row (`GET /api/notifications`). */
@@ -832,7 +860,10 @@ export interface MerchOrder {
   shippingCost: RupiahAmount;
   shippingWeightGrams: number | null;
   buyerNote: string | null;
+  /** Seller-scoped promo code applied at checkout — null when none was used. */
+  promoCodeId: Uuid | null;
   subtotalAmount: RupiahAmount;
+  discountAmount: RupiahAmount;
   totalAmount: RupiahAmount;
   status: MerchOrderStatus;
   paymentExpiresAt: IsoDateTimeString;
@@ -854,6 +885,29 @@ export interface MerchOrderPayment {
   reviewedAt: IsoDateTimeString | null;
   reviewerNotes: string | null;
   submittedAt: IsoDateTimeString;
+}
+
+export interface MerchPromoCode {
+  id: Uuid;
+  sellerId: Uuid;
+  code: string;
+  discountType: DiscountType;
+  /** Parsed to a number client-side — see normalize.ts. */
+  discountValue: number;
+  maxUses: number;
+  usedCount: number;
+  validFrom: IsoDateTimeString | null;
+  validUntil: IsoDateTimeString | null;
+  isActive: boolean;
+  createdAt: IsoDateTimeString;
+  updatedAt: IsoDateTimeString;
+}
+
+/** Buyer-facing checkout preview of a code — enough to price the discount in the UI. */
+export interface MerchPromoValidation {
+  code: string;
+  discountType: DiscountType;
+  discountValue: number;
 }
 
 export interface AppNotification {
@@ -1142,8 +1196,30 @@ export interface CreateMerchOrderRequest {
    * cart's weight, never trusting a client-side price.
    */
   shipping: { sellerId: Uuid; courierCode: string }[];
+  /**
+   * Optional promo code per seller in the cart (codes are seller-scoped). Only
+   * the code is sent — the backend re-validates and re-prices the discount.
+   */
+  promoCodes?: { sellerId: Uuid; code: string }[];
   buyerNote?: string;
 }
+
+/** `POST /api/merch-promo-codes/validate` — buyer-facing checkout preview. */
+export interface ValidateMerchPromoCodeRequest {
+  sellerId: Uuid;
+  code: string;
+}
+
+export interface CreateMerchPromoCodeRequest {
+  code: string;
+  discountType: DiscountType;
+  discountValue: number;
+  maxUses: number;
+  validFrom?: string;
+  validUntil?: string;
+}
+
+export type UpdateMerchPromoCodeRequest = Partial<Omit<CreateMerchPromoCodeRequest, "code"> & { isActive: boolean }>;
 
 /** `GET /api/merch-orders/selling` — the seller table's server-side search/filter/sort/pagination. */
 export interface ListSellingMerchOrdersQuery {

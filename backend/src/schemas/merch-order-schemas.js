@@ -25,6 +25,21 @@ export const createMerchOrderSchema = z.object({
     )
     .min(1)
     .max(50),
+  // Optional promo code PER seller (the cart splits into one order per seller,
+  // and codes are seller-scoped). Validated + consumed server-side per group.
+  promoCodes: z
+    .array(
+      z.object({
+        sellerId: z.string().uuid(),
+        code: z
+          .string()
+          .min(1)
+          .max(64)
+          .transform((value) => value.toUpperCase()),
+      }),
+    )
+    .max(50)
+    .optional(),
   buyerNote: z.string().max(500).optional(),
 });
 

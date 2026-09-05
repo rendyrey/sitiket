@@ -7,6 +7,7 @@ import {
   toEventImage,
   toEventStaff,
   toMerchOrderPayment,
+  toMerchPromoCode,
   toOrderPayment,
   toOrganizerEmailConfig,
   toProduct,
@@ -27,6 +28,7 @@ import type {
   CreateBankAccountRequest,
   CreateEventRequest,
   CreateProductRequest,
+  CreateMerchPromoCodeRequest,
   CreatePromoCodeRequest,
   CreateTicketTypeRequest,
   Event,
@@ -38,6 +40,7 @@ import type {
   RawEventImage,
   RawEventStaff,
   RawMerchOrderPayment,
+  RawMerchPromoCode,
   RawOrderPayment,
   RawOrganizerEmailConfig,
   RawProduct,
@@ -52,6 +55,7 @@ import type {
   UpdateBankAccountRequest,
   UpdateEventRequest,
   UpdateProductRequest,
+  UpdateMerchPromoCodeRequest,
   UpdatePromoCodeRequest,
   UpdateQrisConfigRequest,
   UpdateTicketTypeRequest,
@@ -98,6 +102,22 @@ export async function updatePromoCodeAction(eventId: string, promoCodeId: string
   return toActionResult(
     () => apiFetch<RawPromoCode>(`/api/events/${eventId}/promo-codes/${promoCodeId}`, { method: "PATCH", body: input }),
     toPromoCode,
+  );
+}
+
+// ---- Merch promo codes (seller-scoped) ----
+
+export async function createMerchPromoCodeAction(input: CreateMerchPromoCodeRequest) {
+  return toActionResult(
+    () => apiFetch<RawMerchPromoCode>("/api/merch-promo-codes", { method: "POST", body: input }),
+    toMerchPromoCode,
+  );
+}
+
+export async function updateMerchPromoCodeAction(promoCodeId: string, input: UpdateMerchPromoCodeRequest) {
+  return toActionResult(
+    () => apiFetch<RawMerchPromoCode>(`/api/merch-promo-codes/${promoCodeId}`, { method: "PATCH", body: input }),
+    toMerchPromoCode,
   );
 }
 

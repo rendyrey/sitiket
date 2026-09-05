@@ -2,6 +2,7 @@ import { db } from "../config/db.js";
 import { env } from "../config/env.js";
 import * as merchOrderItemsRepository from "../repositories/merch-order-items-repository.js";
 import * as merchOrdersRepository from "../repositories/merch-orders-repository.js";
+import * as merchPromoCodesRepository from "../repositories/merch-promo-codes-repository.js";
 import * as productVariantsRepository from "../repositories/product-variants-repository.js";
 import * as productsRepository from "../repositories/products-repository.js";
 import * as usersRepository from "../repositories/users-repository.js";
@@ -12,6 +13,7 @@ import {
   notifyMerchOrderExpired,
   notifyMerchOrderPlaced,
 } from "./notification-service.js";
+import { calculateDiscount, validateForOrder as validateMerchPromoForOrder } from "./merch-promo-code-service.js";
 import { resolvePaymentOptionsForSeller } from "./payment-method-service.js";
 import { filterCouriersForOrigin, getCourierOptions, getOriginOrThrow, gramsToBillableKg } from "./shipping-service.js";
 import { pushNotification } from "./web-notification-service.js";
@@ -38,7 +40,8 @@ const formatRupiah = (amount) => `Rp${Number(amount).toLocaleString("id-ID")}`;
  *
  * @param {{ sub: string }} requester - merch checkout is signed-in only
  * @param {{ items: Array<{ productId: string, variantId?: string, quantity: number }>,
- *   shipping: Array<{ sellerId: string, courierCode: string }>, buyerNote?: string }} input
+ *   shipping: Array<{ sellerId: string, courierCode: string }>,
+ *   promoCodes?: Array<{ sellerId: string, code: string }>, buyerNote?: string }} input
  * @returns {Promise<object[]>} the created orders (one per seller), each with its `items`
  */
 export const createOrders = async (requester, input) => {
@@ -87,6 +90,20 @@ export const createOrders = async (requester, input) => {
     shipmentBySeller.set(sellerId, { origin, courier, weightGrams });
   }
 
+  // Validate an optional promo code per seller BEFORE the transaction and
+  // pre-compute its discount from that seller's subtotal. Codes are
+  // seller-scoped, so a code only ever discounts its own seller's order. The
+  // atomic consume happens inside the transaction (incrementUsage).
+  const promoBySeller = new Map((input.promoCodes ?? []).map((choice) => [choice.sellerId, choice.code]));
+  const discountBySeller = new Map();
+  for (const [sellerId, sellerLines] of linesBySeller) {
+    const code = promoBySeller.get(sellerId);
+    if (!code) continue;
+    const promoCode = await validateMerchPromoForOrder(sellerId, code);
+    const subtotalAmount = sellerLines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
+    discountBySeller.set(sellerId, { promoCode, discountAmount: calculateDiscount(promoCode, subtotalAmount) });
+  }
+
   const paymentExpiresAt = new Date(Date.now() + env.MERCH_PAYMENT_HOLD_HOURS * 60 * 60 * 1000);
 
   const orderIds = await db.transaction(async (trx) => {
@@ -104,6 +121,18 @@ export const createOrders = async (requester, input) => {
 
       const subtotalAmount = sellerLines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
       const { origin, courier, weightGrams } = shipmentBySeller.get(sellerId);
+
+      // Consume the seller's promo code atomically — the guarded UPDATE re-checks
+      // the cap, so a code on its last use can't be redeemed by two concurrent
+      // checkouts.
+      const promo = discountBySeller.get(sellerId);
+      let discountAmount = 0;
+      if (promo) {
+        const consumed = await merchPromoCodesRepository.incrementUsage(promo.promoCode.id, trx);
+        if (!consumed) throw conflict("MERCH_PROMO_CODE_EXHAUSTED", "Promo code has reached its usage limit");
+        discountAmount = promo.discountAmount;
+      }
+
       const orderId = await merchOrdersRepository.create(
         {
           sellerId,
@@ -125,8 +154,10 @@ export const createOrders = async (requester, input) => {
           shippingCost: courier.price,
           shippingWeightGrams: weightGrams,
           buyerNote: input.buyerNote,
+          promoCodeId: promo?.promoCode.id ?? null,
           subtotalAmount,
-          totalAmount: subtotalAmount + courier.price,
+          discountAmount,
+          totalAmount: subtotalAmount - discountAmount + courier.price,
           paymentExpiresAt,
         },
         trx,
@@ -231,6 +262,9 @@ const releaseOrder = async (order, status) => {
       } else {
         await productsRepository.releaseStock(item.product_id, item.quantity, trx);
       }
+    }
+    if (order.promo_code_id) {
+      await merchPromoCodesRepository.decrementUsage(order.promo_code_id, trx);
     }
     await merchOrdersRepository.updateStatus(order.id, status, trx);
   });

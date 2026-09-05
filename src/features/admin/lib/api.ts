@@ -4,6 +4,7 @@ import {
   toEventStaff,
   toMerchOrder,
   toMerchOrderPayment,
+  toMerchPromoCode,
   toOrderPayment,
   toOrganizerEmailConfig,
   toProduct,
@@ -24,6 +25,7 @@ import type {
   ListSellingMerchOrdersQuery,
   MerchOrder,
   MerchOrderPayment,
+  MerchPromoCode,
   Order,
   OrderPayment,
   OrganizerEmailConfig,
@@ -35,6 +37,7 @@ import type {
   RawEventStaffWithUser,
   RawMerchOrder,
   RawMerchOrderPayment,
+  RawMerchPromoCode,
   RawOrderPayment,
   RawOrganizerEmailConfig,
   RawProduct,
@@ -79,6 +82,13 @@ export const listAllTicketTypes = async (eventId: string): Promise<TicketType[]>
 export const listPromoCodes = async (eventId: string): Promise<PromoCode[]> => {
   const raw = await apiFetch<RawPromoCode[]>(`/api/events/${eventId}/promo-codes`);
   return raw.map(toPromoCode);
+};
+
+// ---- Merch promo codes (seller-scoped) ----
+
+export const listMerchPromoCodes = async (): Promise<MerchPromoCode[]> => {
+  const raw = await apiFetch<RawMerchPromoCode[]>("/api/merch-promo-codes");
+  return raw.map(toMerchPromoCode);
 };
 
 // ---- Event staff (gate scanners) ----

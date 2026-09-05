@@ -144,6 +144,12 @@ export default function MerchOrderStatusView({ order, paymentInstructions }: Mer
             <span>Items</span>
             <span>{formatPrice(order.subtotalAmount)}</span>
           </div>
+          {order.discountAmount > 0 && (
+            <div className="flex justify-between gap-3 text-lime">
+              <span>Discount</span>
+              <span>-{formatPrice(order.discountAmount)}</span>
+            </div>
+          )}
           <div className="flex justify-between gap-3">
             <span>Shipping{order.courierName ? ` (${order.courierName})` : ""}</span>
             <span>{formatPrice(order.shippingCost)}</span>
