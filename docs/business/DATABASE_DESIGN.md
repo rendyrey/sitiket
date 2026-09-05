@@ -476,6 +476,25 @@ Up to **10 photos** per product (service-enforced), `sort_order`-driven; the fir
 
 Multi-level options, Shopee-style: groups are the axes ("Color", "Size" — max 3), options the values within a group (max 20), and a **variant is one sellable combination with its OWN `price`, `stock`, `quantity_sold`, `is_active`, and a human-readable `label` ("Red / M")**. `product_variant_options` links each variant to exactly one option per group. The whole config is replaced atomically via `PUT /api/products/:id/variants`; order lines snapshot label/price and their `variant_id` FK is ON DELETE SET NULL, so replacing config never corrupts history.
 
+#### `merch_promo_codes` — **[confirmed addition]**
+
+The merch analogue of `promo_codes`, but **scoped to a seller** instead of an event (the seller's store is the container, and a multi-seller cart splits into one order per seller, so a code only ever discounts its own seller's order). Same shape, columns, and atomic-usage semantics as `promo_codes`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `seller_id` | uuid FK → `users.id` (CASCADE), not null | |
+| `code` | text, not null | Unique per seller: `(seller_id, code)`. Uppercased on write. |
+| `discount_type` | enum (`percentage`, `fixed_amount`) | |
+| `discount_value` | numeric, not null | Percentage (0–100) or a flat Rupiah amount, per `discount_type`. |
+| `max_uses` | integer, not null | |
+| `used_count` | integer, not null, default 0 | Check constraint `used_count <= max_uses`. |
+| `valid_from` / `valid_until` | timestamptz, nullable | Optional validity window (API-supported; not yet exposed in the dashboard UI). |
+| `is_active` | boolean, default true | Manual kill switch independent of the date window. |
+| `created_at` / `updated_at` | timestamptz | |
+
+Redemption mirrors tickets exactly: `services/merch-promo-code-service.js` `validateForOrder` pre-flight-checks the code, then `merch-promo-codes-repository.js` `incrementUsage` (guarded `used_count + 1 <= max_uses` UPDATE) consumes one use atomically inside the checkout transaction; `decrementUsage` releases it when the order is cancelled/expired.
+
 #### `merch_orders`
 
 One order per SELLER — a multi-seller cart is split at checkout inside a single transaction (all-or-nothing stock reservation).
@@ -491,7 +510,10 @@ One order per SELLER — a multi-seller cart is split at checkout inside a singl
 | `shipping_cost` | integer unsigned, not null, default 0 | Server-re-priced courier cost at checkout — never taken from the client. |
 | `shipping_weight_grams` | integer unsigned, nullable | Total billed package weight snapshot. |
 | `buyer_note` | text, nullable | Free-form note to the seller. |
-| `subtotal_amount` / `total_amount` | integer | Server-computed; `total_amount = subtotal_amount + shipping_cost`. No promo codes for merch in v1. |
+| `promo_code_id` | uuid FK → `merch_promo_codes.id` (SET NULL), nullable | The seller-scoped code applied at checkout, if any. |
+| `subtotal_amount` | integer | Sum of `merch_order_items.subtotal` before discount. |
+| `discount_amount` | integer unsigned, not null, default 0 | Server-computed promo discount snapshot (clamped to the subtotal). |
+| `total_amount` | integer | Server-computed; `total_amount = subtotal_amount - discount_amount + shipping_cost`. Never trust a client-submitted total. |
 | `status` | enum (`pending_payment`, `awaiting_verification`, `paid`, `expired`, `cancelled`) | Same machine as ticket orders minus refunds. |
 | `payment_expires_at` | timestamptz, not null | now + `MERCH_PAYMENT_HOLD_HOURS` (default 24h); swept by the same interval as ticket orders. |
 
