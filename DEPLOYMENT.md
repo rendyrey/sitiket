@@ -161,7 +161,7 @@ has on disk into the bucket, then confirm before removing anything:
 ```bash
 cd /var/www/sitiket/backend
 npm ci                    # picks up aws4fetch
-npm run uploads:migrate   # copies uploads/* into R2 under identical keys
+npm run uploads:normalize # files uploads/* into R2 under per-kind directories
 # reload the API, then load an event page and check the images render
 mv uploads uploads.pre-r2 # keep the originals until you've verified, then delete
 ```

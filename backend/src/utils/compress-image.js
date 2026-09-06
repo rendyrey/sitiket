@@ -30,12 +30,6 @@ const POLICIES = {
   "proofs/tickets": { maxDimension: 1280, quality: 75 },
   "proofs/merch": { maxDimension: 1280, quality: 75 },
   qris: { maxDimension: null, lossless: true },
-  // Recompression of objects that predate the prefixes (scripts/migrate-uploads-to-r2.js).
-  // A flat key gives no clue what the image is for, and `event_images` rows
-  // store each poster's width/height, so nothing may be resized — re-encode
-  // only. QRIS codes among them are detected from the database and routed to
-  // the lossless `qris` policy instead.
-  legacy: { maxDimension: null, quality: 82 },
 };
 
 /** sharp's format name → the MIME type to store an untouched original under. */

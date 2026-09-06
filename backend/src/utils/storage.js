@@ -59,3 +59,49 @@ export const putObject = async (key, body, contentType) => {
  *   the caller's to map.
  */
 export const getObject = (key, headers = {}) => client.fetch(objectUrl(key), { headers });
+
+/**
+ * Whether an object exists, without transferring its body.
+ *
+ * @param {string} key - object key. Example: `"merch/7f3c….webp"`
+ * @returns {Promise<boolean>}
+ */
+export const objectExists = async (key) => (await client.fetch(objectUrl(key), { method: "HEAD" })).ok;
+
+/**
+ * Copies an object to a new key **inside R2**, without the bytes travelling
+ * through this host — the S3 `CopyObject` operation. Used to relocate an
+ * object whose original is no longer on local disk.
+ *
+ * @param {string} fromKey - existing key. Example: `"7f3c….jpg"`
+ * @param {string} toKey - destination key. Example: `"merch/7f3c….jpg"`
+ * @throws {HttpError} 502 when R2 rejects the copy.
+ */
+export const copyObject = async (fromKey, toKey) => {
+  const source = `/${env.R2_BUCKET}/${fromKey.split("/").map(encodeURIComponent).join("/")}`;
+  const response = await client.fetch(objectUrl(toKey), {
+    method: "PUT",
+    headers: { "x-amz-copy-source": source },
+  });
+
+  if (!response.ok) {
+    console.error(`R2 COPY ${fromKey} -> ${toKey} failed: ${response.status} ${await response.text()}`);
+    throw badGateway("STORAGE_COPY_FAILED", "Could not copy the stored file.");
+  }
+};
+
+/**
+ * Permanently removes an object. Only ever called on a key nothing references
+ * any more — an object left behind after its content moved to a new key.
+ *
+ * @param {string} key - object key to delete. Example: `"7f3c….jpg"`
+ * @throws {HttpError} 502 when R2 rejects the delete.
+ */
+export const deleteObject = async (key) => {
+  const response = await client.fetch(objectUrl(key), { method: "DELETE" });
+  // 404 is success for our purposes: the object is gone either way.
+  if (!response.ok && response.status !== 404) {
+    console.error(`R2 DELETE ${key} failed: ${response.status} ${await response.text()}`);
+    throw badGateway("STORAGE_DELETE_FAILED", "Could not delete the stored file.");
+  }
+};

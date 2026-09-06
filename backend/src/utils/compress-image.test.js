@@ -87,12 +87,11 @@ test("rejects bytes that are not an image at all", async () => {
 });
 
 test("every prefix used by a route has a policy", () => {
-  for (const prefix of ["events", "merch", "proofs/tickets", "proofs/merch", "qris", "legacy"]) {
+  for (const prefix of ["events", "merch", "proofs/tickets", "proofs/merch", "qris"]) {
     assert.ok(prefix in POLICIES, `${prefix} needs an explicit policy`);
   }
   assert.equal(POLICIES.events.maxDimension, null, "posters are resolution-validated");
   assert.equal(POLICIES.qris.lossless, true, "QR codes must stay lossless");
-  assert.equal(POLICIES.legacy.maxDimension, null, "legacy objects must keep their stored dimensions");
 });
 
 test("never grows a lossless upload — keeps the original when WebP is larger", async () => {

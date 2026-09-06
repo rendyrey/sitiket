@@ -145,9 +145,10 @@ so uploads survive a redeploy, a rebuilt VPS, or a second API instance.
   | `proofs/merch/` | merch-order payment proofs | `POST /merch-orders/:orderId/payments` |
   | `qris/` | organizer/seller QRIS codes | `PUT /qris-config` |
 
-  Objects migrated from the pre-R2 local disk keep their original **flat**
-  keys (`<uuid>.<ext>`, no prefix) so the URLs already in the database keep
-  resolving; the read path serves both shapes.
+  `npm run uploads:normalize` files every referenced object under its prefix
+  and rewrites the database URL to match, so nothing sits in the bucket root.
+  The read path still resolves a flat key, since another environment sharing
+  the bucket may not have been normalized yet.
 - **Compression** (`utils/compress-image.js`, `sharp`): every upload is
   re-encoded to **WebP** before it is stored — so the key always ends `.webp`
   and the object is always served as a renderable image, regardless of what the
@@ -185,17 +186,19 @@ so uploads survive a redeploy, a rebuilt VPS, or a second API instance.
   `R2_SECRET_ACCESS_KEY` — all four required, so a misconfigured bucket fails at
   boot rather than at the first upload. Signing uses `aws4fetch` (SigV4 over
   `fetch`), not the AWS SDK.
-- **Backfill / recompression**: `npm run uploads:migrate` copies whatever is
-  still in `UPLOAD_DIR` into R2, compressed, under identical (flat, unprefixed)
-  keys. Because the keys are preserved, no database rows change; the key keeps
-  its original extension while the bytes become WebP, which is harmless since
-  the read proxy serves the `Content-Type` recorded on the object and nothing
-  infers a type from the key. **Nothing is resized** — a flat key carries no
-  hint of what the image is for, and `event_images` rows store each poster's
-  width/height, so changing dimensions would both invalidate those rows and let
-  out-of-spec artwork pass the poster rule. QRIS codes are identified from
-  `qris_configs.qris_image_url` and stored lossless. Idempotent — safe to
-  re-run, which is also how a wrong `Content-Type` gets fixed.
+- **Normalizing** (`npm run uploads:normalize`, `scripts/normalize-uploads.js`):
+  makes R2 match the database. For each row in the five columns that hold an
+  upload URL (`event_images`, `product_images`, `order_payments`,
+  `merch_order_payments`, `qris_configs`) it puts the object under that kind's
+  prefix, compressed with that kind's policy, then rewrites the row. It
+  prefers re-compressing the untouched original from `UPLOAD_DIR` over an
+  in-R2 copy, because knowing an image is a payment proof rather than an event
+  poster is what makes resizing it safe. Order is upload → verify → update row
+  → delete the old object, so an interrupted run can leave an unreferenced
+  object behind but never a broken link. Idempotent: a second run is a no-op.
+  Objects no row references are reported and never touched — classification
+  comes from whichever database it runs against, and a shared bucket holds
+  rows it cannot see.
 
 ## Known gaps / follow-ups
 
