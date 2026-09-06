@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import multer from "multer";
+import { compressImage } from "../utils/compress-image.js";
 import { putObject } from "../utils/storage.js";
 import { badRequest } from "../utils/http-error.js";
 
@@ -114,14 +115,39 @@ export const singleImageUpload = (fieldName, prefix) => (request, response, next
       return;
     }
 
-    const key = toObjectKey(prefix, request.file.mimetype);
-    putObject(key, request.file.buffer, request.file.mimetype)
-      .then(() => {
-        request.file.filename = key;
-        next();
-      })
-      .catch(next);
+    storeUpload(request, prefix).then(next, next);
   });
+};
+
+/**
+ * Compresses the buffered upload, stores it in R2, and rewrites `request.file`
+ * to describe what was actually stored (key, MIME type, bytes, dimensions) so
+ * downstream services never see the pre-compression original.
+ *
+ * @param {import("express").Request} request - carries the multer `file`
+ * @param {string} prefix - directory to store under. Example: `"merch"`
+ */
+const storeUpload = async (request, prefix) => {
+  let compressed;
+  try {
+    compressed = await compressImage(request.file.buffer, prefix);
+  } catch {
+    // The MIME type is client-supplied, so bytes that pass the file filter can
+    // still fail to decode (a truncated upload, or a renamed non-image).
+    throw badRequest("INVALID_IMAGE", "That file could not be read as an image. Please try a different photo.");
+  }
+
+  const key = toObjectKey(prefix, compressed.mimeType);
+  await putObject(key, compressed.buffer, compressed.mimeType);
+
+  request.file.filename = key;
+  request.file.buffer = compressed.buffer;
+  request.file.size = compressed.buffer.length;
+  request.file.mimetype = compressed.mimeType;
+  // Measured during compression, so services needing the stored image's real
+  // dimensions (the poster-resolution rule) don't have to decode it again.
+  request.file.width = compressed.width;
+  request.file.height = compressed.height;
 };
 
 // Exported for unit testing the multer-error → HttpError mapping and key naming.

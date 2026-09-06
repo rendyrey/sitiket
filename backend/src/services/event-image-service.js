@@ -1,4 +1,3 @@
-import { imageSize } from "image-size";
 import * as eventImagesRepository from "../repositories/event-images-repository.js";
 import { getOwnedEventOrThrow } from "./event-service.js";
 import { badRequest, notFound } from "../utils/http-error.js";
@@ -20,16 +19,18 @@ export const listImages = (eventId) => eventImagesRepository.listByEvent(eventId
 /**
  * @param {string} eventId
  * @param {{ sub: string, role: string }} requester
- * @param {{ buffer: Buffer, filename: string }} file - the R2-stored upload;
- *   `filename` is its object key, `buffer` the bytes still in memory
+ * @param {{ filename: string, width: number, height: number }} file - the
+ *   R2-stored upload; `filename` is its object key, `width`/`height` the
+ *   dimensions of the image as actually stored
  * @param {boolean} isPoster
  */
 export const addImage = async (eventId, requester, file, isPoster) => {
   await getOwnedEventOrThrow(eventId, requester);
 
-  // Measured from the in-memory buffer — the image lives in R2, not on this
-  // host's disk, so there is no path to read back.
-  const { width, height } = imageSize(file.buffer);
+  // Dimensions of the stored image, measured by middleware/upload.js while it
+  // compressed the upload. Posters are never resized, so this still reflects
+  // the artwork the organizer submitted.
+  const { width, height } = file;
 
   if (isPoster && !POSTER_RESOLUTIONS.some((resolution) => resolution.width === width && resolution.height === height)) {
     const labels = POSTER_RESOLUTIONS.map((resolution) => resolution.label);

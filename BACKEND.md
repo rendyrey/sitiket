@@ -2,7 +2,7 @@
 
 ## Status and stack
 
-Backend root: `backend/`. A separate ESM Node.js package using Express 5, MySQL 8 (via `knex` + `mysql2`), JWT sessions (Google ID token verified server-side, then a SiTIKET-issued JWT), `zod` validation, and `multer` + Cloudflare R2 for file uploads (see § _File storage_). The full v1 domain model from [docs/business/](docs/business/README.md) is implemented: auth, admin onboarding, events, ticket types, promo codes, orders/checkout with atomic inventory reservation, manual payment verification (bank transfer and per-event opt-in QRIS), QR ticket issuance, gate check-in, manual refunds, per-organizer outgoing email (every buyer-facing email is sent through the event organizer's own SMTP — see § _Email delivery_), a per-seller merch store (products with Shopee-style option/variant matrices, split-per-seller checkout, seller-scoped promo codes, 24h payment hold — see § _Merch invariants_), and in-app header-bell notifications.
+Backend root: `backend/`. A separate ESM Node.js package using Express 5, MySQL 8 (via `knex` + `mysql2`), JWT sessions (Google ID token verified server-side, then a SiTIKET-issued JWT), `zod` validation, and `multer` + `sharp` + Cloudflare R2 for file uploads (see § _File storage_). The full v1 domain model from [docs/business/](docs/business/README.md) is implemented: auth, admin onboarding, events, ticket types, promo codes, orders/checkout with atomic inventory reservation, manual payment verification (bank transfer and per-event opt-in QRIS), QR ticket issuance, gate check-in, manual refunds, per-organizer outgoing email (every buyer-facing email is sent through the event organizer's own SMTP — see § _Email delivery_), a per-seller merch store (products with Shopee-style option/variant matrices, split-per-seller checkout, seller-scoped promo codes, 24h payment hold — see § _Merch invariants_), and in-app header-bell notifications.
 
 Not yet implemented (see § _Known gaps_): automated tests and a payment gateway (Midtrans/Xendit — deferred by design, see [docs/business/PAYMENT_VERIFICATION.md](docs/business/PAYMENT_VERIFICATION.md)).
 
@@ -148,11 +148,32 @@ so uploads survive a redeploy, a rebuilt VPS, or a second API instance.
   Objects migrated from the pre-R2 local disk keep their original **flat**
   keys (`<uuid>.<ext>`, no prefix) so the URLs already in the database keep
   resolving; the read path serves both shapes.
-- **The extension comes from the validated MIME type, not the client filename.**
-  Windows browsers hand back `.jfif` for an ordinary JPEG, and older uploads
-  arrived as `.JPG` or with no extension at all. Deriving it from the MIME type
-  keeps keys consistent and guarantees the object is served as a renderable
-  image rather than an `application/octet-stream` download.
+- **Compression** (`utils/compress-image.js`, `sharp`): every upload is
+  re-encoded to **WebP** before it is stored — so the key always ends `.webp`
+  and the object is always served as a renderable image, regardless of what the
+  client called the file (Windows browsers hand back `.jfif` for a plain JPEG,
+  and older uploads arrived as `.JPG` or with no extension at all). EXIF
+  orientation is baked into the pixels first, because re-encoding strips the
+  tag and a sideways phone photo would otherwise start displaying sideways.
+
+  What may be changed differs per prefix, so the policy is a table with a
+  reason per row rather than one blanket setting:
+
+  | Prefix | Longest edge | Encoding | Why |
+  | --- | --- | --- | --- |
+  | `events/` | unchanged | WebP q82 | posters are validated against **exact** pixel resolutions — resizing would let out-of-spec artwork pass |
+  | `merch/` | 1280 px | WebP q78 | customer-facing storefront photo |
+  | `proofs/tickets/`, `proofs/merch/` | 1280 px | WebP q75 | glanced at once by an admin verifying a transfer; 1280 px is the floor that keeps a bank receipt's details readable |
+  | `qris/` | unchanged | WebP **lossless** | a QR code must stay scannable by a payment app — pixel-exact, never traded for bytes |
+
+  Measured over all 262 production images: **151 MB → 14.4 MB (90% smaller)**,
+  median output 38 KB, 94% under 120 KB. Dropping to 1100 px / q70 bought only
+  ~3% more while risking receipt legibility, so 1280 px is deliberate.
+
+  Input is decoded with `failOn: "none"`: truncated uploads (production already
+  holds one clipped JPEG) are salvaged rather than rejected, since a browser
+  renders them fine. Bytes with no decodable image at all are a 400
+  `INVALID_IMAGE` — the declared MIME type is client-supplied and can lie.
 - **Read** (`routes/uploads.js`): the bucket stays private; `GET /uploads/*`
   streams the object back through the API with a one-year immutable
   `Cache-Control` (keys are UUIDs and are never overwritten) and forwards
