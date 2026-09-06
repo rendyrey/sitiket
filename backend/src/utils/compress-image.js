@@ -38,6 +38,13 @@ const POLICIES = {
   legacy: { maxDimension: null, quality: 82 },
 };
 
+/** sharp's format name → the MIME type to store an untouched original under. */
+const MIME_TYPE_BY_FORMAT = {
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
 /** Applied to any prefix without its own entry — conservative: no resize. */
 const DEFAULT_POLICY = { maxDimension: null, quality: 82 };
 
@@ -85,8 +92,23 @@ export const compressImage = async (buffer, prefix) => {
     .webp(policy.lossless ? { lossless: true } : { quality: policy.quality })
     .toBuffer({ resolveWithObject: true });
 
+  // A lossless re-encode of already-lossy input is routinely *larger* than the
+  // original — a JPEG QRIS code roughly doubles. Storing more bytes for
+  // identical pixels is pure waste, so keep whichever is smaller. The original
+  // is equally safe: its pixels are by definition unchanged, and browsers apply
+  // a JPEG's own EXIF orientation, which is exactly how these files were served
+  // before R2. Only the lossless path can grow like this; a lossy re-encode of
+  // a photo always shrinks.
+  if (policy.lossless && buffer.length < data.length) {
+    const sourceMimeType = MIME_TYPE_BY_FORMAT[(await sharp(buffer).metadata()).format];
+    if (sourceMimeType) {
+      return { buffer, mimeType: sourceMimeType, width: info.width, height: info.height };
+    }
+  }
+
   return { buffer: data, mimeType: "image/webp", width: info.width, height: info.height };
 };
+
 
 // Exported so the policy table can be asserted against the poster/QRIS rules.
 export const __testables = { POLICIES, DEFAULT_POLICY };

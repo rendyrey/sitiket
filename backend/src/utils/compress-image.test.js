@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import test from "node:test";
 import sharp from "sharp";
 import { compressImage, __testables } from "./compress-image.js";
@@ -92,4 +93,18 @@ test("every prefix used by a route has a policy", () => {
   assert.equal(POLICIES.events.maxDimension, null, "posters are resolution-validated");
   assert.equal(POLICIES.qris.lossless, true, "QR codes must stay lossless");
   assert.equal(POLICIES.legacy.maxDimension, null, "legacy objects must keep their stored dimensions");
+});
+
+test("never grows a lossless upload — keeps the original when WebP is larger", async () => {
+  // Noise stands in for a real photo: lossless coding of it is far larger than
+  // the lossy JPEG it came from, which is exactly the QRIS-from-JPEG case.
+  const noise = randomBytes(600 * 800 * 3);
+  const jpeg = await sharp(noise, { raw: { width: 600, height: 800, channels: 3 } })
+    .jpeg({ quality: 70 })
+    .toBuffer();
+
+  const { buffer, mimeType } = await compressImage(jpeg, "qris");
+  assert.ok(buffer.length <= jpeg.length, "storing more bytes for identical pixels is waste");
+  assert.ok(buffer.equals(jpeg), "the original bytes are kept verbatim");
+  assert.equal(mimeType, "image/jpeg", "and are labelled with their own format, not webp");
 });
