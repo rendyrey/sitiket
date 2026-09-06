@@ -20,13 +20,16 @@ export const listImages = (eventId) => eventImagesRepository.listByEvent(eventId
 /**
  * @param {string} eventId
  * @param {{ sub: string, role: string }} requester
- * @param {{ path: string, filename: string }} file - the multer-saved file
+ * @param {{ buffer: Buffer, filename: string }} file - the R2-stored upload;
+ *   `filename` is its object key, `buffer` the bytes still in memory
  * @param {boolean} isPoster
  */
 export const addImage = async (eventId, requester, file, isPoster) => {
   await getOwnedEventOrThrow(eventId, requester);
 
-  const { width, height } = imageSize(file.path);
+  // Measured from the in-memory buffer — the image lives in R2, not on this
+  // host's disk, so there is no path to read back.
+  const { width, height } = imageSize(file.buffer);
 
   if (isPoster && !POSTER_RESOLUTIONS.some((resolution) => resolution.width === width && resolution.height === height)) {
     const labels = POSTER_RESOLUTIONS.map((resolution) => resolution.label);

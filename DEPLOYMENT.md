@@ -145,9 +145,29 @@ APIs & Services → Credentials / OAuth consent screen):
 
 ## Uploads
 
-`backend/uploads/` on the VPS disk holds all user uploads (event images,
-payment proofs, QRIS codes). It is not in git — back it up alongside the
-database. Swapping to object storage (GCS/S3) is a known follow-up (BACKEND.md).
+All user uploads (event images, product photos, payment proofs, QRIS codes) go
+to a **Cloudflare R2 bucket**, not the VPS disk — see BACKEND.md § _File
+storage_. Nothing under `backend/uploads/` needs backing up any more, and the
+nginx `/uploads/` upstream is unchanged: the API streams objects back from the
+private bucket under the same URLs.
+
+Backend `/var/www/sitiket/backend/.env` needs all four R2 values
+(`R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) or the
+API refuses to boot.
+
+**One-off, on the first deploy of this change** — copy the files the VPS already
+has on disk into the bucket, then confirm before removing anything:
+
+```bash
+cd /var/www/sitiket/backend
+npm ci                    # picks up aws4fetch
+npm run uploads:migrate   # copies uploads/* into R2 under identical keys
+# reload the API, then load an event page and check the images render
+mv uploads uploads.pre-r2 # keep the originals until you've verified, then delete
+```
+
+Keys are preserved, so no database rows change — the `/uploads/<key>` URLs
+already stored keep resolving.
 
 ### Upload size limits — keep all three in sync
 

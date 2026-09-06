@@ -7,6 +7,15 @@ import { HttpError } from "../utils/http-error.js";
  */
 // eslint-disable-next-line no-unused-vars
 export const errorHandler = (error, request, response, next) => {
+  // A streaming response (e.g. an /uploads image) has already sent its status
+  // and headers, so no error body can be written any more. The usual cause is
+  // a client that navigated away mid-download — not something to log or dress
+  // up as a 500; just drop the half-written connection.
+  if (response.headersSent) {
+    response.destroy();
+    return;
+  }
+
   if (error instanceof HttpError) {
     response.status(error.statusCode).json({
       error: { code: error.code, message: error.message, details: error.details },

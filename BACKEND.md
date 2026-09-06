@@ -2,9 +2,9 @@
 
 ## Status and stack
 
-Backend root: `backend/`. A separate ESM Node.js package using Express 5, MySQL 8 (via `knex` + `mysql2`), JWT sessions (Google ID token verified server-side, then a SiTIKET-issued JWT), `zod` validation, and `multer` for local-disk file uploads. The full v1 domain model from [docs/business/](docs/business/README.md) is implemented: auth, admin onboarding, events, ticket types, promo codes, orders/checkout with atomic inventory reservation, manual payment verification (bank transfer and per-event opt-in QRIS), QR ticket issuance, gate check-in, manual refunds, per-organizer outgoing email (every buyer-facing email is sent through the event organizer's own SMTP — see § _Email delivery_), a per-seller merch store (products with Shopee-style option/variant matrices, split-per-seller checkout, seller-scoped promo codes, 24h payment hold — see § _Merch invariants_), and in-app header-bell notifications.
+Backend root: `backend/`. A separate ESM Node.js package using Express 5, MySQL 8 (via `knex` + `mysql2`), JWT sessions (Google ID token verified server-side, then a SiTIKET-issued JWT), `zod` validation, and `multer` + Cloudflare R2 for file uploads (see § _File storage_). The full v1 domain model from [docs/business/](docs/business/README.md) is implemented: auth, admin onboarding, events, ticket types, promo codes, orders/checkout with atomic inventory reservation, manual payment verification (bank transfer and per-event opt-in QRIS), QR ticket issuance, gate check-in, manual refunds, per-organizer outgoing email (every buyer-facing email is sent through the event organizer's own SMTP — see § _Email delivery_), a per-seller merch store (products with Shopee-style option/variant matrices, split-per-seller checkout, seller-scoped promo codes, 24h payment hold — see § _Merch invariants_), and in-app header-bell notifications.
 
-Not yet implemented (see § _Known gaps_): automated tests, a payment gateway (Midtrans/Xendit — deferred by design, see [docs/business/PAYMENT_VERIFICATION.md](docs/business/PAYMENT_VERIFICATION.md)), and production-grade file storage (uploads currently live on local disk).
+Not yet implemented (see § _Known gaps_): automated tests and a payment gateway (Midtrans/Xendit — deferred by design, see [docs/business/PAYMENT_VERIFICATION.md](docs/business/PAYMENT_VERIFICATION.md)).
 
 ## Local setup
 
@@ -33,8 +33,9 @@ backend/
 ├── docker-compose.yml   # local MySQL 8 service
 ├── knexfile.js          # knex CLI config (migrations/seeds)
 ├── scripts/
-│   └── promote-super-admin.js
-├── uploads/             # local dev file storage (gitignored) — event images, payment proofs
+│   ├── promote-super-admin.js
+│   └── migrate-uploads-to-r2.js  # one-off backfill of legacy local uploads into R2
+├── uploads/             # legacy local file storage (gitignored) — kept only for the R2 backfill script
 └── src/
     ├── app.js           # middleware + all route mounts
     ├── server.js        # startup + the stale-order expiry sweep interval
@@ -42,7 +43,7 @@ backend/
     ├── db/
     │   ├── migrations/  # one file per table, see docs/business/DATABASE_DESIGN.md
     │   └── seeds/       # event_categories / ticket_categories
-    ├── middleware/      # auth (JWT), validate (zod), upload (multer), rate-limit, error-handler
+    ├── middleware/      # auth (JWT), validate (zod), upload (multer -> R2), rate-limit, error-handler
     ├── routes/          # route declarations, thin
     ├── controllers/     # req/response translation
     ├── services/        # business rules, transactions, authorization
@@ -120,11 +121,35 @@ All routes are prefixed `/api`. Grouped by resource; `mine`/owner-scoped routes 
 - **Secrets at rest**: SMTP passwords are AES-256-GCM encrypted (`utils/secret-box.js`) with a key derived from `EMAIL_CONFIG_SECRET` (recommended in production) or, when unset, from `JWT_SECRET`.
 - **Worker semantics** (`services/email-job-service.js`, 3s interval in `server.js`): jobs routed to an organizer whose config has since disappeared (legacy events pre-dating the requirement, or a deleted config) fall back to the platform SMTP; when no transport at all is available the job retries with backoff and ends `failed` — it is never silently marked sent, so `email_jobs.status = 'failed'` rows are meaningful.
 
+## File storage
+
+Every user upload — event images, product photos, payment proofs, QRIS codes —
+lives in a **Cloudflare R2 bucket**. Nothing is written to the API host's disk,
+so uploads survive a redeploy, a rebuilt VPS, or a second API instance.
+
+- **Write** (`middleware/upload.js`): `multer.memoryStorage()` parses the
+  multipart field, then `utils/storage.js` `putObject` PUTs the buffer to R2
+  under a fresh `<uuid>.<ext>` key. A failed PUT is a 502
+  `UPLOAD_STORAGE_FAILED`, never a database row pointing at a missing object.
+  Handlers still read `request.file.filename` (now the R2 object key), so every
+  service keeps storing the same `/uploads/<key>` URL it always did.
+- **Read** (`routes/uploads.js`): the bucket stays private; `GET /uploads/:key`
+  streams the object back through the API with a one-year immutable
+  `Cache-Control` (keys are UUIDs and are never overwritten) and forwards
+  `If-None-Match` so repeat views cost a 304. This keeps the stored URLs, the
+  nginx `/uploads/` upstream, and `NEXT_PUBLIC_API_ORIGIN` exactly as they were.
+- **Config**: `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`,
+  `R2_SECRET_ACCESS_KEY` — all four required, so a misconfigured bucket fails at
+  boot rather than at the first upload. Signing uses `aws4fetch` (SigV4 over
+  `fetch`), not the AWS SDK.
+- **Backfill**: `npm run uploads:migrate` copies whatever is still in
+  `UPLOAD_DIR` into R2 under identical keys. Because the keys are preserved,
+  no database rows change. Idempotent — safe to re-run.
+
 ## Known gaps / follow-ups
 
 - **JWT role claims don't live-update.** A session JWT embeds `role` at sign-in time. If a Super Admin approves someone's Admin application (or changes anyone's role) mid-session, the affected user must sign in again to get a token reflecting the new role — there is no server-side session/role revalidation per request. Standard stateless-JWT tradeoff; consider shorter token lifetimes or a role-refresh endpoint if this becomes a real friction point.
 - **No email-config management beyond replace.** An organizer can overwrite their email config but not delete it (deliberate — it's a prerequisite), and there's no "send test email" endpoint beyond the verify-on-save handshake. The guest OTP still logs server-side and echoes in the response outside `NODE_ENV=production` when no transport is available, so dev checkout works without SMTP.
-- **Local disk uploads.** `middleware/upload.js` writes event images and payment proofs to `backend/uploads/`. Swap the multer storage engine for a cloud-storage backend (GCS/S3) before any real deployment.
 - **No automated tests yet.** Add them alongside the first real feature change per this project's `AGENTS.md`.
 - **Payment gateway** (Midtrans/Xendit) is explicitly deferred — see the migration path in [docs/business/PAYMENT_VERIFICATION.md](docs/business/PAYMENT_VERIFICATION.md) §5.
 

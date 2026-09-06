@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
 import path from "node:path";
 import multer from "multer";
-import { env } from "../config/env.js";
+import { putObject } from "../utils/storage.js";
 import { badRequest } from "../utils/http-error.js";
 
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -12,24 +11,26 @@ const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 // `bodySizeLimit` (next.config.js). All three are 50 MB.
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 
-// multer's diskStorage does not create its destination directory; if UPLOAD_DIR
-// is missing every write fails with ENOENT and the upload 500s. Ensure it
-// exists at startup. `recursive: true` is a no-op when it already exists.
-// Example: UPLOAD_DIR="uploads" -> creates ./uploads relative to the process cwd.
-mkdirSync(env.UPLOAD_DIR, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (request, file, callback) => callback(null, env.UPLOAD_DIR),
-  filename: (request, file, callback) => callback(null, `${randomUUID()}${path.extname(file.originalname)}`),
-});
+/**
+ * Builds the R2 object key for one upload. A random UUID makes the key
+ * unguessable and collision-free; the original extension is preserved so the
+ * key still looks like an image to humans and to `path.extname` consumers.
+ *
+ * @param {string} originalName - the client-supplied filename. Example: `"IMG_2043.JPG"`
+ * @returns {string} Example: `"7f3c1e0a-….jpg"`
+ */
+const toObjectKey = (originalName) => `${randomUUID()}${path.extname(originalName).toLowerCase()}`;
 
 /**
- * Local-disk image upload for development (event images, payment proofs).
- * Swap `storage` for a cloud-storage (e.g. GCS/S3) multer engine before
- * production — files currently live under `UPLOAD_DIR` on the API host.
+ * Image upload buffered in memory, then handed to Cloudflare R2 by
+ * {@link singleImageUpload}. Nothing is ever written to the API host's disk.
+ *
+ * ponytail: whole file buffered in RAM (capped at MAX_IMAGE_BYTES per request);
+ * stream multipart straight into an R2 multipart upload if concurrency ever
+ * makes that memory a problem.
  */
 export const imageUpload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_IMAGE_BYTES },
   fileFilter: (request, file, callback) => {
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
@@ -71,9 +72,14 @@ const toClientError = (error) => {
 };
 
 /**
- * Route middleware for a single-image multipart field that reports every
- * rejection (wrong type, too large) as a clear 400 instead of a silent 500.
+ * Route middleware for a single-image multipart field: parses the field,
+ * stores the image in R2, and reports every rejection (wrong type, too large,
+ * storage failure) as a clear 4xx/502 instead of a silent 500.
  * Use this in place of `imageUpload.single(field)`.
+ *
+ * Downstream handlers read `request.file.filename` — the R2 object key — and
+ * `request.file.buffer`, exactly as they read the multer-on-disk filename
+ * before, so the stored `/uploads/<key>` URLs are unchanged.
  *
  * @param {string} fieldName - the multipart field name (e.g. "image", "proof")
  */
@@ -83,9 +89,22 @@ export const singleImageUpload = (fieldName) => (request, response, next) => {
       next(toClientError(error));
       return;
     }
-    next();
+    // The field is optional on some routes (e.g. QRIS config keeps its current
+    // image when only the merchant name changes), so no file is not an error.
+    if (!request.file) {
+      next();
+      return;
+    }
+
+    const key = toObjectKey(request.file.originalname);
+    putObject(key, request.file.buffer, request.file.mimetype)
+      .then(() => {
+        request.file.filename = key;
+        next();
+      })
+      .catch(next);
   });
 };
 
-// Exported for unit testing the multer-error → HttpError mapping.
-export const __testables = { toClientError, MAX_IMAGE_BYTES };
+// Exported for unit testing the multer-error → HttpError mapping and key naming.
+export const __testables = { toClientError, toObjectKey, MAX_IMAGE_BYTES };

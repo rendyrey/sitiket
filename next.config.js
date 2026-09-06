@@ -22,8 +22,9 @@ const nextConfig = {
     },
   },
   images: {
-    // Event posters/gallery images and payment-proof uploads are served from
-    // the backend's local disk storage under /uploads — see BACKEND.md.
+    // Event posters/gallery images and payment-proof uploads are streamed by
+    // the backend from its private Cloudflare R2 bucket, still under /uploads
+    // on the same origin — see BACKEND.md § File storage.
     remotePatterns: [
       {
         protocol: assetOrigin.protocol.replace(":", ""),

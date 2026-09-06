@@ -4,7 +4,7 @@ import multer from "multer";
 import { HttpError } from "../utils/http-error.js";
 import { __testables } from "./upload.js";
 
-const { toClientError } = __testables;
+const { toClientError, toObjectKey } = __testables;
 
 test("maps a file-size overflow to a clear 400, not a generic 500", () => {
   const mapped = toClientError(new multer.MulterError("LIMIT_FILE_SIZE"));
@@ -28,4 +28,14 @@ test("passes a fileFilter HttpError (wrong type) through untouched", () => {
 test("passes an unknown error through untouched", () => {
   const original = new Error("boom");
   assert.equal(toClientError(original), original);
+});
+
+test("names the R2 object key with a random uuid and the lower-cased original extension", () => {
+  const key = toObjectKey("IMG_2043.JPG");
+  assert.match(key, /^[0-9a-f-]{36}\.jpg$/, "should be <uuid>.<ext>");
+  assert.notEqual(key, toObjectKey("IMG_2043.JPG"), "two uploads of the same filename must not collide");
+});
+
+test("tolerates a filename with no extension", () => {
+  assert.match(toObjectKey("screenshot"), /^[0-9a-f-]{36}$/);
 });

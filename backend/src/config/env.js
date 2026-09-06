@@ -25,7 +25,20 @@ const envSchema = z.object({
 
   QR_SIGNING_SECRET: z.string().min(32, "QR_SIGNING_SECRET must be at least 32 characters"),
 
+  // Legacy local-disk upload directory. Uploads now go straight to R2 (see
+  // utils/storage.js); this remains only so scripts/migrate-uploads-to-r2.js
+  // can find the files an older deployment already wrote to disk.
   UPLOAD_DIR: z.string().default("uploads"),
+
+  // Cloudflare R2 object storage — the single home for every user upload
+  // (event images, product photos, payment proofs, QRIS codes). Required:
+  // there is no local-disk fallback, so a misconfigured bucket fails loudly at
+  // boot instead of silently writing files that vanish on the next deploy.
+  // Example: R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
+  R2_ENDPOINT: z.string().url(),
+  R2_BUCKET: z.string().min(1),
+  R2_ACCESS_KEY_ID: z.string().min(1),
+  R2_SECRET_ACCESS_KEY: z.string().min(1),
 
   ORDER_PAYMENT_HOLD_MINUTES: z.coerce.number().int().positive().default(10),
   // Merch stock is far less time-critical than event tickets, so its manual

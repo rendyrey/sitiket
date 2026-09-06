@@ -38,6 +38,7 @@ import { shippingRouter } from "./routes/shipping.js";
 import { ticketCategoryRouter } from "./routes/ticket-categories.js";
 import { ticketTypeRouter } from "./routes/ticket-types.js";
 import { ticketRouter } from "./routes/tickets.js";
+import { uploadsRouter } from "./routes/uploads.js";
 import { userRouter } from "./routes/users.js";
 
 export const app = express();
@@ -47,7 +48,7 @@ app.set('trust proxy', 1);
 app.use(cors({ origin: env.FRONTEND_URL }));
 
 app.use(express.json());
-app.use("/uploads", express.static(env.UPLOAD_DIR));
+app.use("/uploads", uploadsRouter);
 
 app.get("/api/health", (_request, response) => response.json({ status: "ok" }));
 

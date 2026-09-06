@@ -13,9 +13,11 @@
     "db:migrate:make": "knex migrate:make",
     "db:rollback": "knex migrate:rollback",
     "db:seed": "knex seed:run",
-    "db:promote-super-admin": "node scripts/promote-super-admin.js"
+    "db:promote-super-admin": "node scripts/promote-super-admin.js",
+    "uploads:migrate": "node scripts/migrate-uploads-to-r2.js"
   },
   "dependencies": {
+    "aws4fetch": "^1.0.20",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
