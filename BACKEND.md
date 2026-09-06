@@ -185,11 +185,17 @@ so uploads survive a redeploy, a rebuilt VPS, or a second API instance.
   `R2_SECRET_ACCESS_KEY` — all four required, so a misconfigured bucket fails at
   boot rather than at the first upload. Signing uses `aws4fetch` (SigV4 over
   `fetch`), not the AWS SDK.
-- **Backfill**: `npm run uploads:migrate` copies whatever is still in
-  `UPLOAD_DIR` into R2 under identical (flat, unprefixed) keys. Because the keys
-  are preserved, no database rows change. Idempotent — safe to re-run, which is
-  also how a wrong `Content-Type` gets corrected. It skips (loudly) any
-  extension missing from its map rather than storing an unrenderable object.
+- **Backfill / recompression**: `npm run uploads:migrate` copies whatever is
+  still in `UPLOAD_DIR` into R2, compressed, under identical (flat, unprefixed)
+  keys. Because the keys are preserved, no database rows change; the key keeps
+  its original extension while the bytes become WebP, which is harmless since
+  the read proxy serves the `Content-Type` recorded on the object and nothing
+  infers a type from the key. **Nothing is resized** — a flat key carries no
+  hint of what the image is for, and `event_images` rows store each poster's
+  width/height, so changing dimensions would both invalidate those rows and let
+  out-of-spec artwork pass the poster rule. QRIS codes are identified from
+  `qris_configs.qris_image_url` and stored lossless. Idempotent — safe to
+  re-run, which is also how a wrong `Content-Type` gets fixed.
 
 ## Known gaps / follow-ups
 
