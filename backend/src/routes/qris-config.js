@@ -10,6 +10,6 @@ export const qrisConfigRouter = Router();
 qrisConfigRouter.use(requireAuth, requireRole("admin", "super_admin"));
 
 qrisConfigRouter.get("/", qrisConfigController.getMine);
-qrisConfigRouter.put("/", singleImageUpload("qrisImage"), validate(saveQrisConfigSchema), qrisConfigController.save);
+qrisConfigRouter.put("/", singleImageUpload("qrisImage", "qris"), validate(saveQrisConfigSchema), qrisConfigController.save);
 qrisConfigRouter.patch("/", validate(updateQrisConfigSchema), qrisConfigController.update);
 qrisConfigRouter.delete("/", qrisConfigController.remove);

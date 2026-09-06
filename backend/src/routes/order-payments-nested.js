@@ -20,7 +20,7 @@ orderPaymentNestedRouter.post(
   "/",
   writeLimiter,
   optionalAuth,
-  singleImageUpload("proof"),
+  singleImageUpload("proof", "proofs/tickets"),
   validate(submitPaymentProofSchema),
   orderPaymentController.submit,
 );

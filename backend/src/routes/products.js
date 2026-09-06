@@ -24,5 +24,5 @@ productRouter.delete("/:id", productController.remove);
 
 productRouter.put("/:id/variants", validate(replaceVariantsSchema), productController.replaceVariants);
 
-productRouter.post("/:id/images", singleImageUpload("image"), productController.addImage);
+productRouter.post("/:id/images", singleImageUpload("image", "merch"), productController.addImage);
 productRouter.delete("/:id/images/:imageId", productController.removeImage);

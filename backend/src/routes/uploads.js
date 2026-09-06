@@ -18,12 +18,34 @@ export const uploadsRouter = Router();
  */
 const CACHE_CONTROL = "public, max-age=31536000, immutable";
 
-uploadsRouter.get("/:key", async (request, response, next) => {
+/**
+ * Reads the object key out of the request path. Keys carry a directory prefix
+ * (`events/`, `merch/`, `proofs/tickets/`, `proofs/merch/`, `qris/`), and older
+ * ones are flat, so this matches the whole remaining path rather than a single
+ * segment.
+ *
+ * @param {string} requestPath - path within this router. Example: `"/merch/7f3c….jpg"`
+ * @returns {string|null} the key, or null if the path could not be a valid key.
+ *   Example: `"merch/7f3c….jpg"`
+ */
+const toObjectKey = (requestPath) => {
+  const key = decodeURIComponent(requestPath).replace(/^\/+/, "");
+  // Reject empty keys and any `..` segment. R2 keys are opaque strings so this
+  // cannot escape the bucket, but a traversal-looking path is never legitimate
+  // here and normalising clients could resolve it to an unintended object.
+  if (!key || key.split("/").includes("..")) return null;
+  return key;
+};
+
+uploadsRouter.get("/*splat", async (request, response, next) => {
   try {
+    const key = toObjectKey(request.path);
+    if (!key) throw notFound("FILE_NOT_FOUND", "File not found");
+
     // Forward the browser's validator so a repeat view costs a 304 with no
     // body instead of re-streaming the whole image through this host.
     const ifNoneMatch = request.headers["if-none-match"];
-    const upstream = await getObject(request.params.key, ifNoneMatch ? { "if-none-match": ifNoneMatch } : {});
+    const upstream = await getObject(key, ifNoneMatch ? { "if-none-match": ifNoneMatch } : {});
 
     if (upstream.status === 304) {
       response.status(304).end();
@@ -31,7 +53,7 @@ uploadsRouter.get("/:key", async (request, response, next) => {
     }
     if (upstream.status === 404) throw notFound("FILE_NOT_FOUND", "File not found");
     if (!upstream.ok) {
-      console.error(`R2 GET ${request.params.key} failed: ${upstream.status} ${await upstream.text()}`);
+      console.error(`R2 GET ${key} failed: ${upstream.status} ${await upstream.text()}`);
       throw badGateway("STORAGE_UNAVAILABLE", "Could not load that file. Please try again.");
     }
 

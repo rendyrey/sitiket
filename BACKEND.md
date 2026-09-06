@@ -129,22 +129,46 @@ so uploads survive a redeploy, a rebuilt VPS, or a second API instance.
 
 - **Write** (`middleware/upload.js`): `multer.memoryStorage()` parses the
   multipart field, then `utils/storage.js` `putObject` PUTs the buffer to R2
-  under a fresh `<uuid>.<ext>` key. A failed PUT is a 502
+  under a fresh `<prefix>/<uuid>.<ext>` key. A failed PUT is a 502
   `UPLOAD_STORAGE_FAILED`, never a database row pointing at a missing object.
-  Handlers still read `request.file.filename` (now the R2 object key), so every
-  service keeps storing the same `/uploads/<key>` URL it always did.
-- **Read** (`routes/uploads.js`): the bucket stays private; `GET /uploads/:key`
+  Handlers still read `request.file.filename` (now the R2 object key, prefix
+  included), so every service keeps storing the same `/uploads/<key>` URL shape
+  it always did.
+- **Prefixes** — `singleImageUpload(field, prefix)` sorts uploads into
+  directories, so the bucket can be browsed and lifecycle-ruled per kind:
+
+  | Prefix | Contents | Route |
+  | --- | --- | --- |
+  | `events/` | event posters + gallery images | `POST /events/:eventId/images` |
+  | `merch/` | product photos | `POST /products/:id/images` |
+  | `proofs/tickets/` | ticket-order payment proofs | `POST /orders/:orderId/payments` |
+  | `proofs/merch/` | merch-order payment proofs | `POST /merch-orders/:orderId/payments` |
+  | `qris/` | organizer/seller QRIS codes | `PUT /qris-config` |
+
+  Objects migrated from the pre-R2 local disk keep their original **flat**
+  keys (`<uuid>.<ext>`, no prefix) so the URLs already in the database keep
+  resolving; the read path serves both shapes.
+- **The extension comes from the validated MIME type, not the client filename.**
+  Windows browsers hand back `.jfif` for an ordinary JPEG, and older uploads
+  arrived as `.JPG` or with no extension at all. Deriving it from the MIME type
+  keeps keys consistent and guarantees the object is served as a renderable
+  image rather than an `application/octet-stream` download.
+- **Read** (`routes/uploads.js`): the bucket stays private; `GET /uploads/*`
   streams the object back through the API with a one-year immutable
   `Cache-Control` (keys are UUIDs and are never overwritten) and forwards
-  `If-None-Match` so repeat views cost a 304. This keeps the stored URLs, the
-  nginx `/uploads/` upstream, and `NEXT_PUBLIC_API_ORIGIN` exactly as they were.
+  `If-None-Match` so repeat views cost a 304. It matches the whole remaining
+  path (keys contain `/`) and rejects any `..` segment. This keeps the stored
+  URLs, the nginx `/uploads/` upstream, and `NEXT_PUBLIC_API_ORIGIN` exactly as
+  they were.
 - **Config**: `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`,
   `R2_SECRET_ACCESS_KEY` — all four required, so a misconfigured bucket fails at
   boot rather than at the first upload. Signing uses `aws4fetch` (SigV4 over
   `fetch`), not the AWS SDK.
 - **Backfill**: `npm run uploads:migrate` copies whatever is still in
-  `UPLOAD_DIR` into R2 under identical keys. Because the keys are preserved,
-  no database rows change. Idempotent — safe to re-run.
+  `UPLOAD_DIR` into R2 under identical (flat, unprefixed) keys. Because the keys
+  are preserved, no database rows change. Idempotent — safe to re-run, which is
+  also how a wrong `Content-Type` gets corrected. It skips (loudly) any
+  extension missing from its map rather than storing an unrenderable object.
 
 ## Known gaps / follow-ups
 

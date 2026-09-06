@@ -1,10 +1,22 @@
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import multer from "multer";
 import { putObject } from "../utils/storage.js";
 import { badRequest } from "../utils/http-error.js";
 
-const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+/**
+ * Accepted upload types mapped to the canonical file extension used in the
+ * object key. The extension is derived from the (validated) MIME type rather
+ * than the client's filename on purpose: browsers on Windows hand back `.jfif`
+ * for an ordinary JPEG, and older uploads landed with `.JPG`, no extension at
+ * all, or an extension that disagreed with the bytes. Keying off the MIME type
+ * keeps every stored object named consistently and served with the right
+ * `Content-Type`.
+ */
+const EXTENSION_BY_MIME_TYPE = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+};
 // Must stay in sync with the two limits in front of it, or an upload dies at
 // the smallest link with a confusing error: nginx `client_max_body_size`
 // (/etc/nginx/sites-available/sitiket) and the Next.js Server Action
@@ -12,14 +24,17 @@ const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 
 /**
- * Builds the R2 object key for one upload. A random UUID makes the key
- * unguessable and collision-free; the original extension is preserved so the
- * key still looks like an image to humans and to `path.extname` consumers.
+ * Builds the R2 object key for one upload: a directory prefix naming what the
+ * image is for, then a random UUID (unguessable and collision-free) with the
+ * canonical extension for its MIME type.
  *
- * @param {string} originalName - the client-supplied filename. Example: `"IMG_2043.JPG"`
- * @returns {string} Example: `"7f3c1e0a-….jpg"`
+ * @param {string} prefix - directory the upload belongs in, no trailing slash.
+ *   Example: `"proofs/merch"`
+ * @param {string} mimeType - the MIME type already vetted by the file filter.
+ *   Example: `"image/jpeg"`
+ * @returns {string} Example: `"proofs/merch/7f3c1e0a-….jpg"`
  */
-const toObjectKey = (originalName) => `${randomUUID()}${path.extname(originalName).toLowerCase()}`;
+const toObjectKey = (prefix, mimeType) => `${prefix}/${randomUUID()}${EXTENSION_BY_MIME_TYPE[mimeType]}`;
 
 /**
  * Image upload buffered in memory, then handed to Cloudflare R2 by
@@ -33,7 +48,7 @@ export const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_IMAGE_BYTES },
   fileFilter: (request, file, callback) => {
-    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+    if (!(file.mimetype in EXTENSION_BY_MIME_TYPE)) {
       // Pass an HttpError (not a bare Error) so the central error-handler turns
       // this into a 400 with a message the user can act on, rather than an
       // opaque 500. HEIC is called out because it's the iPhone camera default
@@ -73,17 +88,20 @@ const toClientError = (error) => {
 
 /**
  * Route middleware for a single-image multipart field: parses the field,
- * stores the image in R2, and reports every rejection (wrong type, too large,
- * storage failure) as a clear 4xx/502 instead of a silent 500.
+ * stores the image in R2 under `prefix/`, and reports every rejection (wrong
+ * type, too large, storage failure) as a clear 4xx/502 instead of a silent 500.
  * Use this in place of `imageUpload.single(field)`.
  *
- * Downstream handlers read `request.file.filename` — the R2 object key — and
- * `request.file.buffer`, exactly as they read the multer-on-disk filename
- * before, so the stored `/uploads/<key>` URLs are unchanged.
+ * Downstream handlers read `request.file.filename` — the R2 object key,
+ * prefix included — and `request.file.buffer`, exactly as they read the
+ * multer-on-disk filename before, so they keep composing `/uploads/<key>` URLs
+ * with no change.
  *
  * @param {string} fieldName - the multipart field name (e.g. "image", "proof")
+ * @param {string} prefix - directory to store under, no trailing slash. One of
+ *   `"events"`, `"merch"`, `"proofs/tickets"`, `"proofs/merch"`, `"qris"`.
  */
-export const singleImageUpload = (fieldName) => (request, response, next) => {
+export const singleImageUpload = (fieldName, prefix) => (request, response, next) => {
   imageUpload.single(fieldName)(request, response, (error) => {
     if (error) {
       next(toClientError(error));
@@ -96,7 +114,7 @@ export const singleImageUpload = (fieldName) => (request, response, next) => {
       return;
     }
 
-    const key = toObjectKey(request.file.originalname);
+    const key = toObjectKey(prefix, request.file.mimetype);
     putObject(key, request.file.buffer, request.file.mimetype)
       .then(() => {
         request.file.filename = key;

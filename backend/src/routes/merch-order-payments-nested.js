@@ -15,7 +15,7 @@ merchOrderPaymentNestedRouter.get("/instructions", merchOrderController.getInstr
 merchOrderPaymentNestedRouter.post(
   "/",
   writeLimiter,
-  singleImageUpload("proof"),
+  singleImageUpload("proof", "proofs/merch"),
   validate(submitMerchPaymentProofSchema),
   merchOrderController.submitPayment,
 );

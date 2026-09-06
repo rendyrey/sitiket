@@ -30,12 +30,16 @@ test("passes an unknown error through untouched", () => {
   assert.equal(toClientError(original), original);
 });
 
-test("names the R2 object key with a random uuid and the lower-cased original extension", () => {
-  const key = toObjectKey("IMG_2043.JPG");
-  assert.match(key, /^[0-9a-f-]{36}\.jpg$/, "should be <uuid>.<ext>");
-  assert.notEqual(key, toObjectKey("IMG_2043.JPG"), "two uploads of the same filename must not collide");
+test("keys an object under its prefix with a random uuid", () => {
+  const key = toObjectKey("proofs/merch", "image/jpeg");
+  assert.match(key, /^proofs\/merch\/[0-9a-f-]{36}\.jpg$/, "should be <prefix>/<uuid>.<ext>");
+  assert.notEqual(key, toObjectKey("proofs/merch", "image/jpeg"), "two uploads must not collide");
 });
 
-test("tolerates a filename with no extension", () => {
-  assert.match(toObjectKey("screenshot"), /^[0-9a-f-]{36}$/);
+test("derives the extension from the mime type, not the client filename", () => {
+  // A Windows browser hands back "photo.jfif" for a plain JPEG; the stored key
+  // must still be .jpg so it is served as a renderable image.
+  assert.match(toObjectKey("events", "image/jpeg"), /\.jpg$/);
+  assert.match(toObjectKey("merch", "image/png"), /\.png$/);
+  assert.match(toObjectKey("qris", "image/webp"), /\.webp$/);
 });

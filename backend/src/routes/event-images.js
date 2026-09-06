@@ -15,7 +15,7 @@ eventImageRouter.post(
   "/",
   requireAuth,
   requireRole("admin", "super_admin"),
-  singleImageUpload("image"),
+  singleImageUpload("image", "events"),
   validate(uploadEventImageSchema),
   eventImageController.upload,
 );

@@ -16,12 +16,16 @@ const client = new AwsClient({
 });
 
 /**
- * Absolute S3-API URL of one object.
+ * Absolute S3-API URL of one object. Each path segment is escaped separately so
+ * a prefixed key keeps its `/` separators — `encodeURIComponent` on the whole
+ * key would turn them into `%2F` and address a different (flat-named) object.
  *
- * @param {string} key - object key, i.e. the stored filename. Example: `"7f3c….png"`
- * @returns {string} Example: `"https://<account>.r2.cloudflarestorage.com/sitiket/7f3c….png"`
+ * @param {string} key - object key, i.e. prefix + stored filename.
+ *   Example: `"proofs/merch/7f3c….jpg"`
+ * @returns {string} Example: `"https://<account>.r2.cloudflarestorage.com/sitiket/proofs/merch/7f3c….jpg"`
  */
-const objectUrl = (key) => `${env.R2_ENDPOINT}/${env.R2_BUCKET}/${encodeURIComponent(key)}`;
+const objectUrl = (key) =>
+  `${env.R2_ENDPOINT}/${env.R2_BUCKET}/${key.split("/").map(encodeURIComponent).join("/")}`;
 
 /**
  * Stores one object in the bucket, overwriting any object with the same key.

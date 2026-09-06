@@ -14,10 +14,18 @@ import path from "node:path";
 import { env } from "../src/config/env.js";
 import { putObject } from "../src/utils/storage.js";
 
-/** Extension → MIME type, so R2 serves each object back with the right header. */
+/**
+ * Extension → MIME type, so R2 serves each object back with the right header.
+ * `.jfif` matters: Windows browsers save ordinary JPEGs under that extension
+ * and 8 such files exist in production. Served as `application/octet-stream`
+ * they download instead of rendering, so every extension actually present on
+ * disk must be mapped here.
+ */
 const CONTENT_TYPES = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".jfif": "image/jpeg",
+  ".jpe": "image/jpeg",
   ".png": "image/png",
   ".webp": "image/webp",
 };
@@ -33,7 +41,14 @@ console.log(`Found ${files.length} file(s) in ${env.UPLOAD_DIR} -> r2://${env.R2
 let copied = 0;
 for (const file of files) {
   const body = await readFile(path.join(env.UPLOAD_DIR, file.name));
-  const contentType = CONTENT_TYPES[path.extname(file.name).toLowerCase()] ?? "application/octet-stream";
+  const extension = path.extname(file.name).toLowerCase();
+  const contentType = CONTENT_TYPES[extension];
+  if (!contentType) {
+    // Storing an unmapped type would serve it as a download rather than an
+    // image, so skip it and say so instead of quietly breaking that one file.
+    console.warn(`  SKIPPED ${file.name} — unmapped extension "${extension}"; add it to CONTENT_TYPES`);
+    continue;
+  }
   await putObject(file.name, body, contentType);
   copied += 1;
   console.log(`  [${copied}/${files.length}] ${file.name} (${body.length} bytes, ${contentType})`);
