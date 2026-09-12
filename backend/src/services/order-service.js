@@ -220,6 +220,13 @@ export const listOrdersForEvent = async (eventId, requester, filters) => {
   return ordersRepository.listByEvent(eventId, filters);
 };
 
+/** Attaches items (with ticket type names) to a set of orders — shared by both Excel export listings. */
+const attachItemsWithTypeNames = async (orders) => {
+  if (orders.length === 0) return orders;
+  const items = await orderItemsRepository.listByOrdersWithTypeNames(orders.map((order) => order.id));
+  return orders.map((order) => ({ ...order, items: items.filter((item) => item.order_id === order.id) }));
+};
+
 /**
  * Admin-facing Excel export: every order across every event this admin owns
  * within the date range, items (with ticket type names) attached, no
@@ -229,9 +236,22 @@ export const listOrdersForEvent = async (eventId, requester, filters) => {
  */
 export const listOrdersForExport = async (ownerId, filters) => {
   const orders = await ordersRepository.listByOwnerForExport(ownerId, toDateRange(filters));
-  if (orders.length === 0) return orders;
-  const items = await orderItemsRepository.listByOrdersWithTypeNames(orders.map((order) => order.id));
-  return orders.map((order) => ({ ...order, items: items.filter((item) => item.order_id === order.id) }));
+  return attachItemsWithTypeNames(orders);
+};
+
+/**
+ * Same Excel export, scoped to a single event instead of every event the
+ * admin owns — powers the "Export" panel on that event's Orders tab.
+ * @param {string} eventId
+ * @param {{ sub: string, role: string }} requester
+ * @param {{ startDate?: string, endDate?: string }} [filters]
+ */
+export const listEventOrdersForExport = async (eventId, requester, filters) => {
+  const event = await eventsRepository.findById(eventId);
+  if (!event) throw notFound("EVENT_NOT_FOUND", "Event not found");
+  assertEventOwnerOrSuperAdmin(event, requester);
+  const orders = await ordersRepository.listByEventForExport(eventId, toDateRange(filters));
+  return attachItemsWithTypeNames(orders);
 };
 
 /**

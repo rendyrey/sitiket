@@ -116,6 +116,19 @@ export const listByOwnerForExport = (ownerId, { start, end } = {}) => {
 };
 
 /**
+ * Every matching order for one event's Excel export — no pagination, since a
+ * report covers a whole date range at once.
+ * @param {string} eventId
+ * @param {{ start?: Date, end?: Date }} [range]
+ */
+export const listByEventForExport = (eventId, { start, end } = {}) => {
+  const query = db(TABLE).where("event_id", eventId).orderBy("created_at", "desc");
+  if (start) query.andWhere("created_at", ">=", start);
+  if (end) query.andWhere("created_at", "<=", end);
+  return query;
+};
+
+/**
  * @param {object} input - camelCase order fields
  * @param {import("knex").Knex} executor - must be an open transaction (inventory was just reserved in it)
  * @returns {Promise<string>} the created order's id

@@ -142,6 +142,10 @@ export const listEventOrders = async (
 export const getMyOrdersExport = async (query: ExportOrdersQuery): Promise<Order[]> =>
   apiFetch<Order[]>("/api/orders/export", { query });
 
+/** Server-only. Every order for one event within a date range — powers that event's Excel sales report. */
+export const getEventOrdersExport = async (eventId: string, query: ExportOrdersQuery): Promise<Order[]> =>
+  apiFetch<Order[]>(`/api/events/${eventId}/orders/export`, { query });
+
 export const listOrderPayments = async (orderId: string): Promise<OrderPayment[]> => {
   const raw = await apiFetch<RawOrderPayment[]>(`/api/orders/${orderId}/payments`);
   return raw.map(toOrderPayment);

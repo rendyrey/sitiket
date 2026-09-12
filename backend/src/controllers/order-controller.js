@@ -62,3 +62,9 @@ export const listForEvent = async (request, response) => {
   );
   response.status(200).json({ data: rows.map(toPublicOrder), meta: { total, page, pageSize } });
 };
+
+/** GET /api/events/:eventId/orders/export?startDate=&endDate= — every order for this one event, for the Excel report. */
+export const exportForEvent = async (request, response) => {
+  const orders = await orderService.listEventOrdersForExport(request.params.eventId, request.user, request.query);
+  response.status(200).json({ data: orders.map(toPublicOrder) });
+};
