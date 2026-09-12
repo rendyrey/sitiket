@@ -38,7 +38,7 @@ export default function SalesReportPanel() {
         <a
           href={invalidRange ? undefined : downloadHref}
           aria-disabled={invalidRange}
-          className={`button button-dark inline-block ${invalidRange ? "pointer-events-none opacity-50" : ""}`}
+          className={`button button-dark ${invalidRange ? "pointer-events-none opacity-50" : ""}`}
         >
           Download Excel
         </a>
