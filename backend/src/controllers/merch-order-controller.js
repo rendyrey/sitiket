@@ -23,6 +23,12 @@ export const listSelling = async (request, response) => {
   response.status(200).json({ data: rows, meta: { total, page, pageSize } });
 };
 
+/** GET /api/merch-orders/export?startDate=&endDate= — the seller's full Excel report for a date range. */
+export const exportSelling = async (request, response) => {
+  const orders = await merchOrderService.listSellingOrdersForExport(request.user.sub, request.query);
+  response.status(200).json({ data: orders });
+};
+
 /** GET /api/merch-orders/:id */
 export const getById = async (request, response) => {
   const order = await merchOrderService.getOrderForViewer(request.params.id, request.user);

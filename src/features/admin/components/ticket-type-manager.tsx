@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { formatPrice } from "@/data/events";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 import DataTable, { type DataTableColumn } from "@/components/ui/data-table";
+import DateTimeField from "@/components/ui/datetime-field";
 import FormField from "@/components/ui/form-field";
 import SearchableSelect from "@/components/ui/searchable-select";
 import { createTicketTypeAction, deleteTicketTypeAction, updateTicketTypeAction } from "@/features/admin/lib/actions";
@@ -261,19 +262,12 @@ export default function TicketTypeManager({ categories, eventId, eventStartAt, e
             Leave the fields below empty to sell from now until the event.
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <FormField
-              label="Sales start"
-              name="saleStartAt"
-              type="datetime-local"
-              value={saleStart}
-              onChange={(e) => setSaleStart(e.target.value)}
-            />
-            <FormField
+            <DateTimeField label="Sales start" value={saleStart} onChange={setSaleStart} placeholder="Now" />
+            <DateTimeField
               label="Sales end (ticket closes automatically)"
-              name="saleEndAt"
-              type="datetime-local"
               value={saleEnd}
-              onChange={(e) => setSaleEnd(e.target.value)}
+              onChange={setSaleEnd}
+              placeholder="Event start"
               error={saleStart && saleEnd && dayjs(saleEnd).valueOf() <= dayjs(saleStart).valueOf() ? "Must be after the sales start" : undefined}
             />
           </div>

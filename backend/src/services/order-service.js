@@ -12,6 +12,7 @@ import { requestGuestOtp } from "./email-verification-service.js";
 import { notifyOrderCancelled, notifyOrderExpired } from "./notification-service.js";
 import { pushNotification } from "./web-notification-service.js";
 import { assertEventOwnerOrSuperAdmin } from "../utils/authorize-event-owner.js";
+import { toDateRange } from "../utils/date-range.js";
 import { badRequest, conflict, forbidden, notFound } from "../utils/http-error.js";
 
 /**
@@ -217,6 +218,20 @@ export const listOrdersForEvent = async (eventId, requester, filters) => {
   if (!event) throw notFound("EVENT_NOT_FOUND", "Event not found");
   assertEventOwnerOrSuperAdmin(event, requester);
   return ordersRepository.listByEvent(eventId, filters);
+};
+
+/**
+ * Admin-facing Excel export: every order across every event this admin owns
+ * within the date range, items (with ticket type names) attached, no
+ * pagination.
+ * @param {string} ownerId
+ * @param {{ startDate?: string, endDate?: string }} [filters]
+ */
+export const listOrdersForExport = async (ownerId, filters) => {
+  const orders = await ordersRepository.listByOwnerForExport(ownerId, toDateRange(filters));
+  if (orders.length === 0) return orders;
+  const items = await orderItemsRepository.listByOrdersWithTypeNames(orders.map((order) => order.id));
+  return orders.map((order) => ({ ...order, items: items.filter((item) => item.order_id === order.id) }));
 };
 
 /**

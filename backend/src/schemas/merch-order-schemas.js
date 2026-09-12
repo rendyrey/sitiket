@@ -53,6 +53,12 @@ export const listSellingOrdersQuerySchema = z.object({
   pageSize: z.coerce.number().int().positive().max(100).optional(),
 });
 
+/** `GET /api/merch-orders/export` — the seller's Excel report, bounded by an inclusive date range. */
+export const exportMerchOrdersQuerySchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
+});
+
 export const submitMerchPaymentProofSchema = z.object({
   transferNote: z.string().max(500).optional(),
   // Which way the buyer paid. Defaults server-side to whichever method the

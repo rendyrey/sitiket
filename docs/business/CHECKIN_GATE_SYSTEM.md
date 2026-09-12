@@ -45,9 +45,12 @@ sequenceDiagram
             S->>T: Set status = used, checked_in_at = now, checked_in_by = staff
             S->>S: Log ticket_check_ins(result = success)
             S->>St: Accept — show buyer name/ticket type
+            S-->>S: Email buyer a "you're checked in" confirmation (event, venue, ticket type, scan time)
         end
     end
 ```
+
+A `success` scan also emails the buyer a branded confirmation — event, venue, ticket type, and the scan timestamp (`Asia/Jakarta`, "DD MMMM YYYY, HH:mm") — routed through the event organizer's SMTP config, same as every other buyer-facing email (`notifyTicketCheckedIn` in `services/notification-service.js`). It never fires for `duplicate`/`invalid`/`expired` scans, and a failure to queue the email never fails the scan itself (see BACKEND.md § _Email delivery_).
 
 ## 5. Ticket states
 

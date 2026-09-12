@@ -3,6 +3,12 @@ import * as orderService from "../services/order-service.js";
 import * as ticketsRepository from "../repositories/tickets-repository.js";
 import { toPublicOrder, toPublicTicket } from "../utils/presenters.js";
 
+/** GET /api/orders/export?startDate=&endDate= — every order across the admin's own events, for the Excel report. */
+export const exportMine = async (request, response) => {
+  const orders = await orderService.listOrdersForExport(request.user.sub, request.query);
+  response.status(200).json({ data: orders.map(toPublicOrder) });
+};
+
 /** POST /api/orders — guest or logged-in checkout. */
 export const create = async (request, response) => {
   const requester = request.user ? { sub: request.user.sub, email: request.user.email } : null;

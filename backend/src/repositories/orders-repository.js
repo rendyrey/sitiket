@@ -99,6 +99,23 @@ export const sumActiveTicketQuantityForBuyer = async (eventId, { userId, buyerEm
 };
 
 /**
+ * Every matching order across every event this admin owns, for the Excel
+ * export — no pagination, since a report covers a whole date range at once.
+ * @param {string} ownerId
+ * @param {{ start?: Date, end?: Date }} [range]
+ */
+export const listByOwnerForExport = (ownerId, { start, end } = {}) => {
+  const query = db(TABLE)
+    .join("events", "events.id", `${TABLE}.event_id`)
+    .select(`${TABLE}.*`, "events.name as event_name", "events.slug as event_slug")
+    .where("events.owner_id", ownerId)
+    .orderBy(`${TABLE}.created_at`, "desc");
+  if (start) query.andWhere(`${TABLE}.created_at`, ">=", start);
+  if (end) query.andWhere(`${TABLE}.created_at`, "<=", end);
+  return query;
+};
+
+/**
  * @param {object} input - camelCase order fields
  * @param {import("knex").Knex} executor - must be an open transaction (inventory was just reserved in it)
  * @returns {Promise<string>} the created order's id

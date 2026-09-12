@@ -3,7 +3,11 @@ import * as merchOrderController from "../controllers/merch-order-controller.js"
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { writeLimiter } from "../middleware/rate-limit.js";
 import { validate } from "../middleware/validate.js";
-import { createMerchOrderSchema, listSellingOrdersQuerySchema } from "../schemas/merch-order-schemas.js";
+import {
+  createMerchOrderSchema,
+  exportMerchOrdersQuerySchema,
+  listSellingOrdersQuerySchema,
+} from "../schemas/merch-order-schemas.js";
 
 /** Merch checkout + order reads. Everything requires a session — merch has no guest flow. */
 export const merchOrderRouter = Router();
@@ -17,6 +21,12 @@ merchOrderRouter.get(
   requireRole("admin", "super_admin"),
   validate(listSellingOrdersQuerySchema, "query"),
   merchOrderController.listSelling,
+);
+merchOrderRouter.get(
+  "/export",
+  requireRole("admin", "super_admin"),
+  validate(exportMerchOrdersQuerySchema, "query"),
+  merchOrderController.exportSelling,
 );
 merchOrderRouter.get("/:id", merchOrderController.getById);
 merchOrderRouter.post("/:id/cancel", merchOrderController.cancel);

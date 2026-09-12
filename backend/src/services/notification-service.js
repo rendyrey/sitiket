@@ -14,6 +14,20 @@ const orderUrl = (orderId, email) => `${env.FRONTEND_URL}/orders/${orderId}?emai
 
 const SPAM_FOOTNOTE = "Not in your inbox? Check your spam or promotions folder, and add us to your contacts so future tickets arrive.";
 
+/** "DD MMMM YYYY, HH:mm" in WIB (the primary market timezone) — the exact shape used for gate check-in timestamps. */
+const formatCheckInTimestamp = (date) => {
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Jakarta",
+  }).format(date);
+  return `${formatted} WIB`;
+};
+
 /** Readable event date in WIB (the primary market timezone). Returns null if absent/invalid. */
 const formatEventDate = (value) => {
   if (!value) return null;
@@ -215,6 +229,53 @@ export const notifyOrderPaid = async (order, tickets, event) => {
         preheader: `Your ${tickets.length === 1 ? "ticket" : "tickets"} for ${eventName}`,
         tag: "Payment confirmed",
         heading: "You're in — here are your tickets",
+        bodyHtml,
+        footnote: SPAM_FOOTNOTE,
+      }),
+    },
+    event?.owner_id,
+  );
+};
+
+/**
+ * Buyer-facing gate confirmation — sent the moment a ticket is successfully
+ * scanned at check-in, so the buyer has a timestamped record of their entry.
+ * @param {object} ticket - a `tickets` row joined with order/event context
+ *   (see repositories/tickets-repository.js `findByCodeWithContext`) —
+ *   `buyer_name`, `buyer_email`, `ticket_type_name` come from that join.
+ * @param {object} event - the ticket's `events` row (routes the email
+ *   through its organizer's SMTP and supplies venue/contact details)
+ * @param {Date} scannedAt - when the scan was recorded
+ */
+export const notifyTicketCheckedIn = async (ticket, event, scannedAt) => {
+  const eventName = event?.name ?? ticket.event_name ?? "the event";
+  const timestamp = formatCheckInTimestamp(scannedAt);
+  const place = [event?.venue_name, event?.city].filter(Boolean).join(", ");
+  const contactRows = organizerContactRows(event);
+
+  const infoRows = [
+    { label: "Event", value: eventName },
+    ...(place ? [{ label: "Location", value: place }] : []),
+    { label: "Ticket type", value: ticket.ticket_type_name },
+    { label: "Ticket holder", value: ticket.buyer_name },
+    { label: "Scanned at", value: timestamp },
+  ];
+
+  const bodyHtml = [
+    paragraph(`Hi ${escapeHtml(ticket.buyer_name)}, you just checked in at <strong>${escapeHtml(eventName)}</strong>. Enjoy the show!`),
+    infoPanel({ heading: "Check-in details", rows: infoRows }),
+    contactRows.length ? infoPanel({ heading: "Need help? Contact the organizer", rows: contactRows }) : "",
+  ].join("");
+
+  await notify(
+    {
+      to: ticket.buyer_email,
+      subject: `You're checked in — ${eventName}`,
+      text: `Hi ${ticket.buyer_name}, you checked in at ${eventName} (${ticket.ticket_type_name}) on ${timestamp}.${organizerContactText(event)}`,
+      html: renderBrandedEmail({
+        preheader: `Checked in at ${eventName}`,
+        tag: "Checked in",
+        heading: "You're in!",
         bodyHtml,
         footnote: SPAM_FOOTNOTE,
       }),

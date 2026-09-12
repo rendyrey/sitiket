@@ -8,7 +8,7 @@ Applies to everything under `src/`. Read root `AGENTS.md` and `FRONTEND.md`; the
 - Put global header, footer, logo, and brand-only elements in `components/site`.
 - Export a feature's public components from its local `index.ts`; avoid importing private internals across features.
 - Default to Server Components. Add `"use client"` only at the smallest state/event/browser boundary.
-- The API layer exists (`lib/api/`, per-feature `lib/api.ts`/`lib/actions.ts`) — read data server-side via a feature's `lib/api.ts`, mutate via its `lib/actions.ts` Server Actions. Never fetch the backend from a Client Component. See FRONTEND.md § _Auth & data flow_.
+- The API layer exists (`lib/api/`, per-feature `lib/api.ts`/`lib/actions.ts`) — read data server-side via a feature's `lib/api.ts`, mutate via its `lib/actions.ts` Server Actions. Never fetch the backend from a Client Component. See FRONTEND.md § _Auth & data flow_. A Route Handler (`app/api/**/route.ts`) may also call a feature's `lib/api.ts` directly — it's a server context like a Server Action — for the one case a Server Action can't cover: returning a non-JSON download (e.g. `app/api/admin/reports/export/route.ts` streaming a generated `.xlsx`).
 - Reuse `EventItem` and `formatPrice` from `data/events.ts` (still the shared display shape/formatter); the mock `events` array and `getEvent` are unused now that events come from `features/events/lib/api.ts` — don't reintroduce them as a data source.
 - Use Next.js `Link` and `Image`; keep accessibility labels, semantic elements, and responsive behavior.
 - Follow the existing Tailwind tokens (`lime`, `ink`, `paper`) and shared classes in `app/globals.css`.

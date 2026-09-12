@@ -24,6 +24,12 @@ export const guestOrderLookupQuerySchema = z.object({
   email: z.string().email(),
 });
 
+/** `GET /api/orders/export` — the admin's Excel report, bounded by an inclusive date range. */
+export const exportOrdersQuerySchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
+});
+
 /** `GET /api/events/:eventId/orders` — server-side search/filter/sort/pagination so the admin orders table never loads the full list into the browser. */
 export const listEventOrdersQuerySchema = z.object({
   search: z.string().max(255).optional(),

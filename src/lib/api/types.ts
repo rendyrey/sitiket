@@ -1233,6 +1233,15 @@ export interface ListSellingMerchOrdersQuery {
 }
 
 /**
+ * `GET /api/merch-orders/export` and `GET /api/orders/export` — the admin
+ * sales report's inclusive date bounds. Both "YYYY-MM-DD", e.g. `"2026-09-01"`.
+ */
+export interface ExportOrdersQuery {
+  startDate: string;
+  endDate: string;
+}
+
+/**
  * `PATCH /api/auth/me` — self-service contact + delivery address. The region
  * is submitted as a 10-digit village code; the backend resolves the full
  * hierarchy (province/city/district/village names + codes) from it, so region

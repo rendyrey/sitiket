@@ -5,7 +5,7 @@ import { InstagramIcon, MailIcon } from "./icons";
 
 export default function SiteFooter() {
   return (
-    <footer className="border-t-4 border-lime bg-ink text-white">
+    <footer className="border-t-4 border-lime bg-ink text-white print:hidden">
       <div className="site-container grid gap-12 py-14 md:grid-cols-[1.3fr_1fr_1fr] md:py-20">
         <div><Logo /><p className="mt-5 max-w-sm text-sm leading-6 text-white/55">Your shortcut to unforgettable moments. Discover local events, secure your spot, and show up ready.</p></div>
         <div><p className="footer-label">Explore</p><div className="mt-5 flex flex-col gap-3 text-sm font-semibold">{footerNavigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}</div></div>

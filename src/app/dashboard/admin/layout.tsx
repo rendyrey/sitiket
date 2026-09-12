@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/admin/qris", label: "QRIS" },
   { href: "/dashboard/admin/email-settings", label: "Email settings" },
   { href: "/dashboard/admin/refunds", label: "Refunds" },
+  { href: "/dashboard/admin/reports", label: "Reports" },
   { href: "/dashboard/scan", label: "Scan tickets" },
 ];
 

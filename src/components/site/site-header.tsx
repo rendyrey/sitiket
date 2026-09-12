@@ -32,7 +32,7 @@ export default function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b-4 border-lime bg-ink text-white">
+    <header className="sticky top-0 z-50 border-b-4 border-lime bg-ink text-white print:hidden">
       <div className="site-container flex h-[72px] items-center justify-between sm:h-[84px] lg:h-[96px]">
         <Logo />
         <nav

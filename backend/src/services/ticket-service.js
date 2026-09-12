@@ -8,7 +8,7 @@ import { db } from "../config/db.js";
 import { conflict, forbidden, notFound } from "../utils/http-error.js";
 import { newTicketCode } from "../utils/id.js";
 import { signQrPayload, verifyQrPayload } from "../utils/qr-token.js";
-import { notifyOrderPaid } from "./notification-service.js";
+import { notifyOrderPaid, notifyTicketCheckedIn } from "./notification-service.js";
 
 /**
  * Generates one `tickets` row (with its own signed QR) per purchased unit
@@ -131,6 +131,8 @@ export const scanTicket = async (scanner, { qrPayload, deviceLabel }) => {
   }
 
   await ticketCheckInsRepository.create({ ticketId: ticket.id, scannedBy: scanner.sub, result, deviceLabel });
+
+  if (result === "success") await notifyTicketCheckedIn(ticket, event, now);
 
   return { result, ticket: await ticketsRepository.findByCodeWithContext(decoded.ticketCode) };
 };

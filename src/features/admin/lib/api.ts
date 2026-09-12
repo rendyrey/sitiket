@@ -20,6 +20,7 @@ import type {
   Event,
   EventAttendanceReport,
   EventStaff,
+  ExportOrdersQuery,
   ListEventOrdersQuery,
   ListEventsQuery,
   ListSellingMerchOrdersQuery,
@@ -137,6 +138,10 @@ export const listEventOrders = async (
   return { orders: data, meta };
 };
 
+/** Server-only. Every order across every event this admin owns within a date range — powers the Excel sales report. */
+export const getMyOrdersExport = async (query: ExportOrdersQuery): Promise<Order[]> =>
+  apiFetch<Order[]>("/api/orders/export", { query });
+
 export const listOrderPayments = async (orderId: string): Promise<OrderPayment[]> => {
   const raw = await apiFetch<RawOrderPayment[]>(`/api/orders/${orderId}/payments`);
   return raw.map(toOrderPayment);
@@ -182,4 +187,16 @@ export const listSellingMerchOrders = async (
 export const listMerchOrderPayments = async (merchOrderId: string): Promise<MerchOrderPayment[]> => {
   const raw = await apiFetch<RawMerchOrderPayment[]>(`/api/merch-orders/${merchOrderId}/payments`);
   return raw.map(toMerchOrderPayment);
+};
+
+/** Server-only. Every selling order within a date range, items included — powers the Excel sales report. */
+export const getSellingMerchOrdersExport = async (query: ExportOrdersQuery): Promise<MerchOrder[]> => {
+  const raw = await apiFetch<RawMerchOrder[]>("/api/merch-orders/export", { query });
+  return raw.map(toMerchOrder);
+};
+
+/** Server-only. One order, buyer + shipping details + items — the packing-label print view. */
+export const getMerchOrderForSeller = async (merchOrderId: string): Promise<MerchOrder> => {
+  const raw = await apiFetch<RawMerchOrder>(`/api/merch-orders/${merchOrderId}`);
+  return toMerchOrder(raw);
 };

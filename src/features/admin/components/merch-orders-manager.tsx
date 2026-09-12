@@ -265,9 +265,19 @@ function MerchOrderRow({
           <p className="text-xs text-black/40">{formatEventTime(order.createdAt)}</p>
         </td>
         <td className="p-3 text-right">
-          <button type="button" onClick={onToggle} className="text-xs font-black uppercase text-link hover:underline">
-            {expanded ? "Hide" : "Review"}
-          </button>
+          <div className="flex items-center justify-end gap-3">
+            <a
+              href={`/print/merch-orders/${order.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-black uppercase text-link hover:underline"
+            >
+              Label
+            </a>
+            <button type="button" onClick={onToggle} className="text-xs font-black uppercase text-link hover:underline">
+              {expanded ? "Hide" : "Review"}
+            </button>
+          </div>
         </td>
       </tr>
       {expanded && (

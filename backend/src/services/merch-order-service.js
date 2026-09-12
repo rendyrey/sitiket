@@ -6,6 +6,7 @@ import * as merchPromoCodesRepository from "../repositories/merch-promo-codes-re
 import * as productVariantsRepository from "../repositories/product-variants-repository.js";
 import * as productsRepository from "../repositories/products-repository.js";
 import * as usersRepository from "../repositories/users-repository.js";
+import { toDateRange } from "../utils/date-range.js";
 import { badRequest, conflict, forbidden, notFound } from "../utils/http-error.js";
 import { groupLinesBySeller, resolveCartLines, totalWeightGrams } from "./merch-cart-service.js";
 import {
@@ -232,6 +233,17 @@ export const listMyOrders = async (userId) => {
 export const listSellingOrders = async (sellerId, filters) => {
   const { rows, ...meta } = await merchOrdersRepository.listBySeller(sellerId, filters);
   return { rows: await attachItems(rows), ...meta };
+};
+
+/**
+ * Seller-facing Excel export: every order in the date range, items attached,
+ * no pagination.
+ * @param {string} sellerId
+ * @param {{ startDate?: string, endDate?: string }} [filters]
+ */
+export const listSellingOrdersForExport = async (sellerId, filters) => {
+  const rows = await merchOrdersRepository.listBySellerForExport(sellerId, toDateRange(filters));
+  return attachItems(rows);
 };
 
 const attachItems = async (orders) => {

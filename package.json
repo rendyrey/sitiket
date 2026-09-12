@@ -48,6 +48,7 @@
     "clsx": "^2.1.1",
     "date-arithmetic": "^4.1.0",
     "dayjs": "^1.11.13",
+    "exceljs": "^4.4.0",
     "fs-extra": "^11.3.0",
     "glob": "^11.0.1",
     "jotai": "2.12.2",

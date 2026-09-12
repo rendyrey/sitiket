@@ -52,6 +52,19 @@ export const listBySeller = async (
 };
 
 /**
+ * Every matching order for the seller's Excel export — no pagination, since
+ * a report covers a whole date range at once.
+ * @param {string} sellerId
+ * @param {{ start?: Date, end?: Date }} [range]
+ */
+export const listBySellerForExport = (sellerId, { start, end } = {}) => {
+  const query = db(TABLE).where("seller_id", sellerId).orderBy("created_at", "desc");
+  if (start) query.andWhere("created_at", ">=", start);
+  if (end) query.andWhere("created_at", "<=", end);
+  return query;
+};
+
+/**
  * @param {object} input - camelCase merch order fields
  * @param {import("knex").Knex} executor - must be an open transaction (stock was just reserved in it)
  * @returns {Promise<string>} the created order's id

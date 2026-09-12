@@ -39,8 +39,9 @@ Admin (event owner), under `/dashboard/admin`:
 - `/dashboard/admin`, `/events/new`, `/events/[slug]` (+ `/images`, `/ticket-types`, `/promo-codes`, `/staff`, `/orders`), `/bank-accounts`, `/qris`, `/email-settings`, `/refunds`
 - `/shipping`: the seller's shipping departure address (same cascading region picker) + the couriers they offer (checkbox whitelist; all-checked stores "no restriction" so new vendor couriers auto-appear). **Required before selling merch** — `/merch/new` blocks with a link here when `GET /api/shipping-origin` returns null (backend enforces it too with 409 `SHIPPING_ORIGIN_REQUIRED`)
 - `/merch`: the seller's product inventory (stock, units sold, revenue, enable/disable, soft delete); `/merch/new` + `/merch/[id]`: product form (incl. package weight in grams — drives shipping quotes), photo manager (max 10), and the option/variant matrix builder (up to 3 groups; every combination gets its own price/stock)
-- `/merch/orders`: incoming merch orders — buyer + full shipping details per row (structured address down to the village, chosen courier + cost + estimation + weight), any promo discount shown in the expanded order detail, payment proofs reviewed inline (approve/reject), server-side search/filter/sort/pagination
+- `/merch/orders`: incoming merch orders — buyer + full shipping details per row (structured address down to the village, chosen courier + cost + estimation + weight), any promo discount shown in the expanded order detail, payment proofs reviewed inline (approve/reject), server-side search/filter/sort/pagination. Each row's **Label** link opens `/print/merch-orders/[id]` in a new tab — a print-only packing label (buyer, shipping address, items); "Print / Save as PDF" is the browser's own print dialog, no PDF library
 - `/merch/promo-codes`: the seller's merch promo codes — create (percentage or fixed IDR + usage limit) and toggle active/inactive (no delete — soft `isActive` switch); seller-scoped, so buyers apply them per seller at merch checkout. Mirrors the event `/promo-codes` tab (`features/admin/components/merch-promo-code-manager.tsx`)
+- `/reports`: Excel sales report — a start/end date range (native `<input type="date">`) downloads one `.xlsx` (via `GET /api/admin/reports/export`, built with `exceljs`) covering every merch order and every ticket order the admin owns in that range, one sheet each (`features/admin/components/sales-report-panel.tsx`)
 - `/qris`: upload/replace the owner's static QRIS code (one per owner); each event then opts in via the "Accept QRIS payments" toggle on its Details form (backend rejects enabling without a config — `QRIS_CONFIG_MISSING`)
 - `/email-settings`: the owner's outbound email identity. Gmail is one click — "Connect Gmail" runs a Google OAuth round-trip (`/api/auth/google-mail/start` → Google consent → `/api/auth/google-mail/callback`, CSRF-protected by an httpOnly state cookie) and the backend stores an encrypted refresh token; other providers fill in SMTP host/port/TLS, live-verified on save. **Required before creating events** — `/events/new` blocks with a link here when `GET /api/email-config` returns null (backend enforces it too with 409 `EMAIL_CONFIG_REQUIRED`)
 
@@ -49,6 +50,9 @@ Super Admin, under `/dashboard/super-admin`:
 
 Gate staff (owner, delegated `event_staff`, or super_admin — enforced backend-side per event, not by frontend role):
 - `/dashboard/scan`: QR check-in, camera scan (via `BarcodeDetector` where supported) or manual paste
+
+Print views (deliberately outside `/dashboard` so nothing but the document itself ends up on paper — `print:hidden` on the site header/footer hides the rest; ownership is enforced backend-side, same as the equivalent dashboard page):
+- `/print/merch-orders/[id]`: the packing-label view for one merch order
 
 ## Architecture
 
@@ -122,7 +126,7 @@ For every UI change, exercise the affected route at 320px, 375px, 768px, and at 
 - Components and files use kebab-case files and PascalCase exports.
 - Prefer named prop types and narrow unions.
 - Default to Server Components; isolate client state with the smallest possible `"use client"` boundary.
-- Use `ActionLink`, `FormField`, and `SectionHeading` before creating equivalents.
+- Use `ActionLink`, `FormField`, `DateTimeField`, and `SectionHeading` before creating equivalents. `DateTimeField` (`components/ui/datetime-field.tsx`) wraps `react-datepicker` (already a dependency — do not reach for `src/core/ui/datepicker.tsx`, the unused `rizzui`-based template copy) and is the one to use for any date+time input; it takes/returns the same `datetime-local`-shaped local string (`"YYYY-MM-DDTHH:mm"`) as a bare `<input type="datetime-local">`, so swapping one in is a drop-in change.
 - Use feature barrel exports for public feature APIs.
 - Do not duplicate event card, poster, grid, filter, or checkout panel implementations.
 
