@@ -1,7 +1,13 @@
 import { db } from "../config/db.js";
+import { env } from "../config/env.js";
 import * as adminApplicationsRepository from "../repositories/admin-applications-repository.js";
 import * as usersRepository from "../repositories/users-repository.js";
-import { notifyAdminApplicationDecision, notifyAdminApplicationSubmitted } from "./notification-service.js";
+import {
+  notifyAdminApplicationDecision,
+  notifyAdminApplicationReceived,
+  notifyAdminApplicationSubmitted,
+} from "./notification-service.js";
+import { pushNotification } from "./web-notification-service.js";
 import { conflict, notFound } from "../utils/http-error.js";
 
 /**
@@ -24,7 +30,26 @@ export const apply = async (userId, input) => {
 
   const application = await adminApplicationsRepository.create({ userId, ...input });
   await notifyAdminApplicationSubmitted(application, user);
+  await notifyApplicationPending(application, user);
   return application;
+};
+
+/**
+ * Applicant-facing "still in progress" notice — bell + email — sent when an
+ * application is created, and reused by the one-off backfill script for
+ * applications that predate this notice.
+ * @param {object} application - an `admin_applications` row
+ * @param {object} applicant - the applying user's row
+ */
+export const notifyApplicationPending = async (application, applicant) => {
+  await pushNotification({
+    userId: applicant.id,
+    type: "admin_application_pending",
+    title: "Application submitted",
+    body: "Your organizer application is being reviewed. Need a faster answer? Tap here to message us on WhatsApp.",
+    href: env.ADMIN_SUPPORT_WHATSAPP_URL,
+  });
+  await notifyAdminApplicationReceived(application, applicant);
 };
 
 /** @param {{ status?: "pending" | "approved" | "rejected", page?: number, pageSize?: number }} filters */

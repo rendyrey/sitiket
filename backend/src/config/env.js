@@ -96,6 +96,10 @@ const envSchema = z.object({
   SMTP_USER: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
   SMTP_PASSWORD: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
   SMTP_FROM: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+
+  // Direct WhatsApp chat offered to a requester while their admin/organizer
+  // application is pending review. Example: "https://wa.me/message/XXXXXXXXXXXXX1"
+  ADMIN_SUPPORT_WHATSAPP_URL: z.string().url().default("https://wa.me/message/G7YDAXGHGQ66F1"),
 });
 
 const parsed = envSchema.safeParse(process.env);

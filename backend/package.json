@@ -14,7 +14,8 @@
     "db:rollback": "knex migrate:rollback",
     "db:seed": "knex seed:run",
     "db:promote-super-admin": "node scripts/promote-super-admin.js",
-    "uploads:normalize": "node scripts/normalize-uploads.js"
+    "uploads:normalize": "node scripts/normalize-uploads.js",
+    "notify:pending-admin-applications": "node scripts/notify-pending-admin-applications.js"
   },
   "dependencies": {
     "aws4fetch": "^1.0.20",

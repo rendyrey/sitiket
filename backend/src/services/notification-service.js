@@ -121,6 +121,35 @@ export const notifyAdminApplicationSubmitted = async (application, applicant) =>
 };
 
 /**
+ * Confirms to the applicant that their organizer application was received
+ * and is pending review, with a direct WhatsApp line to support if they need
+ * a faster answer.
+ * @param {object} application - an `admin_applications` row
+ * @param {object} applicant - the applying user's row
+ */
+export const notifyAdminApplicationReceived = async (application, applicant) => {
+  const bodyHtml = [
+    paragraph(
+      `Hi ${escapeHtml(applicant.name)}, we've received your application as <strong>${escapeHtml(application.business_name)}</strong>. It's now waiting for a Super Admin to review it — we'll email you as soon as there's a decision.`,
+    ),
+    paragraph("Need a faster answer? Message us on WhatsApp and we'll take a look."),
+    button({ href: env.ADMIN_SUPPORT_WHATSAPP_URL, label: "Message us on WhatsApp", variant: "lime" }),
+  ].join("");
+
+  await notify({
+    to: applicant.email,
+    subject: "Your organizer application is being reviewed",
+    text: `Hi ${applicant.name}, we've received your application as "${application.business_name}". It's pending Super Admin review — we'll email you once there's a decision.\n\nNeed a faster answer? Message us on WhatsApp: ${env.ADMIN_SUPPORT_WHATSAPP_URL}`,
+    html: renderBrandedEmail({
+      preheader: "Your organizer application was received and is pending review",
+      tag: "Pending review",
+      heading: "Your application is in progress",
+      bodyHtml,
+    }),
+  });
+};
+
+/**
  * Tells the applicant their organizer application was approved or rejected.
  * @param {object} application - an `admin_applications` row
  * @param {object} applicant - the applicant's user row
