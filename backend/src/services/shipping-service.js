@@ -6,38 +6,40 @@ import { badGateway, badRequest, conflict, notImplemented } from "../utils/http-
 import { groupLinesBySeller, resolveCartLines, totalWeightGrams } from "./merch-cart-service.js";
 
 /**
- * Merch shipping-cost quotes via the api.co.id Expedition API, served through
- * a DB-side time-window cache (shipping_cost_cache) because the vendor plan
- * is credit-limited. A quote is keyed on (origin village, destination
- * village, integer kg) — repeat renders of the same checkout, the order
- * submit re-pricing the lane, and other buyers on the same lane all hit the
- * cache instead of spending a credit.
+ * Merch shipping-cost quotes via the api.co.id Cek Ongkir v2 API
+ * (`/courier/v2/rates`), served through a DB-side time-window cache
+ * (shipping_cost_cache) because the vendor plan is credit-limited. A quote is
+ * keyed on (origin district, destination district, integer kg) — repeat
+ * renders of the same checkout, the order submit re-pricing the lane, and
+ * other buyers on the same lane all hit the cache instead of spending a
+ * credit.
+ *
+ * v2 quotes on 6-digit district (kecamatan) codes, not the 10-digit village
+ * codes v1 used — addresses stay village-level (postal codes need it), only
+ * the lane key is the district.
  */
 
-/** api.co.id expedition endpoint. Auth via the `x-api-co-id` header. */
-const SHIPPING_COST_URL = "https://use.api.co.id/expedition/shipping-cost";
+/** api.co.id Cek Ongkir v2 endpoint. Auth via the `x-api-co-id` header. */
+const COURIER_RATES_URL = "https://use.api.co.id/courier/v2/rates";
 
 /**
- * The expedition couriers api.co.id quotes (it has no "list couriers"
- * endpoint, so this catalog mirrors its quote responses). Powers the seller's
- * enable/disable checkboxes; a vendor courier missing here still works — it
- * just can't be individually toggled until added.
+ * The couriers api.co.id v2 quotes (mirrors its free `/courier/v1/couriers`
+ * list). Powers the seller's enable/disable checkboxes; a vendor courier
+ * missing here still works — it just can't be individually toggled until
+ * added.
  */
 export const KNOWN_COURIERS = [
-  { code: "JNE", name: "JNE Express" },
-  { code: "JNECargo", name: "JNE Cargo" },
-  { code: "SiCepat", name: "SiCepat Express" },
-  { code: "SiCepatCargo", name: "SiCepat Cargo" },
-  { code: "SAP", name: "SAP Express" },
-  { code: "SAPLite", name: "SAP Lite" },
-  { code: "SapCargo", name: "SAP Cargo" },
-  { code: "iDexpress", name: "iDexpress" },
-  { code: "iDlite", name: "iDlite" },
-  { code: "iDexpressCargo", name: "iDexpress Cargo" },
-  { code: "JT", name: "J&T Express" },
+  { code: "anteraja", name: "Anteraja" },
+  { code: "idx", name: "ID Express" },
+  { code: "jne", name: "JNE Express" },
+  { code: "jnt", name: "JNT Express" },
+  { code: "jnt_cargo", name: "JNT Cargo" },
   { code: "lion", name: "Lion Parcel" },
-  { code: "anteraja", name: "AnterAja" },
-  { code: "Ninja", name: "Ninja Express" },
+  { code: "ninja", name: "Ninja Express" },
+  { code: "paxel", name: "Paxel" },
+  { code: "sap", name: "SAP Express" },
+  { code: "sicepat", name: "Sicepat Express" },
+  { code: "spx", name: "SPX Express" },
 ];
 
 /**
@@ -60,37 +62,68 @@ export const filterCouriersForOrigin = (origin, couriers) => {
 export const gramsToBillableKg = (grams) => Math.max(1, Math.ceil(grams / 1000));
 
 /**
+ * Collapses v2's per-service rate rows into one option per courier — the
+ * cheapest service each courier offers — keeping the one-price-per-courier
+ * shape the checkout and `merch_orders.courier_code` are built on.
+ * `price + handling_fee` is what the buyer is charged, so that is the number
+ * ranked and returned.
+ * ponytail: cheapest service per courier; expose every service (needs a
+ * service_code on the order + a second picker in checkout) if buyers ask to
+ * choose between e.g. JNE REG and JNE YES.
+ * @param {Array<object>} rates - `data.rates` from `/courier/v2/rates`
+ * @returns {Array<{ courier_code: string, courier_name: string, price: number, estimation: string | null }>}
+ */
+const cheapestPerCourier = (rates) => {
+  /** Map of courier_code → the cheapest quoted option for that courier. */
+  const bestByCourier = new Map();
+  for (const rate of rates) {
+    const price = rate.total_price ?? rate.price + (rate.handling_fee ?? 0);
+    if (!(price > 0)) continue;
+    const current = bestByCourier.get(rate.courier_code);
+    if (current && current.price <= price) continue;
+    bestByCourier.set(rate.courier_code, {
+      courier_code: rate.courier_code,
+      courier_name: rate.service_name ? `${rate.courier_name} — ${rate.service_name}` : rate.courier_name,
+      price,
+      estimation: rate.etd ? `${rate.etd} days` : null,
+    });
+  }
+  return [...bestByCourier.values()].sort((a, b) => a.price - b.price);
+};
+
+/**
  * Courier options for one lane, cache-through with a
  * SHIPPING_COST_CACHE_HOURS freshness window.
- * @param {string} originVillageCode - seller departure village (10 digits)
- * @param {string} destinationVillageCode - buyer village (10 digits)
+ * @param {string} originDistrictCode - seller departure district (6 digits)
+ * @param {string} destinationDistrictCode - buyer district (6 digits)
  * @param {number} weightKg - integer kg (see {@link gramsToBillableKg})
- * @returns {Promise<Array<{ courier_code: string, courier_name: string, price: number, weight: number, estimation: string }>>}
+ * @returns {Promise<Array<{ courier_code: string, courier_name: string, price: number, estimation: string | null }>>}
  */
-export const getCourierOptions = async (originVillageCode, destinationVillageCode, weightKg) => {
+export const getCourierOptions = async (originDistrictCode, destinationDistrictCode, weightKg) => {
   if (!env.API_CO_ID_KEY) {
     throw notImplemented("SHIPPING_NOT_CONFIGURED", "Shipping quotes are not configured on this server");
   }
 
-  const cached = await shippingCostCacheRepository.find(originVillageCode, destinationVillageCode, weightKg);
+  const cached = await shippingCostCacheRepository.find(originDistrictCode, destinationDistrictCode, weightKg);
   const maxAgeMs = env.SHIPPING_COST_CACHE_HOURS * 60 * 60 * 1000;
   if (cached && Date.now() - new Date(cached.fetchedAt).getTime() < maxAgeMs) {
     return cached.couriers;
   }
 
-  const url = `${SHIPPING_COST_URL}?origin_village_code=${originVillageCode}&destination_village_code=${destinationVillageCode}&weight=${weightKg}`;
+  const url = `${COURIER_RATES_URL}?origin_district_code=${originDistrictCode}&destination_district_code=${destinationDistrictCode}&weight=${weightKg}`;
   let json;
   try {
     const response = await fetch(url, { headers: { "x-api-co-id": env.API_CO_ID_KEY } });
     json = await response.json().catch(() => null);
     if (!response.ok || !json?.is_success) {
-      // Vendor 400/404s are actionable (unsupported village, bad code) —
-      // surface their message instead of a generic failure.
+      // Vendor 400/404s are actionable (unsupported district, bad code) —
+      // surface their message instead of a generic failure. A 402 (vendor
+      // balance empty) is ours to fix, not the buyer's, so it stays generic.
       const message = json?.message;
-      if (message && response.status < 500) {
+      if (message && response.status < 500 && response.status !== 402) {
         throw badRequest("SHIPPING_LANE_UNAVAILABLE", `Shipping quote failed: ${message}`);
       }
-      throw new Error(`api.co.id shipping-cost failed (${response.status})`);
+      throw new Error(`api.co.id courier rates failed (${response.status})`);
     }
   } catch (error) {
     if (error.statusCode) throw error;
@@ -99,7 +132,7 @@ export const getCourierOptions = async (originVillageCode, destinationVillageCod
     // cache, so buyer-shown and charged prices stay consistent.
     if (cached) {
       console.error(
-        `Shipping quote fetch failed, serving stale cache for ${originVillageCode}->${destinationVillageCode}:`,
+        `Shipping quote fetch failed, serving stale cache for ${originDistrictCode}->${destinationDistrictCode}:`,
         error.message,
       );
       return cached.couriers;
@@ -107,8 +140,8 @@ export const getCourierOptions = async (originVillageCode, destinationVillageCod
     throw badGateway("SHIPPING_QUOTE_FAILED", "Could not calculate shipping costs right now");
   }
 
-  const couriers = (json.data?.couriers ?? []).filter((courier) => courier.price > 0);
-  await shippingCostCacheRepository.save(originVillageCode, destinationVillageCode, weightKg, couriers);
+  const couriers = cheapestPerCourier(json.data?.rates ?? []);
+  await shippingCostCacheRepository.save(originDistrictCode, destinationDistrictCode, weightKg, couriers);
   return couriers;
 };
 
@@ -131,7 +164,7 @@ export const getOriginOrThrow = async (sellerId, sellerName) => {
 /**
  * Full checkout shipping quote: resolves the cart server-side, groups it per
  * seller, and returns each seller group's courier options for the buyer's
- * saved delivery village.
+ * saved delivery district.
  *
  * @param {{ sub: string }} requester - the signed-in buyer
  * @param {Array<{ productId: string, variantId?: string, quantity: number }>} items
@@ -139,7 +172,7 @@ export const getOriginOrThrow = async (sellerId, sellerName) => {
  */
 export const quoteCart = async (requester, items) => {
   const buyer = await usersRepository.findById(requester.sub);
-  if (!buyer.village_code) {
+  if (!buyer.district_code) {
     throw conflict(
       "PROFILE_INCOMPLETE",
       "Add your delivery address (down to the village) to your account before requesting shipping costs",
@@ -159,9 +192,12 @@ export const quoteCart = async (requester, items) => {
     // is applied on top of it, never baked into the cached list.
     const couriers = filterCouriersForOrigin(
       origin,
-      await getCourierOptions(origin.village_code, buyer.village_code, weightKg),
+      await getCourierOptions(origin.district_code, buyer.district_code, weightKg),
     );
     quotes.push({ sellerId, weightGrams, weightKg, couriers });
   }
   return quotes;
 };
+
+// Exported for unit tests — collapsing v2 per-service rates is the non-trivial bit.
+export const __testables = { cheapestPerCourier };

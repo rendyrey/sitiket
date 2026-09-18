@@ -1310,12 +1310,12 @@ export interface CourierOption {
   estimation: string | null;
 }
 
-/** Raw courier entry as the backend relays it from api.co.id. */
+/** Raw courier entry as the backend relays it from api.co.id Cek Ongkir v2. */
 export interface RawCourierOption {
   courier_code: string;
+  /** Courier + its cheapest service, e.g. `"JNE Express — Reguler"`. */
   courier_name: string;
   price: RupiahAmount;
-  weight: number;
   estimation: string | null;
 }
 

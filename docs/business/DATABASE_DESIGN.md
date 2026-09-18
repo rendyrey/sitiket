@@ -445,7 +445,7 @@ Indexes: `(status, available_at)`, `owner_id`.
 
 ### 4.10 Merch store — **[confirmed addition]**
 
-An e-commerce area where every admin/organizer sells physical merch (Shopee/Tokopedia-style), paid by manual transfer to the SELLER's own bank account/QRIS and verified through the same proof-review model as tickets. Confirmed decisions: a multi-seller cart splits into one order per seller (the buyer is warned they'll make multiple payments); merch checkout requires a signed-in buyer with a saved delivery address (no guest flow); stock is held for **24 hours** (`MERCH_PAYMENT_HOLD_HOURS`), not the 10-minute ticket window; delivery is by **courier with real shipping costs** quoted through the api.co.id Expedition API from the seller's mandatory departure address to the buyer's village (see § _Shipping & regions_ below — this supersedes the original "sellers arrange delivery themselves" decision).
+An e-commerce area where every admin/organizer sells physical merch (Shopee/Tokopedia-style), paid by manual transfer to the SELLER's own bank account/QRIS and verified through the same proof-review model as tickets. Confirmed decisions: a multi-seller cart splits into one order per seller (the buyer is warned they'll make multiple payments); merch checkout requires a signed-in buyer with a saved delivery address (no guest flow); stock is held for **24 hours** (`MERCH_PAYMENT_HOLD_HOURS`), not the 10-minute ticket window; delivery is by **courier with real shipping costs** quoted through the api.co.id Cek Ongkir v2 API from the seller's mandatory departure address to the buyer's district (see § _Shipping & regions_ below — this supersedes the original "sellers arrange delivery themselves" decision).
 
 #### `merch_categories`
 
@@ -505,8 +505,8 @@ One order per SELLER — a multi-seller cart is split at checkout inside a singl
 | `seller_id` / `user_id` | uuid FK → `users.id`, not null | Buyer is **never null** — merch checkout requires sign-in. |
 | `buyer_name` / `buyer_email` / `buyer_phone` | text, not null | Snapshot of the buyer's profile at checkout. |
 | `shipping_address` (+ `shipping_city`/`shipping_province`/`shipping_postal_code`/`shipping_district`/`shipping_village`/`shipping_village_code`) | text | Snapshot of the buyer's structured profile address (down to the 10-digit village code the quote was priced against). |
-| `origin_village_code` | text, nullable | The seller departure village the shipping quote was priced from. |
-| `courier_code` / `courier_name` / `shipping_estimation` | text, nullable | The buyer's chosen courier snapshot (e.g. `JNE` / "JNE Express" / "1 - 2 days"); null on orders predating courier shipping. |
+| `origin_village_code` | text, nullable | The seller departure village snapshot (quotes themselves price on its district). |
+| `courier_code` / `courier_name` / `shipping_estimation` | text, nullable | The buyer's chosen courier snapshot (e.g. `jne` / "JNE Express — Reguler" / "1-2 days"); null on orders predating courier shipping. |
 | `shipping_cost` | integer unsigned, not null, default 0 | Server-re-priced courier cost at checkout — never taken from the client. |
 | `shipping_weight_grams` | integer unsigned, nullable | Total billed package weight snapshot. |
 | `buyer_note` | text, nullable | Free-form note to the seller. |
@@ -535,7 +535,7 @@ Optional semantic-search layer — only populated when an embeddings provider is
 
 #### Shipping & regions — **[confirmed addition]**
 
-Merch delivery uses real couriers priced via **api.co.id** (Indonesia Regional API + Expedition API, both authenticated with the `x-api-co-id` header from `API_CO_ID_KEY`). Addresses are structured on Indonesia's region hierarchy — province (2-digit code) → regency/city (4) → district (6) → village (10) — and the **10-digit village code is what shipping quotes key on**. Clients only ever submit a village code; the backend resolves the full hierarchy from cached region data, so region names are never free-typed.
+Merch delivery uses real couriers priced via **api.co.id** (Indonesia Regional API + Cek Ongkir v2 API `/courier/v2/rates`, both authenticated with the `x-api-co-id` header from `API_CO_ID_KEY`). Addresses are structured on Indonesia's region hierarchy — province (2-digit code) → regency/city (4) → district (6) → village (10). Clients only ever submit the **10-digit village code** (it carries the postal codes) and the backend resolves the full hierarchy from cached region data, so region names are never free-typed; **shipping quotes key on the 6-digit district code**, the granularity Cek Ongkir v2 prices on. Courier codes are v2's lowercase slugs (`jne`, `sicepat`, `jnt`, …), and v2's per-service rates are collapsed to the cheapest service per courier.
 
 ##### `users` (address extension)
 
@@ -552,7 +552,7 @@ Both api.co.id plans are **credit-limited**, so every response is cached DB-side
 | Table | Key | Payload | Window |
 | --- | --- | --- | --- |
 | `region_cache` | `cache_key` (`provinces`, `regencies:31`, `districts:3172`, `villages:317205`) | the full list (all vendor pages), JSON | `REGION_CACHE_DAYS` (default 30 — region data is near-static) |
-| `shipping_cost_cache` | composite PK (`origin_village_code`, `destination_village_code`, `weight_kg`) | courier list (`courier_code`, `courier_name`, `price`, `estimation`), JSON | `SHIPPING_COST_CACHE_HOURS` (default 24 — prices drift) |
+| `shipping_cost_cache` | composite PK (`origin_district_code`, `destination_district_code`, `weight_kg`) | courier list (`courier_code`, `courier_name`, `price`, `estimation`), JSON | `SHIPPING_COST_CACHE_HOURS` (default 24 — prices drift) |
 
 On a vendor failure, a stale cached copy is served instead of erroring (stale beats a 502); with no cache at all, region lookups answer 502 `REGION_LOOKUP_FAILED` / quotes 502 `SHIPPING_QUOTE_FAILED`. `API_CO_ID_KEY` unset → 501 `SHIPPING_NOT_CONFIGURED`, everything else keeps working. The quote cache is shared across sellers per lane; each seller's `enabled_couriers` whitelist is applied on top of the cached list, never baked into it.
 
@@ -580,7 +580,7 @@ Indexes: `(user_id, read_at)`, `(user_id, created_at)`. Written fire-and-log nex
 | Never oversell merch | Same guarded-UPDATE pattern on `products` (base stock) and `product_variants` (per-combination stock), reserved at merch-order creation inside one all-or-nothing transaction spanning every seller's order in the cart. |
 | One merch payment per seller | A multi-seller cart is split into one `merch_orders` row per `seller_id` at checkout — payment is a manual transfer to each seller's own account, so a combined order could never be settled in one payment. |
 | Never trust a client-submitted price/total | `order_items.unit_price` and `orders.total_amount` are always computed server-side from `ticket_types.price` and `promo_codes` at write time. |
-| Never trust a client-submitted shipping cost | Checkout sends only a `courier_code` per seller; the service re-quotes the lane (seller origin village → buyer village, billed kg) and takes the price from the vendor/cache — a courier outside the seller's `enabled_couriers` whitelist is rejected (`COURIER_NOT_AVAILABLE`). |
+| Never trust a client-submitted shipping cost | Checkout sends only a `courier_code` per seller; the service re-quotes the lane (seller origin district → buyer district, billed kg) and takes the price from the vendor/cache — a courier outside the seller's `enabled_couriers` whitelist is rejected (`COURIER_NOT_AVAILABLE`). |
 | Selling merch requires a departure address | `POST /api/products` throws 409 `SHIPPING_ORIGIN_REQUIRED` until the owner has a `seller_shipping_origins` row — every checkout quote is priced from it. |
 | One buyer identity per order | `buyer_name`/`buyer_email`/`buyer_phone` live once on `orders`, never duplicated onto `tickets`. |
 | Per-event, per-user purchase cap | Enforced in the order-creation service: sum `order_items.quantity` across the buyer's (`user_id` or `buyer_email`) non-cancelled/non-expired orders for the event, reject if it would exceed `events.max_tickets_per_user`. |

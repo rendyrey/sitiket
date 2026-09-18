@@ -82,7 +82,7 @@ export const createOrders = async (requester, input) => {
     // disabled can never be smuggled in by code.
     const couriers = filterCouriersForOrigin(
       origin,
-      await getCourierOptions(origin.village_code, buyer.village_code, gramsToBillableKg(weightGrams)),
+      await getCourierOptions(origin.district_code, buyer.district_code, gramsToBillableKg(weightGrams)),
     );
     const courier = couriers.find((option) => option.courier_code === courierCode);
     if (!courier) {

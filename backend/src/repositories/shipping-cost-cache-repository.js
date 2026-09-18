@@ -10,16 +10,16 @@ const TABLE = "shipping_cost_cache";
 const parseCouriers = (value) => (typeof value === "string" ? JSON.parse(value) : value);
 
 /**
- * @param {string} originVillageCode - 10-digit api.co.id village code
- * @param {string} destinationVillageCode
+ * @param {string} originDistrictCode - 6-digit api.co.id district code
+ * @param {string} destinationDistrictCode
  * @param {number} weightKg - integer kg the quote was requested for
  * @returns {Promise<{ couriers: object[], fetchedAt: Date } | null>}
  */
-export const find = async (originVillageCode, destinationVillageCode, weightKg) => {
+export const find = async (originDistrictCode, destinationDistrictCode, weightKg) => {
   const row = await db(TABLE)
     .where({
-      origin_village_code: originVillageCode,
-      destination_village_code: destinationVillageCode,
+      origin_district_code: originDistrictCode,
+      destination_district_code: destinationDistrictCode,
       weight_kg: weightKg,
     })
     .first();
@@ -30,20 +30,20 @@ export const find = async (originVillageCode, destinationVillageCode, weightKg) 
 /**
  * Creates or refreshes the cached courier list for one (origin, destination,
  * weight) lane.
- * @param {string} originVillageCode
- * @param {string} destinationVillageCode
+ * @param {string} originDistrictCode
+ * @param {string} destinationDistrictCode
  * @param {number} weightKg
- * @param {object[]} couriers - as returned by api.co.id (`courier_code`, `courier_name`, `price`, `estimation`)
+ * @param {object[]} couriers - collapsed v2 options (`courier_code`, `courier_name`, `price`, `estimation`)
  */
-export const save = async (originVillageCode, destinationVillageCode, weightKg, couriers) => {
+export const save = async (originDistrictCode, destinationDistrictCode, weightKg, couriers) => {
   await db(TABLE)
     .insert({
-      origin_village_code: originVillageCode,
-      destination_village_code: destinationVillageCode,
+      origin_district_code: originDistrictCode,
+      destination_district_code: destinationDistrictCode,
       weight_kg: weightKg,
       couriers: JSON.stringify(couriers),
       fetched_at: new Date(),
     })
-    .onConflict(["origin_village_code", "destination_village_code", "weight_kg"])
+    .onConflict(["origin_district_code", "destination_district_code", "weight_kg"])
     .merge();
 };
