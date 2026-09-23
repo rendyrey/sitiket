@@ -9,6 +9,27 @@ export const findByGoogleSub = (googleSub) => db(TABLE).where({ google_sub: goog
 /** @param {string} email */
 export const findByEmail = (email) => db(TABLE).where({ email }).first();
 
+/** `users.phone` with the separators people type (+ - space . parentheses) stripped, as SQL. */
+const STRIPPED_PHONE_SQL =
+  "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '.', ''), '(', ''), ')', '')";
+
+/**
+ * Active accounts whose saved phone is this WhatsApp number in any common
+ * format ("62812…", "+62 812-…", "0812…") — how the WhatsApp bot recognises
+ * who is chatting. Callers still re-check each row with utils/phone.js
+ * `toWhatsappId` (the SQL is only the candidate filter).
+ * ponytail: unindexed expression scan over users; add a normalized, indexed column past ~100k users.
+ *
+ * @param {string} waId - digits with country code. Example: `"628112003717"`
+ * @returns {Promise<object[]>} matching `users` rows (usually 0 or 1)
+ */
+export const findActiveByWhatsappId = (waId) => {
+  const candidates = waId.startsWith("62") ? [waId, `0${waId.slice(2)}`] : [waId];
+  return db(TABLE)
+    .where({ status: "active" })
+    .whereRaw(`${STRIPPED_PHONE_SQL} IN (${candidates.map(() => "?").join(", ")})`, candidates);
+};
+
 /**
  * @param {string} id
  * @param {import("knex").Knex} [executor] - pass an open transaction to read inside it; defaults to the pool.

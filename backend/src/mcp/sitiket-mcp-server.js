@@ -1,7 +1,11 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { MERCH_TOOLS } from "./merch-tools.js";
 import { executeTool, SITIKET_TOOLS } from "./sitiket-tools.js";
+
+/** Every tool the server can offer; each message's server registers only its sender's share. */
+const ALL_TOOLS = [...SITIKET_TOOLS, ...MERCH_TOOLS];
 
 // Local MCP server exposing SiTIKET's ticket-buying flow as tools. It runs
 // in-process (in-memory transport) rather than as a stdio child: one server is
@@ -21,7 +25,7 @@ const CLIENT_INFO = { name: "sitiket-whatsapp-bot", version: "1.0.0" };
  */
 export const createSitiketMcpServer = (context) => {
   const server = new McpServer(SERVER_INFO);
-  for (const tool of SITIKET_TOOLS.filter((candidate) => candidate.roles.includes(context.role))) {
+  for (const tool of ALL_TOOLS.filter((candidate) => candidate.roles.includes(context.role))) {
     server.registerTool(tool.name, { description: tool.description, inputSchema: tool.inputSchema }, async (args) => {
       const result = await executeTool(tool, args, context);
       return { content: [{ type: "text", text: JSON.stringify(result) }], isError: Boolean(result.error) };

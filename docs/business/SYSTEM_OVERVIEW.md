@@ -74,7 +74,7 @@ These were explicitly decided with the product owner during design and materiall
 | In-app QR gate check-in with duplicate/fraud detection | ✅ |
 | Admin onboarding via Super Admin approval | ✅ |
 | Manual, status-tracked refunds | ✅ |
-| WhatsApp ticket bot (Bahasa Indonesia) — buy + email OTP + photo proof in chat, organizer approves own payments, Super Admin approves organizer applications, QR tickets delivered in chat — see [WHATSAPP_BOT.md](./WHATSAPP_BOT.md) | ✅ |
+| WhatsApp bot (Bahasa Indonesia) — tickets (buy + email OTP + photo proof) and merch (newest-10 catalog, product photos, variants, saved-address check/change, courier quote, per-seller orders) in chat, organizer approves own payments, Super Admin approves organizer applications, QR tickets delivered in chat — see [WHATSAPP_BOT.md](./WHATSAPP_BOT.md) | ✅ |
 | WhatsApp ticket delivery after the 24h customer-service window (needs a Meta-approved template) | 🔜 future |
 | Automated payment gateway (Midtrans/Xendit) | 🔜 future — see [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) §5 |
 | Automated gateway-driven refunds | 🔜 future, depends on the above |

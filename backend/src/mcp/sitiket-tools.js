@@ -2,6 +2,7 @@ import { z } from "zod";
 import { env } from "../config/env.js";
 import * as adminApplicationsRepository from "../repositories/admin-applications-repository.js";
 import * as eventsRepository from "../repositories/events-repository.js";
+import * as merchOrdersRepository from "../repositories/merch-orders-repository.js";
 import * as orderPaymentsRepository from "../repositories/order-payments-repository.js";
 import * as ordersRepository from "../repositories/orders-repository.js";
 import * as usersRepository from "../repositories/users-repository.js";
@@ -30,6 +31,9 @@ import { HttpError } from "../utils/http-error.js";
  * @property {string} waId - sender's WhatsApp id from the signed webhook. Example: `"628112003717"`
  * @property {"buyer" | "admin" | "super_admin"} role - resolved server-side (see services/whatsapp-bot-service.js `resolveSender`)
  * @property {object} [staff] - the acting admin/super_admin's `users` row; set whenever `role !== "buyer"`
+ * @property {object} [account] - the SiTIKET account whose profile phone is this WhatsApp number (any role) —
+ *   what merch orders and address updates act on. Unset when no account (or several) match.
+ * @property {boolean} [duplicateAccounts] - true when more than one account has this number, so none is used
  * @property {string} userText - the sender's current message, read by the approval guard. Example: `"setujui a1b2c3d4"`
  */
 
@@ -63,6 +67,15 @@ const ORDER_STATUS_LABELS = {
   refund_requested: "Pengajuan refund diproses",
   refunded: "Refund selesai",
   refund_rejected: "Refund ditolak",
+};
+
+/** Buyer-facing Indonesian label per `merch_orders.status`. */
+export const MERCH_ORDER_STATUS_LABELS = {
+  pending_payment: "Menunggu pembayaran",
+  awaiting_verification: "Bukti bayar sedang diverifikasi penjual",
+  paid: "Lunas — pesanan sedang disiapkan penjual",
+  expired: "Kedaluwarsa (tidak dibayar dalam 24 jam)",
+  cancelled: "Dibatalkan",
 };
 
 /**
@@ -117,13 +130,13 @@ export const isApprovalTypedByUser = (ref, userText) =>
  * @param {string} code - Example: `"NO_OPEN_ORDER"`
  * @param {string} message - English is fine; the model answers in Indonesian.
  */
-const toolError = (code, message) => ({ error: { code, message } });
+export const toolError = (code, message) => ({ error: { code, message } });
 
 /**
  * @param {string | null} text
  * @param {number} max
  */
-const truncate = (text, max) => (text && text.length > max ? `${text.slice(0, max)}…` : text ?? null);
+export const truncate = (text, max) => (text && text.length > max ? `${text.slice(0, max)}…` : text ?? null);
 
 /**
  * @param {object} ticketType - a `ticket_types` row
@@ -299,16 +312,25 @@ export const SITIKET_TOOLS = [
   {
     name: "get_my_orders",
     roles: ["buyer", "admin", "super_admin"],
-    description: "List the buyer's recent orders placed via this WhatsApp number, with their status.",
+    description:
+      "List the buyer's recent ticket orders placed via this WhatsApp number and merch orders on their linked account, with their status.",
     inputSchema: {},
     handler: async (_args, context) => {
       const orders = await ordersRepository.listRecentByWhatsappWaId(context.waId);
+      const merchOrders = context.account ? (await merchOrdersRepository.listByBuyer(context.account.id)).slice(0, 5) : [];
       return {
-        orders: orders.map((order) => ({
+        ticketOrders: orders.map((order) => ({
           orderRef: shortRef(order.id),
           eventId: order.event_id,
           eventName: order.event_name,
           status: ORDER_STATUS_LABELS[order.status] ?? order.status,
+          total: formatRupiah(order.total_amount),
+          placedAt: formatJakartaTime(order.created_at),
+        })),
+        merchOrders: merchOrders.map((order) => ({
+          orderRef: shortRef(order.id),
+          status: MERCH_ORDER_STATUS_LABELS[order.status] ?? order.status,
+          courier: order.courier_name,
           total: formatRupiah(order.total_amount),
           placedAt: formatJakartaTime(order.created_at),
         })),

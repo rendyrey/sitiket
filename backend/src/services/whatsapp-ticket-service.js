@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { isWhatsappSendConfigured, sendPngImage, sendText } from "./whatsapp-client.js";
+import { isWhatsappSendConfigured, sendImage, sendText } from "./whatsapp-client.js";
 
 // Delivers issued tickets to buyers who ordered through the WhatsApp bot:
 // one QR image per ticket, encoding the same signed `qr_payload` the web
@@ -31,9 +31,10 @@ export const sendTicketsViaWhatsapp = async (order, tickets, event) => {
     );
     for (const [index, ticket] of tickets.entries()) {
       const png = await QRCode.toBuffer(ticket.qr_payload, QR_OPTIONS);
-      await sendPngImage(
+      await sendImage(
         order.whatsapp_wa_id,
         png,
+        "image/png",
         `Tiket ${index + 1}/${tickets.length} — ${ticket.ticket_type_name}\nKode: ${ticket.ticket_code}`,
       );
     }

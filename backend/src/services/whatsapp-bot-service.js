@@ -2,10 +2,12 @@ import { env } from "../config/env.js";
 import { connectSitiketMcp } from "../mcp/sitiket-mcp-server.js";
 import { formatJakartaTime, shortRef } from "../mcp/sitiket-tools.js";
 import { storeImage } from "../middleware/upload.js";
+import * as merchOrdersRepository from "../repositories/merch-orders-repository.js";
 import * as ordersRepository from "../repositories/orders-repository.js";
 import * as usersRepository from "../repositories/users-repository.js";
 import { HttpError } from "../utils/http-error.js";
 import { toWhatsappId } from "../utils/phone.js";
+import { submitProof as submitMerchProof } from "./merch-payment-service.js";
 import { submitProof } from "./order-payment-service.js";
 import { downloadMedia, sendText } from "./whatsapp-client.js";
 
@@ -36,17 +38,23 @@ const UNSUPPORTED_REPLY =
   "Maaf Kak, Mimin hanya bisa membaca pesan teks dan *foto* bukti pembayaran. Silakan ketik pertanyaannya atau kirim foto bukti transfer, ya.";
 const RATE_LIMITED_REPLY = "Pesannya banyak sekali dalam waktu singkat, Kak. Tunggu beberapa menit lalu coba lagi, ya 🙏";
 
+/** Order statuses (ticket and merch alike) that still take a payment proof. */
+const OPEN_PAYMENT_STATUSES = ["pending_payment", "awaiting_verification"];
+
 /** Indonesian reply per proof-upload failure the buyer can act on. */
 const PROOF_ERROR_REPLIES = {
   ORDER_EXPIRED: "Batas waktu pembayaran pesanan ini sudah habis, jadi bukti tidak bisa diterima. Silakan buat pesanan baru.",
+  MERCH_ORDER_EXPIRED: "Batas waktu pembayaran pesanan ini sudah habis, jadi bukti tidak bisa diterima. Silakan buat pesanan baru.",
   ORDER_NOT_AWAITING_PAYMENT: "Pesanan ini sedang tidak menunggu pembayaran, jadi bukti tidak bisa dikirim.",
+  MERCH_ORDER_NOT_AWAITING_PAYMENT: "Pesanan ini sedang tidak menunggu pembayaran, jadi bukti tidak bisa dikirim.",
+  SELLER_NO_BANK_ACCOUNT: "Metode pembayaran penjual belum siap. Silakan hubungi penjualnya lewat website SiTIKET.",
   INVALID_IMAGE: "Foto tidak bisa dibaca. Coba kirim ulang foto bukti transfer (JPG/PNG), ya.",
   INVALID_IMAGE_TYPE: "Format foto tidak didukung. Kirim foto bukti transfer dalam format JPG atau PNG, ya.",
   QRIS_NOT_AVAILABLE: "Metode pembayaran penyelenggara belum siap. Silakan hubungi penyelenggara event.",
   EVENT_OWNER_NO_BANK_ACCOUNT: "Metode pembayaran penyelenggara belum siap. Silakan hubungi penyelenggara event.",
 };
 
-const BUYER_PROMPT = `Kamu adalah *Mimin SiTIKET*, customer service WhatsApp resmi SiTIKET (${env.FRONTEND_URL}) — platform tiket event. Tugasmu: bikin setiap pembeli merasa dibantu sampai tuntas, dari cari event sampai e-tiket di tangan.
+const BUYER_PROMPT = `Kamu adalah *Mimin SiTIKET*, customer service WhatsApp resmi SiTIKET (${env.FRONTEND_URL}) — platform tiket event dan merchandise. Tugasmu: bikin setiap pembeli merasa dibantu sampai tuntas, dari cari event/merch sampai tiket atau barang di tangan.
 
 Gaya bicara:
 - Selalu Bahasa Indonesia, apa pun bahasa pengguna. Hangat, sopan, santai tapi profesional — seperti CS terbaik, bukan robot. Panggil pengguna "Kak" (atau namanya kalau sudah tahu).
@@ -55,7 +63,7 @@ Gaya bicara:
 
 Cara membantu:
 - Proaktif: selalu tutup balasan dengan langkah berikutnya atau pilihan yang jelas, misalnya "Mau Mimin tampilkan jenis tiketnya?". Jangan biarkan percakapan buntu.
-- Pesan pertama/sapaan: perkenalkan diri singkat dan tawarkan bantuan, misalnya lihat event terdekat, cek harga tiket, beli tiket, atau cek status pesanan.
+- Pesan pertama/sapaan: perkenalkan diri singkat dan tawarkan bantuan, misalnya lihat event terdekat, cek harga tiket, beli tiket, lihat & beli merchandise, atau cek status pesanan.
 - Pertanyaan umum (event apa saja, harga, lokasi, jadwal, sisa kuota): langsung cek dengan tool, jangan tanya balik kalau tidak perlu. Kalau hasilnya kosong, bilang terus terang dan tawarkan alternatif (kota lain, kata kunci lain, semua event).
 - Rekomendasikan dengan jujur kalau diminta (misal jenis tiket termurah atau yang masih tersedia), tetapi keputusan tetap di pengguna.
 - Semua data (event, harga, stok, rekening, status) HANYA dari hasil tool. Jangan pernah mengarang atau menebak. Kalau tidak tahu, bilang dan tawarkan jalan keluar.
@@ -71,8 +79,20 @@ Alur pembelian (sama seperti di aplikasi):
 5. Setelah email terverifikasi: tampilkan instruksi pembayaran dengan rapi (bank, nomor rekening, atas nama, *jumlah persis*, batas waktu; link QRIS kalau ada) dan minta pengguna mengirim *foto* bukti transfer di chat ini sebelum batas waktu. Ingatkan waktunya terbatas.
 6. Setelah bukti diterima: pembayaran diverifikasi oleh penyelenggara event. Setelah disetujui, QR e-tiket otomatis dikirim ke chat WhatsApp ini dan ke email. Status bisa dicek kapan saja (get_my_orders).
 
+Alur beli merchandise (sama seperti di aplikasi):
+1. "Merch apa saja?": panggil list_merch (maks. 10 merch terbaru yang bisa dibeli) dan tampilkan nama, harga, penjual. Untuk detail/pilihan: get_merch_details — sebutkan HANYA varian yang stoknya masih ada, lengkap dengan harganya. Jangan menawarkan varian atau jumlah melebihi stok. Kalau pengguna minta foto/lihat barangnya, panggil send_merch_photos (fotonya langsung terkirim ke chat) lalu lanjutkan dengan tawaran berikutnya.
+2. Merch wajib memakai akun SiTIKET yang nomor WhatsApp-nya tersimpan di profil. Panggil get_my_account. Kalau NO_LINKED_ACCOUNT atau DUPLICATE_ACCOUNTS, jelaskan langkahnya dengan ramah (login di website, simpan nomor WhatsApp ini di profil, lalu chat lagi) — tiket event tetap bisa dibeli tanpa akun.
+3. SEBELUM lanjut ke ongkir, SELALU tampilkan alamat pengiriman tersimpan lengkap dan tanyakan "Apakah alamat ini sudah benar?".
+   - Kalau belum ada/tidak lengkap atau pengguna mau ganti: tanya provinsi → search_region level "province"; kota/kabupaten → "regency" (parentCode = kode provinsi); kecamatan → "district"; kelurahan/desa → "village" (sekaligus kode pos). Pakai query nama agar hasilnya ringkas; kalau ada beberapa yang mirip, minta pengguna memilih. Lalu minta alamat jalan lengkap (nama jalan, nomor rumah, RT/RW, patokan).
+   - Ringkas alamat baru dan minta "ya", baru panggil update_my_address. Kalau pencarian wilayah gagal atau pengguna lebih suka, arahkan ubah alamat di ${env.FRONTEND_URL}/account/profile.
+4. Panggil quote_merch_shipping dengan item pilihan, tampilkan pilihan kurir per penjual (nama, ongkir, estimasi), dan minta pengguna memilih satu kurir untuk tiap penjual.
+5. Tanyakan kode promo (opsional, berlaku per penjual) dan catatan untuk penjual (opsional).
+6. Ringkasan akhir: item + varian × jumlah, subtotal, ongkir, total per penjual, alamat kirim. Kalau barangnya dari beberapa penjual, jelaskan pesanan akan dipisah per penjual dan dibayar terpisah. Minta "ya", baru panggil create_merch_order.
+7. Tampilkan instruksi pembayaran tiap pesanan (bank/QRIS, *jumlah persis*, batas waktu 24 jam) dan minta *foto* bukti transfer di chat ini. Kalau ada lebih dari satu pesanan belum dibayar, minta foto dikirim dengan *caption kode pesanan*.
+8. Setelah bukti diterima, penjual memverifikasi lalu menyiapkan pengiriman. Status bisa dicek dengan get_my_orders.
+
 Situasi umum:
-- "Tiket saya mana?" / cek status: panggil get_my_orders, jelaskan statusnya dan apa yang terjadi selanjutnya.
+- "Tiket saya mana?" / "pesanan saya?" / cek status: panggil get_my_orders (tiket dan merch), jelaskan statusnya dan apa yang terjadi selanjutnya.
 - Kode verifikasi tidak masuk: minta cek folder spam/promosi dan pastikan email benar. Kalau email salah atau kode kedaluwarsa, sarankan buat pesanan baru dengan email yang benar.
 - Batas waktu pembayaran lewat: pesanan otomatis batal dan kuota dilepas; tawarkan buat pesanan baru.
 - Jika tool mengembalikan error, jelaskan artinya dengan bahasa sederhana (tanpa kode teknis) dan tawarkan langkah berikutnya.`;
@@ -172,24 +192,40 @@ const isRateLimited = (waId) => {
 };
 
 /**
- * Who is messaging: a Super Admin or Admin when the sender's WhatsApp number
- * equals the phone saved on an active account with that role (profile page),
- * otherwise a buyer. Super Admin wins if one number is on both. The sender id
- * comes from Meta's signed webhook, so it can't be spoofed.
- * ponytail: loads every admin/super_admin row per message and matches in JS
- * (stored phones vary in format); add a normalized, indexed column past ~thousands of admins.
+ * Who is messaging, from the active accounts whose profile phone is the
+ * sender's WhatsApp number (the sender id comes from Meta's signed webhook,
+ * so it can't be spoofed):
+ * - role: super_admin > admin > buyer;
+ * - account: the account merch orders/address updates act on — the staff
+ *   account when there is one, else the single matching account. Several
+ *   plain accounts sharing one number are ambiguous, so none is used.
  *
  * @param {string} waId - Example: `"628112003717"`
- * @returns {Promise<{ role: "buyer" } | { role: "admin" | "super_admin", staff: object }>}
+ * @returns {Promise<{ role: "buyer" | "admin" | "super_admin", staff?: object, account?: object, duplicateAccounts: boolean }>}
  */
 export const resolveSender = async (waId) => {
-  for (const role of ["super_admin", "admin"]) {
-    const staff = (await usersRepository.listByRole(role)).find(
-      (user) => user.status === "active" && toWhatsappId(user.phone) === waId,
-    );
-    if (staff) return { role, staff };
-  }
-  return { role: "buyer" };
+  // SQL narrows by stripped phone; toWhatsappId is the exact check.
+  const accounts = (await usersRepository.findActiveByWhatsappId(waId)).filter((user) => toWhatsappId(user.phone) === waId);
+  const staff = accounts.find((user) => user.role === "super_admin") ?? accounts.find((user) => user.role === "admin");
+  const account = staff ?? (accounts.length === 1 ? accounts[0] : undefined);
+  return { role: staff?.role ?? "buyer", staff, account, duplicateAccounts: !account && accounts.length > 1 };
+};
+
+/**
+ * Picks which open order a payment photo belongs to. The caption decides when
+ * it names one order's reference; otherwise a single open order is the
+ * obvious target, and several are ambiguous (the buyer is asked to resend
+ * with the reference as caption).
+ *
+ * @param {Array<{ ref: string }>} candidates - the sender's open orders. Example: `[{ ref: "a1b2c3d4", … }]`
+ * @param {string | undefined} caption - photo caption. Example: `"bayar a1b2c3d4"`
+ * @returns {object | null} the chosen candidate, or null when ambiguous/none
+ */
+export const pickProofTarget = (candidates, caption) => {
+  const text = (caption ?? "").toLowerCase();
+  const named = candidates.filter((candidate) => text.includes(candidate.ref));
+  if (named.length === 1) return named[0];
+  return candidates.length === 1 ? candidates[0] : null;
 };
 
 /**
@@ -297,42 +333,85 @@ const answerText = async (waId, text) => {
 };
 
 /**
- * Attaches a photo to the sender's open bot order as its payment proof — the
- * same submitProof the web checkout uses, stored in R2 under proofs/tickets.
- * No LLM involved: a photo is always a proof.
+ * The sender's orders a payment photo could be for: their open bot ticket
+ * order and the open merch orders on their linked account (one per seller).
+ * @param {string} waId
+ * @param {object | undefined} account - linked `users` row, see {@link resolveSender}
+ * @returns {Promise<Array<{ kind: "ticket" | "merch", ref: string, label: string, order: object }>>}
+ */
+const listProofCandidates = async (waId, account) => {
+  const ticketOrder = await ordersRepository.findLatestOpenByWhatsappWaId(waId);
+  const merchOrders = account
+    ? (await merchOrdersRepository.listByBuyer(account.id)).filter((order) => OPEN_PAYMENT_STATUSES.includes(order.status))
+    : [];
+  const sellers = await Promise.all(merchOrders.map((order) => usersRepository.findById(order.seller_id)));
+  return [
+    ...(ticketOrder ? [{ kind: "ticket", ref: shortRef(ticketOrder.id), label: `tiket ${ticketOrder.event_name}`, order: ticketOrder }] : []),
+    ...merchOrders.map((order, index) => ({
+      kind: "merch",
+      ref: shortRef(order.id),
+      label: `merch dari ${sellers[index]?.name ?? "penjual"}`,
+      order,
+    })),
+  ];
+};
+
+/**
+ * Attaches a photo to one of the sender's open orders as its payment proof —
+ * the same submitProof the web checkout uses (tickets or merch), stored in R2
+ * under proofs/tickets or proofs/merch. No LLM involved: a photo is always a
+ * proof; which order it's for comes from {@link pickProofTarget}.
  *
  * @param {string} waId
  * @param {{ id: string, caption?: string }} image - `messages[].image` from the webhook
  * @returns {Promise<string>} reply text
  */
 const handleProofImage = async (waId, image) => {
-  const order = await ordersRepository.findLatestOpenByWhatsappWaId(waId);
-  if (!order) {
-    return "Belum ada pesanan tiket dari nomor ini yang menunggu pembayaran. Ketik pertanyaanmu, misalnya *event apa saja yang tersedia?*";
+  const { account } = await resolveSender(waId);
+  const candidates = await listProofCandidates(waId, account);
+  if (candidates.length === 0) {
+    return "Belum ada pesanan dari nomor ini yang menunggu pembayaran, Kak. Ketik pertanyaanmu, misalnya *event apa saja yang tersedia?* atau *merch apa saja yang ada?*";
   }
-  if (!order.guest_email_verified_at) {
+  const target = pickProofTarget(candidates, image.caption);
+  if (!target) {
+    return [
+      "Kakak punya beberapa pesanan yang menunggu pembayaran:",
+      ...candidates.map((candidate) => `- *${candidate.ref}* — ${candidate.label}`),
+      "",
+      "Kirim ulang foto buktinya dengan *caption kode pesanan* yang dibayar, ya (contoh: *" + candidates[0].ref + "*).",
+    ].join("\n");
+  }
+
+  const { order } = target;
+  if (target.kind === "ticket" && !order.guest_email_verified_at) {
     return `Sebelum mengirim bukti bayar, ketik dulu kode verifikasi 6 digit yang kami kirim ke *${order.buyer_email}*.`;
   }
   // Checked up front so an expired order doesn't leave an orphan image in R2.
   if (new Date(order.payment_expires_at) < new Date()) return PROOF_ERROR_REPLIES.ORDER_EXPIRED;
 
+  const transferNote = image.caption?.trim().slice(0, 500) || undefined;
   try {
     const media = await downloadMedia(image.id);
-    const { key } = await storeImage(media.buffer, "proofs/tickets");
-    await submitProof(
-      order.id,
-      { guestEmail: order.buyer_email },
-      { file: { filename: key }, transferNote: image.caption?.trim().slice(0, 500) || undefined },
-    );
+    if (target.kind === "ticket") {
+      const { key } = await storeImage(media.buffer, "proofs/tickets");
+      await submitProof(order.id, { guestEmail: order.buyer_email }, { file: { filename: key }, transferNote });
+    } else {
+      const { key } = await storeImage(media.buffer, "proofs/merch");
+      await submitMerchProof(order.id, { sub: account.id }, { file: { filename: key }, transferNote });
+    }
   } catch (error) {
     if (error instanceof HttpError && PROOF_ERROR_REPLIES[error.code]) return PROOF_ERROR_REPLIES[error.code];
     throw error;
   }
 
+  const nextStep =
+    target.kind === "ticket"
+      ? `Pembayaran sedang diverifikasi oleh penyelenggara. Setelah disetujui, QR e-tiket dikirim ke chat ini dan ke *${order.buyer_email}*.`
+      : "Pembayaran sedang diverifikasi oleh penjual. Setelah disetujui, pesanan disiapkan dan dikirim ke alamatmu.";
   return [
-    `Bukti pembayaran untuk pesanan *${shortRef(order.id)}* (${order.event_name}) sudah kami terima ✅`,
+    `Bukti pembayaran untuk pesanan *${target.ref}* (${target.label}) sudah kami terima ✅`,
     "",
-    `Pembayaran sedang diverifikasi oleh penyelenggara. Setelah disetujui, QR e-tiket dikirim ke chat ini dan ke *${order.buyer_email}*. Ketik *status pesanan* untuk mengecek kapan saja.`,
+    `${nextStep} Ketik *status pesanan* untuk mengecek kapan saja.`,
   ].join("\n");
 };
 

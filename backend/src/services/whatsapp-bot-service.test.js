@@ -5,7 +5,7 @@ import test from "node:test";
 // Set before config/env.js is first imported — env is parsed once at import time.
 process.env.WHATSAPP_APP_SECRET = "test-app-secret";
 
-const { trimHistory } = await import("./whatsapp-bot-service.js");
+const { pickProofTarget, trimHistory } = await import("./whatsapp-bot-service.js");
 const { isApprovalTypedByUser } = await import("../mcp/sitiket-tools.js");
 const { isValidSignature } = await import("../routes/whatsapp.js");
 const { toWhatsappId } = await import("../utils/phone.js");
@@ -40,6 +40,18 @@ test("history is trimmed at user turns, never splitting a tool call from its res
   ];
   assert.deepEqual(trimHistory(history, 5), history);
   assert.deepEqual(trimHistory(history, 1), history.slice(4));
+});
+
+test("a payment photo goes to the order named in its caption, or the only open order", () => {
+  const ticket = { ref: "aaaa1111", kind: "ticket" };
+  const merch = { ref: "bbbb2222", kind: "merch" };
+  assert.equal(pickProofTarget([ticket], undefined), ticket);
+  assert.equal(pickProofTarget([ticket, merch], "transfer bbbb2222"), merch);
+  assert.equal(pickProofTarget([ticket, merch], "BBBB2222"), merch);
+  // Several open orders and no (or an unknown) ref: ambiguous, the buyer is asked.
+  assert.equal(pickProofTarget([ticket, merch], "sudah transfer"), null);
+  assert.equal(pickProofTarget([ticket, merch], "cccc3333"), null);
+  assert.equal(pickProofTarget([], "aaaa1111"), null);
 });
 
 test("webhook signature must be Meta's HMAC of the exact raw body", () => {

@@ -8,7 +8,7 @@
 - [Database design](./DATABASE_DESIGN.md) — full relational schema, ERD, entity reference, and business-rule-to-constraint mapping.
 - [Payment verification](./PAYMENT_VERIFICATION.md) — v1 manual bank-transfer flow, states, edge cases, and the future payment-gateway migration path.
 - [Check-in / gate system](./CHECKIN_GATE_SYSTEM.md) — QR ticket lifecycle and in-app gate scanning flow.
-- [WhatsApp ticket bot](./WHATSAPP_BOT.md) — buying, organizer payment approval, and Super Admin application review over WhatsApp; who the bot recognises and its safety rules.
+- [WhatsApp bot](./WHATSAPP_BOT.md) — buying tickets and merch (incl. address changes), organizer payment approval, and Super Admin application review over WhatsApp; who the bot recognises and its safety rules.
 
 ## Status
 

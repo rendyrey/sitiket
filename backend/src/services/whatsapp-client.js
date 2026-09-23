@@ -48,20 +48,24 @@ const postMessage = async (to, message) => {
  */
 export const sendText = (to, body) => postMessage(to, { type: "text", text: { body: body.slice(0, MAX_TEXT_LENGTH) } });
 
+/** File extension per image type WhatsApp accepts for image messages (no WebP — that's stickers only). */
+const IMAGE_EXTENSIONS = { "image/png": "png", "image/jpeg": "jpg" };
+
 /**
- * Uploads a PNG to WhatsApp's media store and sends it as an image message —
- * no public URL needed. Same 24h-window rule as {@link sendText}.
+ * Uploads an image to WhatsApp's media store and sends it as an image
+ * message — no public URL needed. Same 24h-window rule as {@link sendText}.
  *
  * @param {string} to - recipient `wa_id`. Example: `"628112003717"`
- * @param {Buffer} png - image bytes. Example: a ticket QR code
+ * @param {Buffer} bytes - image bytes. Example: a ticket QR code PNG
+ * @param {"image/png" | "image/jpeg"} mimeType
  * @param {string} caption - shown under the image. Example: `"Tiket 1/2 — Festival"`
  * @throws {Error} when the upload or the send fails.
  */
-export const sendPngImage = async (to, png, caption) => {
+export const sendImage = async (to, bytes, mimeType, caption) => {
   const form = new FormData();
   form.append("messaging_product", "whatsapp");
-  form.append("type", "image/png");
-  form.append("file", new Blob([png], { type: "image/png" }), "ticket.png");
+  form.append("type", mimeType);
+  form.append("file", new Blob([bytes], { type: mimeType }), `image.${IMAGE_EXTENSIONS[mimeType]}`);
   const uploadResponse = await fetch(graphUrl(`${env.WHATSAPP_PHONE_NUMBER_ID}/media`), {
     method: "POST",
     headers: authHeaders(),

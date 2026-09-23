@@ -72,6 +72,8 @@ Backend `/var/www/sitiket/backend/.env`:
   must be set too. All live in **backend** `.env` only — the frontend just
   relays the webhook. Use a System User token for `WHATSAPP_ACCESS_TOKEN`; the
   API Setup page's token expires after 24h and the bot then fails with 401s.
+  Merch in the bot also needs `API_CO_ID_KEY` (region lookups + courier quotes),
+  the same key the web merch checkout uses.
 
 ## WhatsApp bot setup (Meta dashboard)
 
