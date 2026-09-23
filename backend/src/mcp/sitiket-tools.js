@@ -29,8 +29,13 @@ import { HttpError } from "../utils/http-error.js";
 
 /**
  * @typedef {object} ToolContext
- * @property {"whatsapp" | "web"} channel - which front end the user is chatting on
+ * @property {"whatsapp" | "telegram" | "web"} channel - which front end the user is chatting on
  * @property {string} [waId] - WhatsApp channel only: sender's id from the signed webhook. Example: `"628112003717"`
+ * @property {string} [telegramChatId] - Telegram channel only: the private chat to send media to. Example: `"123456789"`
+ * @property {import("../repositories/orders-repository.js").BotIdentity} [botIdentity] - bot channels: how this
+ *   chat's guest ticket orders are tagged/found. Example: `{ column: "telegram_user_id", value: "123456789" }`
+ * @property {string} [verifiedPhone] - the user's phone as vouched for by the channel (WhatsApp sender id, or a
+ *   Telegram contact the user shared), digits with country code. Example: `"628112003717"`
  * @property {"buyer" | "admin" | "super_admin"} role - resolved server-side (see services/whatsapp-bot-service.js `resolveSender`)
  * @property {object} [staff] - the acting admin/super_admin's `users` row; set whenever `role !== "buyer"`
  * @property {object} [account] - the user's SiTIKET account (any role) — what merch orders, address updates and
@@ -61,7 +66,7 @@ const MAX_OTP_ATTEMPTS = 5;
  * @param {ToolContext} context
  * @returns {string} Example: `"Disetujui via WhatsApp bot"`
  */
-const reviewNoteFor = (context) => `Disetujui via ${context.channel === "web" ? "chat website" : "WhatsApp bot"}`;
+const reviewNoteFor = (context) => `Disetujui via ${{ web: "chat website", telegram: "Telegram bot", whatsapp: "WhatsApp bot" }[context.channel]}`;
 /** Short reference shown in place of a UUID: its first 8 hex chars. Example: `"a1b2c3d4"` */
 const REF_PATTERN = /^[0-9a-f]{8}$/;
 /** An approval must be worded as one by the reviewer themself. Example matches: `"setujui a1b2c3d4"`, `"acc a1b2c3d4"` */
@@ -163,13 +168,13 @@ const saleStatus = (ticketType, now) => {
 };
 
 /**
- * The sender's newest open bot order, required to have passed the email OTP.
- * @param {string} waId
+ * The chat's newest open bot order, required to have passed the email OTP.
+ * @param {import("../repositories/orders-repository.js").BotIdentity} identity
  * @returns {Promise<{ order?: object, error?: object }>}
  */
-const findVerifiedOpenOrder = async (waId) => {
-  const order = await ordersRepository.findLatestOpenByWhatsappWaId(waId);
-  if (!order) return { error: toolError("NO_OPEN_ORDER", "This WhatsApp number has no order awaiting payment") };
+const findVerifiedOpenOrder = async (identity) => {
+  const order = await ordersRepository.findLatestOpenByBotIdentity(identity);
+  if (!order) return { error: toolError("NO_OPEN_ORDER", "This chat has no order awaiting payment") };
   if (!order.guest_email_verified_at) {
     return { error: toolError("EMAIL_NOT_VERIFIED", `Ask the buyer for the 6-digit code emailed to ${order.buyer_email}`) };
   }
@@ -273,16 +278,22 @@ export const SITIKET_TOOLS = [
   {
     name: "create_order",
     roles: ["buyer", "admin", "super_admin"],
-    // WhatsApp guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
-    channels: ["whatsapp"],
+    // Bot (WhatsApp/Telegram) guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
+    channels: ["whatsapp", "telegram"],
     description:
-      "Place a ticket order (reserves the tickets and emails a 6-digit verification code). Call ONLY after the buyer confirmed a summary of event, ticket types, quantities, total, full name and email. The buyer's phone is taken from WhatsApp automatically.",
-    // Same schema as POST /api/orders minus the phone, which is the verified sender — never model input.
-    inputSchema: createOrderSchema.omit({ buyerPhone: true }).shape,
-    handler: async (input, context) => {
+      "Place a ticket order (reserves the tickets and emails a 6-digit verification code). Call ONLY after the buyer confirmed a summary of event, ticket types, quantities, total, full name and email. The buyer's phone comes from the chat's verified number when there is one; otherwise the tool asks for buyerPhone (PHONE_REQUIRED).",
+    // Same schema as POST /api/orders; the phone is optional input, used only when the channel has no verified number.
+    inputSchema: {
+      ...createOrderSchema.omit({ buyerPhone: true }).shape,
+      buyerPhone: createOrderSchema.shape.buyerPhone.optional().describe("Only when the tool asked for it (PHONE_REQUIRED)"),
+    },
+    handler: async ({ buyerPhone, ...input }, context) => {
+      // The channel-verified number always wins over typed input (WhatsApp sender, Telegram shared contact).
+      const phone = context.verifiedPhone ? `+${context.verifiedPhone}` : buyerPhone;
+      if (!phone) return toolError("PHONE_REQUIRED", "Ask the buyer for their phone number (or to tap the share-number button) and pass buyerPhone");
       // Guest checkout, exactly like the web: reserves stock and emails the OTP.
-      const { order } = await createOrder(null, { ...input, buyerPhone: `+${context.waId}` });
-      await ordersRepository.setWhatsappWaId(order.id, context.waId);
+      const { order } = await createOrder(null, { ...input, buyerPhone: phone });
+      await ordersRepository.setBotIdentity(order.id, context.botIdentity);
       return {
         orderRef: shortRef(order.id),
         total: formatRupiah(order.total_amount),
@@ -294,13 +305,13 @@ export const SITIKET_TOOLS = [
   {
     name: "verify_email_code",
     roles: ["buyer", "admin", "super_admin"],
-    // WhatsApp guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
-    channels: ["whatsapp"],
+    // Bot (WhatsApp/Telegram) guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
+    channels: ["whatsapp", "telegram"],
     description: "Verify the 6-digit email code for the buyer's latest order. On success returns the payment instructions.",
     inputSchema: { code: z.string().min(1).max(20).describe('The 6-digit code. Example: "042917"') },
     handler: async ({ code }, context) => {
-      const order = await ordersRepository.findLatestOpenByWhatsappWaId(context.waId);
-      if (!order) return toolError("NO_OPEN_ORDER", "This WhatsApp number has no order awaiting payment");
+      const order = await ordersRepository.findLatestOpenByBotIdentity(context.botIdentity);
+      if (!order) return toolError("NO_OPEN_ORDER", "This chat has no order awaiting payment");
       if (order.guest_email_verified_at) return { alreadyVerified: true, payment: await paymentInstructionsFor(order) };
 
       const attempts = (otpAttemptsByOrderId.get(order.id) ?? 0) + 1;
@@ -317,25 +328,25 @@ export const SITIKET_TOOLS = [
   {
     name: "get_payment_instructions",
     roles: ["buyer", "admin", "super_admin"],
-    // WhatsApp guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
-    channels: ["whatsapp"],
+    // Bot (WhatsApp/Telegram) guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
+    channels: ["whatsapp", "telegram"],
     description: "Get where/how much to pay for the buyer's latest open order (bank accounts and/or QRIS, deadline).",
     inputSchema: {},
     handler: async (_args, context) => {
-      const { order, error } = await findVerifiedOpenOrder(context.waId);
+      const { order, error } = await findVerifiedOpenOrder(context.botIdentity);
       return error ?? paymentInstructionsFor(order);
     },
   },
   {
     name: "get_my_orders",
     roles: ["buyer", "admin", "super_admin"],
-    // WhatsApp guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
-    channels: ["whatsapp"],
+    // Bot (WhatsApp/Telegram) guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
+    channels: ["whatsapp", "telegram"],
     description:
-      "List the buyer's recent ticket orders placed via this WhatsApp number and merch orders on their linked account, with their status.",
+      "List the buyer's recent ticket orders placed in this chat and merch orders on their linked account, with their status.",
     inputSchema: {},
     handler: async (_args, context) => {
-      const orders = await ordersRepository.listRecentByWhatsappWaId(context.waId);
+      const orders = await ordersRepository.listRecentByBotIdentity(context.botIdentity);
       const merchOrders = context.account ? (await merchOrdersRepository.listByBuyer(context.account.id)).slice(0, 5) : [];
       return {
         ticketOrders: orders.map((order) => ({

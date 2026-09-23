@@ -20,16 +20,18 @@ import {
   listVillages,
 } from "../services/regional-service.js";
 import { getOriginOrThrow, quoteCart } from "../services/shipping-service.js";
+import { sendTelegramPhoto } from "../services/telegram-client.js";
 import { sendImage } from "../services/whatsapp-client.js";
 import { getObject } from "../utils/storage.js";
 import { formatJakartaTime, formatRupiah, MERCH_ORDER_STATUS_LABELS, shortRef, toolError, truncate } from "./sitiket-tools.js";
 
-// Merch tools for the assistant (WhatsApp + website chat) — the same steps as the web merch checkout
+// Merch tools for the assistant (WhatsApp, Telegram, website chat) — the same steps as the web merch checkout
 // (catalog → product + variant → saved delivery address → courier quote per
 // seller → split-per-seller order → payment → proof), through the same
 // services, on every channel. Merch is signed-in only on the web, so every
-// account-bound tool acts on `context.account` — on WhatsApp the account whose
-// profile phone is the sender's Meta-verified number (whatsapp-bot-service.js
+// account-bound tool acts on `context.account` — on WhatsApp/Telegram the
+// account whose profile phone is the chat's verified number (the WhatsApp
+// sender, or the contact a Telegram user shared — chat-identity-service.js
 // `resolveSender`), on the website the signed-in session — never an account
 // the model names.
 
@@ -76,10 +78,15 @@ const loadAccount = async (context) => {
     };
   }
   if (!context.account) {
+    // Telegram users must first share their number (button under the chat) before it can be matched.
+    const how =
+      context.channel === "telegram" && !context.verifiedPhone
+        ? "First the user must tap the \"Bagikan nomor HP\" button under the chat to share their Telegram phone number."
+        : `No SiTIKET account has this number (+${context.verifiedPhone}) on its profile.`;
     return {
       error: toolError(
         "NO_LINKED_ACCOUNT",
-        `Merch needs a SiTIKET account and none has this WhatsApp number (+${context.waId}) on its profile. Steps: sign in with Google at ${env.FRONTEND_URL}/login, open ${profileUrl()}, save this WhatsApp number as the phone (and the delivery address), then chat again.`,
+        `Merch needs a SiTIKET account. ${how} Steps: sign in with Google at ${env.FRONTEND_URL}/login, open ${profileUrl()}, save that same phone number (and the delivery address), then chat again.`,
       ),
     };
   }
@@ -270,11 +277,12 @@ export const MERCH_TOOLS = [
           sent += 1;
           continue;
         }
-        // Stored as WebP in R2 (`/uploads/<key>`); WhatsApp image messages take only JPEG/PNG.
+        // Stored as WebP in R2 (`/uploads/<key>`); chat apps take JPEG/PNG photos.
         const stored = await getObject(image.image_url.replace(/^\/uploads\//, ""));
         if (!stored.ok) continue;
         const jpeg = await sharp(Buffer.from(await stored.arrayBuffer())).jpeg({ quality: 85 }).toBuffer();
-        await sendImage(context.waId, jpeg, "image/jpeg", caption);
+        if (context.channel === "telegram") await sendTelegramPhoto(context.telegramChatId, jpeg, "image/jpeg", caption);
+        else await sendImage(context.waId, jpeg, "image/jpeg", caption);
         sent += 1;
       }
       /** Photos not sent yet, offered only if the buyer asks for more. */

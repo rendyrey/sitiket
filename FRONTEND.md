@@ -14,7 +14,7 @@ Frontend root: `src/`. Static assets: `public/`. Backend: separate Express/MySQL
 ## Product routes
 
 Public:
-- `/`: landing page (real featured events)
+- `/`: landing page (real featured events, and a lime "Ask Mimin" section with a QR code + "Open in Telegram" button for the Telegram bot — `features/home/components/telegram-bot-cta.tsx`; the bot's username/URL live in `config/assistant.ts`; the QR is `qrcode.react` SVG in a small client component; two columns only from `lg`, since the 72px heading doesn't fit beside the card at `md`)
 - `/events`: event catalog, real category filters, search
 - `/events/[slug]`: event details
 - `/checkout/[slug]`: real checkout — multiple ticket types, promo code, guest or signed-in

@@ -8,7 +8,7 @@
 - [Database design](./DATABASE_DESIGN.md) — full relational schema, ERD, entity reference, and business-rule-to-constraint mapping.
 - [Payment verification](./PAYMENT_VERIFICATION.md) — v1 manual bank-transfer flow, states, edge cases, and the future payment-gateway migration path.
 - [Check-in / gate system](./CHECKIN_GATE_SYSTEM.md) — QR ticket lifecycle and in-app gate scanning flow.
-- [Mimin SiTIKET assistant](./WHATSAPP_BOT.md) — the WhatsApp bot and website chat: buying tickets and merch (incl. address changes), organizer payment approval, Super Admin application review; who the assistant recognises, per-channel differences, and its safety rules.
+- [Mimin SiTIKET assistant](./WHATSAPP_BOT.md) — the WhatsApp bot, Telegram bot and website chat: buying tickets and merch (incl. address changes), organizer payment approval, Super Admin application review; who the assistant recognises, per-channel differences, and its safety rules.
 
 ## Status
 

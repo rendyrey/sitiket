@@ -8,16 +8,19 @@ import { WEB_TOOLS } from "./web-tools.js";
 /** Every tool the server can offer; each message's server registers only its sender's share. */
 const ALL_TOOLS = [...SITIKET_TOOLS, ...MERCH_TOOLS, ...WEB_TOOLS];
 
+/** Every channel the assistant runs on — a tool without `channels` exists on all of them. */
+const ALL_CHANNELS = ["whatsapp", "telegram", "web"];
+
 /**
  * Whether a tool belongs on this message's server.
  * @param {import("./sitiket-tools.js").SitiketTool} tool
  * @param {import("./sitiket-tools.js").ToolContext} context
  */
 const isAvailableTo = (tool, context) =>
-  tool.roles.includes(context.role) && (tool.channels ?? ["whatsapp", "web"]).includes(context.channel);
+  tool.roles.includes(context.role) && (tool.channels ?? ALL_CHANNELS).includes(context.channel);
 
 // Local MCP server exposing SiTIKET's ticket and merch flows as tools, shared
-// by the WhatsApp bot and the website chat. It runs in-process (in-memory
+// by the WhatsApp bot, the Telegram bot and the website chat. It runs in-process (in-memory
 // transport) rather than as a stdio child: one server is built per inbound
 // message with that user's identity and channel baked in, so the tool list
 // itself is the permission boundary — a buyer's server simply has no approve_*

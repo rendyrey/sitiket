@@ -1,6 +1,6 @@
-# "Mimin SiTIKET" assistant — WhatsApp bot & website chat
+# "Mimin SiTIKET" assistant — WhatsApp bot, Telegram bot & website chat
 
-A customer-service bot on SiTIKET's WhatsApp Business number (the WhatsApp Cloud API number, phone number ID `1395472303641057`). It lets people buy tickets and merchandise entirely in WhatsApp, lets organizers approve ticket payments from their phone, and lets the Super Admin review organizer applications. The same assistant also runs as a **chat on the website** (§9). Both are extra **channels** onto the same v1 flows, not a separate system: every step calls the same backend services as the web app, so prices, stock, the email OTP, shipping quotes, payment windows and approval rules are identical (see [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md)).
+A customer-service bot on SiTIKET's WhatsApp Business number (the WhatsApp Cloud API number, phone number ID `1395472303641057`). It lets people buy tickets and merchandise entirely in WhatsApp, lets organizers approve ticket payments from their phone, and lets the Super Admin review organizer applications. The same assistant also runs as a **chat on the website** (§9) and as a **Telegram bot** (§10). Both are extra **channels** onto the same v1 flows, not a separate system: every step calls the same backend services as the web app, so prices, stock, the email OTP, shipping quotes, payment windows and approval rules are identical (see [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md)).
 
 Engineering details (message path, MCP server, config, limits) live in [BACKEND.md](../../BACKEND.md) § _WhatsApp bot_; deployment and Meta dashboard setup in [DEPLOYMENT.md](../../DEPLOYMENT.md) § _WhatsApp bot setup_.
 
@@ -105,3 +105,19 @@ A floating chat button on every page of sitiket.com opens the same assistant: sa
 | Cost | per WhatsApp message (from 1 Oct 2026) + LLM | LLM only |
 
 Limits: 15 messages per 10 minutes per chat, and 40 per 10 minutes per network (so guests can't dodge the per-chat limit). The chat's visible history is remembered in the browser (per account). The assistant's own memory follows the same 30-minute rule as WhatsApp.
+
+## 10. Telegram bot
+
+[@sitiket_assistant_bot](https://t.me/sitiket_assistant_bot). The landing page shows a QR code that opens it, plus an "Open in Telegram" button for phones. Same assistant, tools and rules as WhatsApp; what differs:
+
+| | Telegram |
+| --- | --- |
+| Who you are | Nobody by default — Telegram doesn't reveal a phone number. Tapping **📱 Bagikan nomor HP** shares the user's Telegram-verified number; the bot accepts only the sender's **own** contact and remembers it. That number is matched to SiTIKET accounts exactly like a WhatsApp number (so admins/Super Admins must have it on their profile, as for WhatsApp). |
+| Tickets | Guest checkout: name, email and (until the number is shared) phone in chat, then the **6-digit email code**. |
+| Merch, order status on the account, address changes, approvals | Need the shared number to match a SiTIKET account profile. |
+| Payment proof | Send a **photo** (or an image file) in the chat; several unpaid orders → put the order code in the caption. |
+| Tickets after approval | Confirmation + **one QR photo per ticket** in the Telegram chat, plus email. No 24-hour window like WhatsApp — delivery works any time (unless the user blocked the bot). |
+| Merch photos | Sent as Telegram photos. |
+| Cost | **Free** (Telegram charges nothing) — only the LLM tokens. |
+
+Limits: 15 messages per 10 minutes per user (one notice, then ignored until the window passes); group chats are ignored — the bot only talks in private chats. `/start` shows a fixed greeting (no LLM cost).

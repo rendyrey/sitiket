@@ -5,9 +5,10 @@ import test from "node:test";
 // Set before config/env.js is first imported — env is parsed once at import time.
 process.env.WHATSAPP_APP_SECRET = "test-app-secret";
 
-const { pickProofTarget } = await import("./whatsapp-bot-service.js");
+const { pickProofTarget } = await import("./chat-proof-service.js");
 const { floodDecision, trimHistory } = await import("./assistant-service.js");
 const { buildSystemPrompt } = await import("./assistant-prompts.js");
+const { toTelegramHtml } = await import("./telegram-client.js");
 const { isApprovalTypedByUser } = await import("../mcp/sitiket-tools.js");
 const { isValidSignature } = await import("../routes/whatsapp.js");
 const { toWhatsappId } = await import("../utils/phone.js");
@@ -71,6 +72,20 @@ test("each channel gets its own flow in the shared prompt", () => {
   assert.ok(web.includes("SIGN_IN_REQUIRED") && !web.includes("verify_email_code"));
   assert.ok(web.includes("*Admin*") && !whatsapp.includes("*Admin*"));
   assert.ok(whatsapp.includes("Bahasa Indonesia") && web.includes("Bahasa Indonesia"));
+});
+
+test("Telegram text: WhatsApp-style bold becomes HTML, everything else is escaped", () => {
+  assert.equal(toTelegramHtml("Total *Rp150.000*"), "Total <b>Rp150.000</b>");
+  assert.equal(toTelegramHtml("<script>&"), "&lt;script&gt;&amp;");
+  assert.equal(toTelegramHtml("*<b>*"), "<b>&lt;b&gt;</b>");
+  assert.equal(toTelegramHtml("5 * 3 = 15"), "5 * 3 = 15");
+});
+
+test("Telegram prompt tells the model whether the phone was shared", () => {
+  const without = buildSystemPrompt({ channel: "telegram", role: "buyer" }, "sekarang");
+  const withPhone = buildSystemPrompt({ channel: "telegram", role: "buyer", verifiedPhone: "628112003717" }, "sekarang");
+  assert.ok(without.includes("belum dibagikan") && without.includes("verify_email_code"));
+  assert.ok(withPhone.includes("sudah dibagikan") && !withPhone.includes("belum dibagikan"));
 });
 
 test("webhook signature must be Meta's HMAC of the exact raw body", () => {

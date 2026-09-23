@@ -5,6 +5,7 @@ import { completePastEvents } from "./services/event-service.js";
 import { expireStaleMerchOrders } from "./services/merch-order-service.js";
 import { expireStalePendingOrders } from "./services/order-service.js";
 import { processEmailJobQueue } from "./services/email-job-service.js";
+import { isTelegramBotConfigured, startTelegramPolling } from "./services/telegram-bot-service.js";
 import { isWhatsappBotConfigured, warnStaffWithoutPhone } from "./services/whatsapp-bot-service.js";
 
 // Kept well under ORDER_PAYMENT_HOLD_MINUTES (10): the sweep is what sends the
@@ -19,6 +20,10 @@ app.listen(env.PORT, () => console.log(`SiTIKET API listening on port ${env.PORT
 if (isWhatsappBotConfigured()) {
   warnStaffWithoutPhone().catch((error) => console.error("Failed to check admin phones:", error));
 }
+
+// Telegram bot: long-polls Telegram in this process (single pm2 instance — a
+// second poller on the same token would get 409s).
+if (isTelegramBotConfigured()) startTelegramPolling();
 
 // Single-instance-friendly stand-in for a real job scheduler: releases
 // inventory/promo holds for orders whose payment window lapsed with no

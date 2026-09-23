@@ -75,6 +75,8 @@ Backend `/var/www/sitiket/backend/.env`:
   Merch in the bot also needs `API_CO_ID_KEY` (region lookups + courier quotes),
   the same key the web merch checkout uses.
 
+- `TELEGRAM_BOT_TOKEN` — the Telegram bot (BotFather token). Set it in **backend** `.env` and restart the backend: it long-polls Telegram, so there is no webhook to register and no route/nginx change. Uses the same `EMBEDDINGS_*` LLM settings as the WhatsApp bot. Never set a webhook on this token (that disables polling — `getUpdates` answers 409).
+
 ## WhatsApp bot setup (Meta dashboard)
 
 1. Backend `.env`: set the four `WHATSAPP_*` values, then restart the backend

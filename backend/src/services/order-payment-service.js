@@ -8,7 +8,7 @@ import { resolvePaymentOptionsForEvent } from "./payment-method-service.js";
 import { notifyOrderPaid, notifyPaymentProofRejected, notifyTicketPaymentSubmitted } from "./notification-service.js";
 import { pushNotification } from "./web-notification-service.js";
 import { issueTicketsForOrder } from "./ticket-service.js";
-import { sendTicketsViaWhatsapp } from "./whatsapp-ticket-service.js";
+import { sendTicketsToBotChat } from "./chat-ticket-delivery-service.js";
 
 const formatRupiah = (amount) => `Rp${Number(amount).toLocaleString("id-ID")}`;
 
@@ -97,9 +97,9 @@ export const reviewProof = async (paymentId, reviewer, decision, reviewerNotes) 
     await ordersRepository.updateStatus(order.id, "paid");
     const tickets = await issueTicketsForOrder(order.id);
     await notifyOrderPaid(order, tickets, event);
-    // WhatsApp-bot orders also get their QR codes in the chat. Not awaited:
-    // media uploads take seconds and must never delay or fail the approval.
-    void sendTicketsViaWhatsapp(order, tickets, event);
+    // Bot orders (WhatsApp/Telegram) also get their QR codes in the chat. Not
+    // awaited: media uploads take seconds and must never delay or fail the approval.
+    void sendTicketsToBotChat(order, tickets, event);
     // Bell notifications: the sale is final for the organizer; the buyer
     // (when signed in — guests have no bell) learns their tickets are ready.
     await pushNotification({

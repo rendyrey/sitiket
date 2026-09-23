@@ -172,36 +172,58 @@ export const markGuestEmailVerified = (id, executor = db) =>
   executor(TABLE).where({ id }).update({ guest_email_verified_at: new Date(), updated_at: new Date() });
 
 /**
- * Tags an order as placed through the WhatsApp bot by this WhatsApp account.
- * @param {string} id
- * @param {string} waId - Meta's sender id. Example: `"628112003717"`
+ * Which chat account placed an order through a bot: the column that records
+ * it and its value. Example: `{ column: "telegram_user_id", value: "123456789" }`
+ * @typedef {{ column: "whatsapp_wa_id" | "telegram_user_id", value: string }} BotIdentity
  */
-export const setWhatsappWaId = (id, waId) => db(TABLE).where({ id }).update({ whatsapp_wa_id: waId });
+
+/** The only columns a {@link BotIdentity} may name (they're interpolated into queries). */
+const BOT_IDENTITY_COLUMNS = ["whatsapp_wa_id", "telegram_user_id"];
 
 /**
- * Newest still-payable order this WhatsApp account placed through the bot.
- * @param {string} waId - Example: `"628112003717"`
+ * @param {BotIdentity} identity
+ * @returns {string} the qualified column. Example: `"orders.whatsapp_wa_id"`
+ * @throws {Error} for any column outside {@link BOT_IDENTITY_COLUMNS}
+ */
+const botColumn = ({ column }) => {
+  if (!BOT_IDENTITY_COLUMNS.includes(column)) throw new Error(`Unknown bot identity column: ${column}`);
+  return `${TABLE}.${column}`;
+};
+
+/**
+ * Tags an order as placed through a bot by this chat account.
+ * @param {string} id
+ * @param {BotIdentity} identity - Example: `{ column: "whatsapp_wa_id", value: "628112003717" }`
+ */
+export const setBotIdentity = (id, identity) => {
+  botColumn(identity); // validates the column name
+  return db(TABLE).where({ id }).update({ [identity.column]: identity.value });
+};
+
+/**
+ * Newest still-payable order this chat account placed through the bot.
+ * @param {BotIdentity} identity
  * @returns {Promise<object | undefined>} an `orders` row plus `event_name`
  */
-export const findLatestOpenByWhatsappWaId = (waId) =>
+export const findLatestOpenByBotIdentity = (identity) =>
   db(TABLE)
     .join("events", "events.id", `${TABLE}.event_id`)
     .select(`${TABLE}.*`, "events.name as event_name")
-    .where(`${TABLE}.whatsapp_wa_id`, waId)
+    .where(botColumn(identity), identity.value)
     .whereIn(`${TABLE}.status`, ["pending_payment", "awaiting_verification"])
     .orderBy(`${TABLE}.created_at`, "desc")
     .first();
 
 /**
- * Recent bot orders of one WhatsApp account — answers "status pesanan saya".
- * @param {string} waId - Example: `"628112003717"`
+ * Recent bot orders of one chat account — answers "status pesanan saya".
+ * @param {BotIdentity} identity
  * @param {number} [limit]
  */
-export const listRecentByWhatsappWaId = (waId, limit = 5) =>
+export const listRecentByBotIdentity = (identity, limit = 5) =>
   db(TABLE)
     .join("events", "events.id", `${TABLE}.event_id`)
     .select(`${TABLE}.*`, "events.name as event_name")
-    .where(`${TABLE}.whatsapp_wa_id`, waId)
+    .where(botColumn(identity), identity.value)
     .orderBy(`${TABLE}.created_at`, "desc")
     .limit(limit);
 

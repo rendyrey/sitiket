@@ -288,6 +288,7 @@ See [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) for the full flow narra
 | `total_amount` | integer, not null | `subtotal_amount - discount_amount`. Always recomputed server-side; never trust a client-submitted total. |
 | `status` | enum `order_status` (see below), default `pending_payment` | |
 | `whatsapp_wa_id` | varchar(32), nullable, indexed | Set when the order was placed through the WhatsApp bot: the sender's Meta-verified WhatsApp id (e.g. `628112003717`). The bot authorizes every follow-up (OTP, payment instructions, proof photo) against this — never against the hand-typed `buyer_phone` — and delivers the QR tickets to it on approval. Null for web orders. |
+| `telegram_user_id` | varchar(32), nullable, indexed | Same as `whatsapp_wa_id` for the Telegram bot: the Telegram user id that placed the order (also their private chat id with the bot, where the QR tickets are delivered). Null for web and WhatsApp orders. |
 | `payment_expires_at` | timestamptz, not null | Reservation hold deadline, set at creation to `now + ORDER_PAYMENT_HOLD_MINUTES` (10); expiring orders release their `ticket_types.quantity_sold` hold. Never extended afterwards — including when a rejected proof returns the order to `pending_payment`, see [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) §5. |
 | `created_at` / `updated_at` | timestamptz | |
 
@@ -388,6 +389,14 @@ Audit log of every scan *attempt*, not just successful ones — required to actu
 | `created_at` | timestamptz | |
 
 Index: `ticket_id`.
+
+#### `telegram_contacts` — **[WhatsApp/Telegram assistant]**
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `telegram_user_id` | varchar(32) PK | Telegram user id. |
+| `phone` | varchar(32), not null | The number the user shared with the bot's "share contact" button — Telegram-verified, and the bot only accepts the sender's **own** contact. Digits with country code (`628112003717`). Matched against `users.phone` exactly like a WhatsApp sender id, which links the chat to a SiTIKET account (merch, address changes, admin tools). |
+| `created_at` / `updated_at` | timestamptz | Sharing again replaces the number. |
 
 ### 4.8 Guest email verification — **[confirmed addition]**
 

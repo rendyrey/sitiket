@@ -4,6 +4,7 @@ import {
   HomeCta,
   HomeHero,
   HowItWorks,
+  TelegramBotCta,
 } from "@/features/home/components";
 import { listPublicEvents, toEventItemsWithDetails } from "@/features/events/lib/api";
 
@@ -17,6 +18,7 @@ export default async function HomePage() {
       <CategoryStrip />
       <FeaturedEvents events={items.slice(0, 3)} />
       <HowItWorks />
+      <TelegramBotCta />
       <HomeCta />
     </>
   );

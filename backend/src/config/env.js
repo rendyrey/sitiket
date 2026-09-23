@@ -115,6 +115,11 @@ const envSchema = z.object({
   WHATSAPP_GRAPH_API_VERSION: z.string().default("v23.0"),
   // Must be a CHAT model (not the embeddings model) — the bot's replies and tool calls run on it.
   WHATSAPP_BOT_MODEL: z.string().default("gpt-4o-mini"),
+
+  // Optional: Telegram bot token from BotFather (services/telegram-bot-service.js).
+  // Set → the API long-polls Telegram for messages (no webhook needed); unset
+  // → the Telegram bot stays off. Uses the same assistant LLM settings.
+  TELEGRAM_BOT_TOKEN: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(20).optional()),
 });
 
 const parsed = envSchema.safeParse(process.env);
