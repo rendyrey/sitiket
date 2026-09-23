@@ -67,7 +67,7 @@ Backend `/var/www/sitiket/backend/.env`:
   each organizer's own SMTP config (see BACKEND.md).
 - `WHATSAPP_VERIFY_TOKEN` / `WHATSAPP_APP_SECRET` / `WHATSAPP_ACCESS_TOKEN` /
   `WHATSAPP_PHONE_NUMBER_ID` (+ optional `WHATSAPP_BOT_MODEL`, default
-  `gpt-4o-mini`) — the WhatsApp ticket bot (BACKEND.md § _WhatsApp bot_). Its
+  `gpt-4o-mini`; production runs `gpt-6-luna` with `WHATSAPP_BOT_REASONING_EFFORT=none` — that model only accepts function tools on Chat Completions with reasoning off, while `gpt-4o-mini` rejects the parameter, so leave it empty there. The model drives every channel: WhatsApp, Telegram, website chat) — the WhatsApp ticket bot (BACKEND.md § _WhatsApp bot_). Its
   LLM reuses the `EMBEDDINGS_BASE_URL`/`EMBEDDINGS_API_KEY` above, so those
   must be set too. All live in **backend** `.env` only — the frontend just
   relays the webhook. Use a System User token for `WHATSAPP_ACCESS_TOKEN`; the

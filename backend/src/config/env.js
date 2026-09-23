@@ -113,8 +113,17 @@ const envSchema = z.object({
   WHATSAPP_ACCESS_TOKEN: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
   WHATSAPP_PHONE_NUMBER_ID: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
   WHATSAPP_GRAPH_API_VERSION: z.string().default("v23.0"),
-  // Must be a CHAT model (not the embeddings model) — the bot's replies and tool calls run on it.
+  // Must be a CHAT model (not the embeddings model) — the assistant's replies and
+  // tool calls on every channel (WhatsApp, Telegram, website chat) run on it.
   WHATSAPP_BOT_MODEL: z.string().default("gpt-4o-mini"),
+  // Optional `reasoning_effort` for reasoning models. Required as "none" by models
+  // such as gpt-6-luna, which only accept function tools on /v1/chat/completions
+  // with reasoning off; must stay UNSET for non-reasoning models (gpt-4o-mini
+  // rejects the parameter). Example: "none"
+  WHATSAPP_BOT_REASONING_EFFORT: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]).optional(),
+  ),
 
   // Optional: Telegram bot token from BotFather (services/telegram-bot-service.js).
   // Set → the API long-polls Telegram for messages (no webhook needed); unset

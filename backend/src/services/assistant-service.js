@@ -153,7 +153,9 @@ const toChatTools = (tools) =>
 
 /**
  * One chat-completions call on the OpenAI-compatible endpoint already
- * configured for embeddings (same key, chat model WHATSAPP_BOT_MODEL).
+ * configured for embeddings (same key, chat model WHATSAPP_BOT_MODEL, plus
+ * `reasoning_effort` only when WHATSAPP_BOT_REASONING_EFFORT is set — models
+ * without reasoning reject the parameter).
  * @param {Array<object>} messages
  * @param {Array<object>} tools
  * @returns {Promise<{ content: string | null, tool_calls?: Array<object> }>} the assistant message
@@ -163,7 +165,12 @@ const requestChatCompletion = async (messages, tools) => {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${env.EMBEDDINGS_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: env.WHATSAPP_BOT_MODEL, messages, tools }),
+    body: JSON.stringify({
+      model: env.WHATSAPP_BOT_MODEL,
+      ...(env.WHATSAPP_BOT_REASONING_EFFORT ? { reasoning_effort: env.WHATSAPP_BOT_REASONING_EFFORT } : {}),
+      messages,
+      tools,
+    }),
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
