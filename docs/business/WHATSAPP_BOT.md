@@ -1,6 +1,6 @@
-# WhatsApp Bot — "Mimin SiTIKET"
+# "Mimin SiTIKET" assistant — WhatsApp bot & website chat
 
-A customer-service bot on SiTIKET's WhatsApp Business number (the WhatsApp Cloud API number, phone number ID `1395472303641057`). It lets people buy tickets and merchandise entirely in WhatsApp, lets organizers approve ticket payments from their phone, and lets the Super Admin review organizer applications. It is a second **channel** onto the same v1 flows, not a separate system: every step calls the same backend services as the web app, so prices, stock, the email OTP, shipping quotes, payment windows and approval rules are identical (see [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md)).
+A customer-service bot on SiTIKET's WhatsApp Business number (the WhatsApp Cloud API number, phone number ID `1395472303641057`). It lets people buy tickets and merchandise entirely in WhatsApp, lets organizers approve ticket payments from their phone, and lets the Super Admin review organizer applications. The same assistant also runs as a **chat on the website** (§9). Both are extra **channels** onto the same v1 flows, not a separate system: every step calls the same backend services as the web app, so prices, stock, the email OTP, shipping quotes, payment windows and approval rules are identical (see [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md)).
 
 Engineering details (message path, MCP server, config, limits) live in [BACKEND.md](../../BACKEND.md) § _WhatsApp bot_; deployment and Meta dashboard setup in [DEPLOYMENT.md](../../DEPLOYMENT.md) § _WhatsApp bot setup_.
 
@@ -89,3 +89,19 @@ Organizers cannot see or approve another organizer's payments. **Rejecting** a p
 - **Conversation memory** (last ~8 messages, reset after 30 min idle) is kept in the API process: a backend restart forgets open chats. Orders are unaffected; they're in the database.
 - **Once a number is on the Cloud API**, its chats are not readable in the WhatsApp Business app — they only flow through the bot.
 - Not in the bot (use the dashboard/website): rejecting proofs or applications, cancellations, refunds, **approving merch payments** (sellers use the dashboard).
+
+## 9. Website chat
+
+A floating chat button on every page of sitiket.com opens the same assistant: same persona, same Bahasa Indonesia replies, same tools and rules. What changes on the website:
+
+| | WhatsApp | Website chat |
+| --- | --- | --- |
+| Who you are | the account whose profile phone is your WhatsApp number | the account you're **signed in** with |
+| Without an account | tickets via guest checkout (email OTP) | ask anything; ordering, order status and address changes need **sign-in** (the chat shows a *Masuk* button) |
+| Ticket checkout | name + email in chat, **6-digit email code** | name/email/phone from the account, **no code** (the site's normal signed-in checkout) |
+| Payment proof | send a **photo** in the chat | upload it on the **order page** the chat links to |
+| Merch photos | sent as WhatsApp images (paid from Oct 2026) | shown inside the chat |
+| Approvals (Admin/Super Admin) | same guarded `setujui <code>` | same guarded `setujui <code>`, when signed in with that role |
+| Cost | per WhatsApp message (from 1 Oct 2026) + LLM | LLM only |
+
+Limits: 15 messages per 10 minutes per chat, and 40 per 10 minutes per network (so guests can't dodge the per-chat limit). The chat's visible history is remembered in the browser (per account). The assistant's own memory follows the same 30-minute rule as WhatsApp.

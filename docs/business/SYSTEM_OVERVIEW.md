@@ -75,6 +75,7 @@ These were explicitly decided with the product owner during design and materiall
 | Admin onboarding via Super Admin approval | ✅ |
 | Manual, status-tracked refunds | ✅ |
 | WhatsApp bot (Bahasa Indonesia) — tickets (buy + email OTP + photo proof) and merch (newest-10 catalog, product photos, variants, saved-address check/change, courier quote, per-seller orders) in chat, organizer approves own payments, Super Admin approves organizer applications, QR tickets delivered in chat — see [WHATSAPP_BOT.md](./WHATSAPP_BOT.md) | ✅ |
+| Website chat (same assistant, same tools) — guests ask, signed-in users order tickets (no OTP) and merch, proofs uploaded on the order page, reviewers approve with the same guard — see [WHATSAPP_BOT.md](./WHATSAPP_BOT.md) §9 | ✅ |
 | WhatsApp ticket delivery after the 24h customer-service window (needs a Meta-approved template) | 🔜 future |
 | Automated payment gateway (Midtrans/Xendit) | 🔜 future — see [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) §5 |
 | Automated gateway-driven refunds | 🔜 future, depends on the above |
@@ -87,4 +88,4 @@ These were explicitly decided with the product owner during design and materiall
 - [DATABASE_DESIGN.md](./DATABASE_DESIGN.md) — full relational schema, ERD, and business-rule-to-constraint mapping.
 - [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) — v1 manual bank-transfer flow, states, and the future payment-gateway migration path.
 - [CHECKIN_GATE_SYSTEM.md](./CHECKIN_GATE_SYSTEM.md) — QR ticket lifecycle and gate scanning flow.
-- [WHATSAPP_BOT.md](./WHATSAPP_BOT.md) — the WhatsApp channel: buyer, organizer and Super Admin journeys, recognition by phone, safety rules.
+- [WHATSAPP_BOT.md](./WHATSAPP_BOT.md) — the Mimin SiTIKET assistant (WhatsApp bot + website chat): buyer, organizer and Super Admin journeys, how users are recognised per channel, safety rules.

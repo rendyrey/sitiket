@@ -4,6 +4,7 @@ import { inter, lexendDeca } from "@/app/fonts";
 import SiteHeader from "@/components/site/site-header";
 import SiteFooter from "@/components/site/site-footer";
 import SessionProvider from "@/features/auth/components/session-provider";
+import { ChatWidget } from "@/features/chat";
 import { getCurrentUser } from "@/lib/session";
 import "./globals.css";
 
@@ -22,6 +23,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <SiteHeader />
           <main>{children}</main>
           <SiteFooter />
+          <ChatWidget />
           <Toaster position="top-center" toastOptions={{ style: { borderRadius: 0, fontWeight: 700 } }} />
         </SessionProvider>
       </body>

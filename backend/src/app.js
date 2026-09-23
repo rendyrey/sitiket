@@ -6,6 +6,7 @@ import { notFoundHandler } from "./middleware/not-found.js";
 import { adminApplicationRouter } from "./routes/admin-applications.js";
 import { authRouter } from "./routes/auth.js";
 import { bankAccountRouter } from "./routes/bank-accounts.js";
+import { chatRouter } from "./routes/chat.js";
 import { checkInRouter } from "./routes/check-ins.js";
 import { eventAttendanceRouter } from "./routes/event-attendance.js";
 import { eventCategoryRouter } from "./routes/event-categories.js";
@@ -97,6 +98,7 @@ app.use("/api/merch-orders", merchOrderRouter);
 app.use("/api/merch-order-payments", merchOrderPaymentRouter);
 app.use("/api/merch-promo-codes", merchPromoCodeRouter);
 app.use("/api/notifications", notificationRouter);
+app.use("/api/chat", chatRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

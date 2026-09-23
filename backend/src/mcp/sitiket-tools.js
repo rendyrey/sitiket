@@ -15,25 +15,30 @@ import { createOrder } from "../services/order-service.js";
 import { listPublic as listPublicTicketTypes } from "../services/ticket-type-service.js";
 import { HttpError } from "../utils/http-error.js";
 
-// SiTIKET's MCP tools — the only things the WhatsApp bot's LLM can make
-// happen, served by mcp/sitiket-mcp-server.js. They walk the same steps as the
+// SiTIKET's MCP tools — the only things the assistant's LLM (WhatsApp bot and
+// website chat) can make happen, served by mcp/sitiket-mcp-server.js. They walk the same steps as the
 // web checkout (browse → pick tickets → guest order + email OTP → payment
 // instructions → proof → organizer approval) by calling the same services, so
 // prices, stock, OTP, proof rules and authorization stay identical to the app.
-// Every tool runs with a server-built ToolContext (the sender's Meta-verified
-// wa_id + resolved role), never with identity the model supplies.
+// Every tool runs with a server-built ToolContext (the WhatsApp sender's
+// Meta-verified wa_id, or the website's signed-in session, plus the resolved
+// role), never with identity the model supplies.
 //
 // Who gets what: everyone can buy; an Admin (event organizer) reviews payment
 // proofs for their OWN events; a Super Admin reviews organizer applications.
 
 /**
  * @typedef {object} ToolContext
- * @property {string} waId - sender's WhatsApp id from the signed webhook. Example: `"628112003717"`
+ * @property {"whatsapp" | "web"} channel - which front end the user is chatting on
+ * @property {string} [waId] - WhatsApp channel only: sender's id from the signed webhook. Example: `"628112003717"`
  * @property {"buyer" | "admin" | "super_admin"} role - resolved server-side (see services/whatsapp-bot-service.js `resolveSender`)
  * @property {object} [staff] - the acting admin/super_admin's `users` row; set whenever `role !== "buyer"`
- * @property {object} [account] - the SiTIKET account whose profile phone is this WhatsApp number (any role) —
- *   what merch orders and address updates act on. Unset when no account (or several) match.
+ * @property {object} [account] - the user's SiTIKET account (any role) — what merch orders, address updates and
+ *   web ticket orders act on. WhatsApp: the account whose profile phone is the sender's number (unset when none
+ *   or several match); web: the signed-in account (unset for guests).
  * @property {boolean} [duplicateAccounts] - true when more than one account has this number, so none is used
+ * @property {Array<{ type: "image", url: string, caption: string }>} attachments - media a tool produced for
+ *   channels that render it inline (web chat); filled by the tool, returned with the reply
  * @property {string} userText - the sender's current message, read by the approval guard. Example: `"setujui a1b2c3d4"`
  */
 
@@ -41,6 +46,7 @@ import { HttpError } from "../utils/http-error.js";
  * @typedef {object} SitiketTool
  * @property {string} name - Example: `"get_event_details"`
  * @property {Array<ToolContext["role"]>} roles - who may call it; the MCP server only registers a tool for these roles
+ * @property {Array<ToolContext["channel"]>} [channels] - channels it exists on; omitted = every channel
  * @property {string} description - shown to the model
  * @property {import("zod").ZodRawShape} inputSchema - zod shape; the MCP SDK validates arguments against it and publishes it as JSON Schema
  * @property {(args: any, context: ToolContext) => Promise<object>} handler
@@ -50,8 +56,12 @@ import { HttpError } from "../utils/http-error.js";
 const MAX_LISTED_ROWS = 20;
 /** Wrong-OTP guesses allowed per order before the bot stops trying (the web route has no cap; chat makes guessing cheap). */
 const MAX_OTP_ATTEMPTS = 5;
-/** Reviewer note stored on every decision made through the bot, so the dashboard shows where it came from. */
-const BOT_REVIEW_NOTE = "Disetujui via WhatsApp bot";
+/**
+ * Reviewer note stored on every decision made through the assistant, so the dashboard shows where it came from.
+ * @param {ToolContext} context
+ * @returns {string} Example: `"Disetujui via WhatsApp bot"`
+ */
+const reviewNoteFor = (context) => `Disetujui via ${context.channel === "web" ? "chat website" : "WhatsApp bot"}`;
 /** Short reference shown in place of a UUID: its first 8 hex chars. Example: `"a1b2c3d4"` */
 const REF_PATTERN = /^[0-9a-f]{8}$/;
 /** An approval must be worded as one by the reviewer themself. Example matches: `"setujui a1b2c3d4"`, `"acc a1b2c3d4"` */
@@ -167,12 +177,13 @@ const findVerifiedOpenOrder = async (waId) => {
 };
 
 /**
- * Payment instructions for one of the sender's orders — same data as the web
+ * Payment instructions for one of the user's orders — same data as the web
  * checkout's payment step.
  * @param {object} order - `orders` row plus `event_name`
+ * @param {{ userId?: string, guestEmail?: string }} [identity] - defaults to the guest-checkout identity (WhatsApp orders)
  */
-const paymentInstructionsFor = async (order) => {
-  const instructions = await getPaymentInstructions(order.id, { guestEmail: order.buyer_email });
+export const paymentInstructionsFor = async (order, identity = { guestEmail: order.buyer_email }) => {
+  const instructions = await getPaymentInstructions(order.id, identity);
   return {
     orderRef: shortRef(order.id),
     eventName: order.event_name,
@@ -262,6 +273,8 @@ export const SITIKET_TOOLS = [
   {
     name: "create_order",
     roles: ["buyer", "admin", "super_admin"],
+    // WhatsApp guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
+    channels: ["whatsapp"],
     description:
       "Place a ticket order (reserves the tickets and emails a 6-digit verification code). Call ONLY after the buyer confirmed a summary of event, ticket types, quantities, total, full name and email. The buyer's phone is taken from WhatsApp automatically.",
     // Same schema as POST /api/orders minus the phone, which is the verified sender — never model input.
@@ -281,6 +294,8 @@ export const SITIKET_TOOLS = [
   {
     name: "verify_email_code",
     roles: ["buyer", "admin", "super_admin"],
+    // WhatsApp guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
+    channels: ["whatsapp"],
     description: "Verify the 6-digit email code for the buyer's latest order. On success returns the payment instructions.",
     inputSchema: { code: z.string().min(1).max(20).describe('The 6-digit code. Example: "042917"') },
     handler: async ({ code }, context) => {
@@ -302,6 +317,8 @@ export const SITIKET_TOOLS = [
   {
     name: "get_payment_instructions",
     roles: ["buyer", "admin", "super_admin"],
+    // WhatsApp guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
+    channels: ["whatsapp"],
     description: "Get where/how much to pay for the buyer's latest open order (bank accounts and/or QRIS, deadline).",
     inputSchema: {},
     handler: async (_args, context) => {
@@ -312,6 +329,8 @@ export const SITIKET_TOOLS = [
   {
     name: "get_my_orders",
     roles: ["buyer", "admin", "super_admin"],
+    // WhatsApp guest-checkout flow; the web chat has its own signed-in variant (mcp/web-tools.js).
+    channels: ["whatsapp"],
     description:
       "List the buyer's recent ticket orders placed via this WhatsApp number and merch orders on their linked account, with their status.",
     inputSchema: {},
@@ -376,7 +395,7 @@ export const SITIKET_TOOLS = [
       if (matches.length !== 1) {
         return toolError(matches.length ? "AMBIGUOUS_REF" : "PAYMENT_NOT_FOUND", `No single pending payment of yours matches "${ref}"`);
       }
-      await reviewProof(matches[0].id, { sub: context.staff.id, role: context.role }, "approved", BOT_REVIEW_NOTE);
+      await reviewProof(matches[0].id, { sub: context.staff.id, role: context.role }, "approved", reviewNoteFor(context));
       return { approved: true, paymentRef: ref, result: "Order marked paid; tickets issued and sent to the buyer." };
     },
   },
@@ -422,7 +441,7 @@ export const SITIKET_TOOLS = [
           `No single pending application matches "${ref}"`,
         );
       }
-      await adminApplicationService.approve(matches[0].id, context.staff.id, BOT_REVIEW_NOTE);
+      await adminApplicationService.approve(matches[0].id, context.staff.id, reviewNoteFor(context));
       return {
         approved: true,
         applicationRef: ref,

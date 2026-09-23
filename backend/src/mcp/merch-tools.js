@@ -24,13 +24,14 @@ import { sendImage } from "../services/whatsapp-client.js";
 import { getObject } from "../utils/storage.js";
 import { formatJakartaTime, formatRupiah, MERCH_ORDER_STATUS_LABELS, shortRef, toolError, truncate } from "./sitiket-tools.js";
 
-// Merch tools for the WhatsApp bot — the same steps as the web merch checkout
+// Merch tools for the assistant (WhatsApp + website chat) — the same steps as the web merch checkout
 // (catalog → product + variant → saved delivery address → courier quote per
 // seller → split-per-seller order → payment → proof), through the same
-// services. Merch is signed-in only on the web, so every account-bound tool
-// acts on `context.account`: the SiTIKET account whose profile phone is the
-// sender's Meta-verified WhatsApp number (see whatsapp-bot-service.js
-// `resolveSender`) — never an account the model names.
+// services, on every channel. Merch is signed-in only on the web, so every
+// account-bound tool acts on `context.account` — on WhatsApp the account whose
+// profile phone is the sender's Meta-verified number (whatsapp-bot-service.js
+// `resolveSender`), on the website the signed-in session — never an account
+// the model names.
 
 /** "Top N newest merch" the catalog tool returns. */
 const MAX_LISTED_MERCH = 10;
@@ -61,6 +62,11 @@ const profileUrl = () => `${env.FRONTEND_URL}/account/profile`;
  * @returns {Promise<{ account?: object, error?: object }>}
  */
 const loadAccount = async (context) => {
+  if (context.channel === "web" && !context.account) {
+    return {
+      error: toolError("SIGN_IN_REQUIRED", "The user is not signed in. Ask them to sign in with the Masuk button in the chat, then continue."),
+    };
+  }
   if (context.duplicateAccounts) {
     return {
       error: toolError(
@@ -130,6 +136,7 @@ const merchOrderSummary = async (order, account) => {
   ]);
   return {
     orderRef: shortRef(order.id),
+    orderUrl: `${env.FRONTEND_URL}/merch-orders/${order.id}`,
     seller: seller?.name ?? null,
     status: MERCH_ORDER_STATUS_LABELS[order.status] ?? order.status,
     items: withItems.items.map((item) => ({
@@ -155,9 +162,14 @@ const merchOrderSummary = async (order, account) => {
   };
 };
 
-/** How a buyer submits merch payment proof in chat. */
-const PROOF_HOW_TO =
-  "Send a PHOTO of the transfer receipt in this chat before the deadline. With more than one unpaid order, put the orderRef in the photo caption.";
+/**
+ * How a buyer submits merch payment proof on this channel.
+ * @param {import("./sitiket-tools.js").ToolContext} context
+ */
+const proofHowTo = (context) =>
+  context.channel === "web"
+    ? "Upload the transfer proof on each order's page (orderUrl) before the deadline — proofs can't be sent in this chat."
+    : "Send a PHOTO of the transfer receipt in this chat before the deadline. With more than one unpaid order, put the orderRef in the photo caption.";
 
 /** @type {import("./sitiket-tools.js").SitiketTool[]} */
 export const MERCH_TOOLS = [
@@ -231,7 +243,7 @@ export const MERCH_TOOLS = [
     name: "send_merch_photos",
     roles: ["buyer", "admin", "super_admin"],
     description:
-      "Send a merch product's photos as images straight into this WhatsApp chat, 2 per call (each photo is a paid WhatsApp message). Use when the buyer wants to see the product; pass page=2, 3… only if they ask for more photos.",
+      "Show a merch product's photos straight in this chat, 2 per call (on WhatsApp each photo is a paid message). Use when the buyer wants to see the product; pass page=2, 3… only if they ask for more photos.",
     inputSchema: {
       productId: z.string().uuid().describe("productId from list_merch"),
       page: z.number().int().min(1).max(10).optional().describe("1 = first photos (default), 2 = the next ones, …"),
@@ -250,12 +262,18 @@ export const MERCH_TOOLS = [
 
       let sent = 0;
       for (const [offset, image] of images.entries()) {
+        const position = start + offset + 1;
+        const caption = position === 1 ? `${product.name} — ${priceLabel(product)}` : `${product.name} (${position}/${allImages.length})`;
+        // Website chat renders the stored image itself — no conversion, no paid message.
+        if (context.channel === "web") {
+          context.attachments.push({ type: "image", url: image.image_url, caption });
+          sent += 1;
+          continue;
+        }
         // Stored as WebP in R2 (`/uploads/<key>`); WhatsApp image messages take only JPEG/PNG.
         const stored = await getObject(image.image_url.replace(/^\/uploads\//, ""));
         if (!stored.ok) continue;
         const jpeg = await sharp(Buffer.from(await stored.arrayBuffer())).jpeg({ quality: 85 }).toBuffer();
-        const position = start + offset + 1;
-        const caption = position === 1 ? `${product.name} — ${priceLabel(product)}` : `${product.name} (${position}/${allImages.length})`;
         await sendImage(context.waId, jpeg, "image/jpeg", caption);
         sent += 1;
       }
@@ -275,7 +293,7 @@ export const MERCH_TOOLS = [
     name: "get_my_account",
     roles: ["buyer", "admin", "super_admin"],
     description:
-      "Get the buyer's SiTIKET account linked to this WhatsApp number (by profile phone): name, email, and saved delivery address. Required before any merch order.",
+      "Get the buyer's SiTIKET account (WhatsApp: matched by profile phone; website: the signed-in user): name, email, and saved delivery address. Required before any merch order.",
     inputSchema: {},
     handler: async (_args, context) => {
       const { account, error } = await loadAccount(context);
@@ -393,7 +411,7 @@ export const MERCH_TOOLS = [
       return {
         shipTo: shippingAddressOf(account),
         orders: await Promise.all(orders.map((order) => merchOrderSummary(order, account))),
-        howToSubmitProof: PROOF_HOW_TO,
+        howToSubmitProof: proofHowTo(context),
       };
     },
   },
@@ -411,7 +429,7 @@ export const MERCH_TOOLS = [
       if (open.length === 0) return toolError("NO_OPEN_MERCH_ORDER", "The buyer has no merch order awaiting payment");
       return {
         orders: await Promise.all(open.map((order) => merchOrderSummary(order, account))),
-        howToSubmitProof: PROOF_HOW_TO,
+        howToSubmitProof: proofHowTo(context),
       };
     },
   },
