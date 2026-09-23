@@ -5,6 +5,7 @@ import { completePastEvents } from "./services/event-service.js";
 import { expireStaleMerchOrders } from "./services/merch-order-service.js";
 import { expireStalePendingOrders } from "./services/order-service.js";
 import { processEmailJobQueue } from "./services/email-job-service.js";
+import { isWhatsappBotConfigured, warnStaffWithoutPhone } from "./services/whatsapp-bot-service.js";
 
 // Kept well under ORDER_PAYMENT_HOLD_MINUTES (10): the sweep is what sends the
 // "payment window closed" email, so a coarse interval would make that mail land
@@ -13,6 +14,11 @@ const EXPIRY_SWEEP_INTERVAL_MS = 60 * 1000;
 const EMAIL_QUEUE_POLL_INTERVAL_MS = 3 * 1000;
 
 app.listen(env.PORT, () => console.log(`SiTIKET API listening on port ${env.PORT}`));
+
+// The WhatsApp bot recognises Admins/Super Admins by their profile phone — flag any it can't.
+if (isWhatsappBotConfigured()) {
+  warnStaffWithoutPhone().catch((error) => console.error("Failed to check admin phones:", error));
+}
 
 // Single-instance-friendly stand-in for a real job scheduler: releases
 // inventory/promo holds for orders whose payment window lapsed with no

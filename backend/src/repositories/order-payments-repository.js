@@ -13,6 +13,36 @@ export const findLatestByOrder = (orderId) =>
 /** @param {string} id */
 export const findById = (id) => db(TABLE).where({ id }).first();
 
+/** Pending-review proofs on events owned by `ownerId` (joined with their order + event). */
+const pendingReviewForOwner = (ownerId) =>
+  db(TABLE)
+    .join("orders", "orders.id", `${TABLE}.order_id`)
+    .join("events", "events.id", "orders.event_id")
+    .where(`${TABLE}.status`, "pending_review")
+    .andWhere("events.owner_id", ownerId);
+
+/**
+ * An organizer's review queue across all their events, oldest first — the
+ * Admin's "which payments need approval" view in the WhatsApp bot.
+ * @param {string} ownerId - the admin's user id
+ * @param {number} [limit]
+ */
+export const listPendingReviewForOwner = (ownerId, limit = 20) =>
+  pendingReviewForOwner(ownerId)
+    .select(`${TABLE}.*`, "orders.buyer_name", "orders.buyer_email", "events.name as event_name")
+    .orderBy(`${TABLE}.submitted_at`, "asc")
+    .limit(limit);
+
+/**
+ * One of that organizer's pending proofs by id prefix — resolves the 8-char
+ * reference the WhatsApp bot shows in place of a full UUID. Capped at 2 rows:
+ * the caller only needs to know whether the match is unique.
+ * @param {string} prefix - lowercase hex. Example: `"a1b2c3d4"`
+ * @param {string} ownerId - the admin's user id
+ */
+export const findPendingReviewByIdPrefixForOwner = (prefix, ownerId) =>
+  pendingReviewForOwner(ownerId).select(`${TABLE}.id`).where(`${TABLE}.id`, "like", `${prefix}%`).limit(2);
+
 /**
  * @param {{ orderId: string, method: "bank_transfer" | "qris", bankAccountId: string | null, amount: number, proofImageUrl: string, transferNote?: string }} input
  */

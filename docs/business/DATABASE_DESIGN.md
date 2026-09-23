@@ -287,6 +287,7 @@ See [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) for the full flow narra
 | `discount_amount` | integer, not null, default 0 | |
 | `total_amount` | integer, not null | `subtotal_amount - discount_amount`. Always recomputed server-side; never trust a client-submitted total. |
 | `status` | enum `order_status` (see below), default `pending_payment` | |
+| `whatsapp_wa_id` | varchar(32), nullable, indexed | Set when the order was placed through the WhatsApp bot: the sender's Meta-verified WhatsApp id (e.g. `628112003717`). The bot authorizes every follow-up (OTP, payment instructions, proof photo) against this — never against the hand-typed `buyer_phone` — and delivers the QR tickets to it on approval. Null for web orders. |
 | `payment_expires_at` | timestamptz, not null | Reservation hold deadline, set at creation to `now + ORDER_PAYMENT_HOLD_MINUTES` (10); expiring orders release their `ticket_types.quantity_sold` hold. Never extended afterwards — including when a rejected proof returns the order to `pending_payment`, see [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) §5. |
 | `created_at` / `updated_at` | timestamptz | |
 

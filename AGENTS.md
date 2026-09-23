@@ -2,7 +2,7 @@
 
 ## Purpose
 
-SiTIKET is an event discovery and ticket-purchasing product. The repository contains a production-buildable Next.js frontend and an Express/MySQL backend, and the frontend is wired to the real backend API end-to-end: Google Sign-In, public event browsing, real multi-ticket-type checkout with atomic inventory reservation, manual bank-transfer payment verification (guest OTP, proof upload), QR tickets, gate check-in scanning (a successful scan also emails the buyer a branded confirmation), a per-seller merch store (public storefront with search/filters/infinite scroll, cart, split-per-seller checkout with a 24h payment hold, Shopee-style product variants), in-app header-bell notifications, an Admin dashboard (events/images/ticket-types/promo-codes/staff/bank-accounts/orders/payments/refunds + merch products/orders/packing labels + an Excel sales report), and a Super Admin dashboard (taxonomy incl. merch categories/admin-applications/users). See `BACKEND.md` § _Known gaps_ and `FRONTEND.md` § _Responsive verification_ for what's still stubbed or unverified (real email delivery, a payment gateway, automated tests, per-breakpoint visual passes on the dashboards).
+SiTIKET is an event discovery and ticket-purchasing product. The repository contains a production-buildable Next.js frontend and an Express/MySQL backend, and the frontend is wired to the real backend API end-to-end: Google Sign-In, public event browsing, real multi-ticket-type checkout with atomic inventory reservation, manual bank-transfer payment verification (guest OTP, proof upload), QR tickets, gate check-in scanning (a successful scan also emails the buyer a branded confirmation), a per-seller merch store (public storefront with search/filters/infinite scroll, cart, split-per-seller checkout with a 24h payment hold, Shopee-style product variants), in-app header-bell notifications, an Admin dashboard (events/images/ticket-types/promo-codes/staff/bank-accounts/orders/payments/refunds + merch products/orders/packing labels + an Excel sales report), a Super Admin dashboard (taxonomy incl. merch categories/admin-applications/users), and a Bahasa-Indonesia WhatsApp ticket bot (buy + OTP + photo proof in chat, organizers approve their own payments, Super Admin approves organizer applications, QR tickets delivered in chat — its LLM acts only through a local MCP server; see `docs/business/WHATSAPP_BOT.md` and `BACKEND.md` § _WhatsApp bot_). See `BACKEND.md` § _Known gaps_ and `FRONTEND.md` § _Responsive verification_ for what's still stubbed or unverified (real email delivery, a payment gateway, automated tests, per-breakpoint visual passes on the dashboards).
 
 ## Read only what you need
 
@@ -19,7 +19,7 @@ Repository skills are available under `.agents/skills`:
 
 ## Repository map
 
-- `src/app`: Next.js routes (including `/dashboard/admin`, `/dashboard/super-admin`, `/dashboard/scan`) and Route Handlers (`api/auth/*` — the session-cookie BFF); keep route files thin.
+- `src/app`: Next.js routes (including `/dashboard/admin`, `/dashboard/super-admin`, `/dashboard/scan`) and Route Handlers (`api/auth/*` — the session-cookie BFF; `api/webhooks/whatsapp` — a verbatim relay of Meta's webhook to the backend); keep route files thin.
 - `src/features`: business feature modules (`auth`, `events`, `checkout`, `orders`, `account`, `admin`, `super-admin`, `scanner`, `merch`, `notifications`, `home`) — each with `components/` and a `lib/` of `api.ts` (server reads) + `actions.ts` (Server Action writes).
 - `src/lib`: cross-feature server plumbing — `api/client.ts` (backend fetch wrapper), `api/types.ts` + `api/normalize.ts` (wire types, see the comment block at its top before adding an entity), `session.ts` (current-user resolution), `env.ts`/`public-env.ts`.
 - `src/components/ui`: generic reusable primitives, including `dashboard-shell.tsx` (Admin/Super Admin sidebar layout).
@@ -27,7 +27,7 @@ Repository skills are available under `.agents/skills`:
 - `src/data/events.ts`: `EventItem` type + `formatPrice` (still used); the mock `events` array/`getEvent` are unused now that events come from the API.
 - `src/config`: shared configuration such as navigation.
 - `public`: local static assets.
-- `backend`: separate Node.js/Express + MySQL API implementing the v1 domain — see `BACKEND.md`.
+- `backend`: separate Node.js/Express + MySQL API implementing the v1 domain — see `BACKEND.md`. `backend/src/mcp` holds the local MCP server + tools the WhatsApp bot's LLM acts through.
 - `docs/business`: business/product overview and database design — implemented by `backend` and consumed end-to-end by the frontend.
 - `src/core`: inherited Isomorphic template library, not the default location for new SiTIKET code — not reused by the dashboard shell either (see FRONTEND.md § _Design conventions_).
 

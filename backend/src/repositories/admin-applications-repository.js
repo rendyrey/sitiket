@@ -13,6 +13,14 @@ export const findById = (id, executor = db) => executor(TABLE).where({ id }).fir
 export const findPendingByUserId = (userId) => db(TABLE).where({ user_id: userId, status: "pending" }).first();
 
 /**
+ * Pending applications whose id starts with `prefix` — resolves the 8-char
+ * reference the WhatsApp bot shows. Capped at 2 rows (uniqueness check only).
+ * @param {string} prefix - lowercase hex. Example: `"a1b2c3d4"`
+ */
+export const findPendingByIdPrefix = (prefix) =>
+  db(TABLE).where("id", "like", `${prefix}%`).andWhere({ status: "pending" }).limit(2);
+
+/**
  * @param {{ userId: string, businessName: string, businessDescription?: string, contactPhone: string }} input
  * @returns {Promise<object>} the created application row
  */

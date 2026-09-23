@@ -128,17 +128,7 @@ export const singleImageUpload = (fieldName, prefix) => (request, response, next
  * @param {string} prefix - directory to store under. Example: `"merch"`
  */
 const storeUpload = async (request, prefix) => {
-  let compressed;
-  try {
-    compressed = await compressImage(request.file.buffer, prefix);
-  } catch {
-    // The MIME type is client-supplied, so bytes that pass the file filter can
-    // still fail to decode (a truncated upload, or a renamed non-image).
-    throw badRequest("INVALID_IMAGE", "That file could not be read as an image. Please try a different photo.");
-  }
-
-  const key = toObjectKey(prefix, compressed.mimeType);
-  await putObject(key, compressed.buffer, compressed.mimeType);
+  const { key, compressed } = await storeImage(request.file.buffer, prefix);
 
   request.file.filename = key;
   request.file.buffer = compressed.buffer;
@@ -148,6 +138,33 @@ const storeUpload = async (request, prefix) => {
   // dimensions (the poster-resolution rule) don't have to decode it again.
   request.file.width = compressed.width;
   request.file.height = compressed.height;
+};
+
+/**
+ * Compresses an image buffer with its prefix's policy and stores it in R2 —
+ * the same path every multipart upload takes, reused by callers that receive
+ * image bytes some other way (the WhatsApp bot downloads payment proofs from
+ * Meta's media API).
+ *
+ * @param {Buffer} buffer - raw image bytes. Example: a 3 MB phone JPEG
+ * @param {string} prefix - directory to store under. Example: `"proofs/tickets"`
+ * @returns {Promise<{ key: string, compressed: { buffer: Buffer, mimeType: string, width: number, height: number } }>}
+ *   `key` is the R2 object key. Example: `"proofs/tickets/7f3c1e0a-….webp"`
+ * @throws {HttpError} 400 `INVALID_IMAGE` when the bytes don't decode, 502 when R2 rejects the write.
+ */
+export const storeImage = async (buffer, prefix) => {
+  let compressed;
+  try {
+    compressed = await compressImage(buffer, prefix);
+  } catch {
+    // The MIME type is client-supplied, so bytes that pass the file filter can
+    // still fail to decode (a truncated upload, or a renamed non-image).
+    throw badRequest("INVALID_IMAGE", "That file could not be read as an image. Please try a different photo.");
+  }
+
+  const key = toObjectKey(prefix, compressed.mimeType);
+  await putObject(key, compressed.buffer, compressed.mimeType);
+  return { key, compressed };
 };
 
 // Exported for unit testing the multer-error → HttpError mapping and key naming.

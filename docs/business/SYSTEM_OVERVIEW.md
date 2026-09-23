@@ -74,6 +74,8 @@ These were explicitly decided with the product owner during design and materiall
 | In-app QR gate check-in with duplicate/fraud detection | ✅ |
 | Admin onboarding via Super Admin approval | ✅ |
 | Manual, status-tracked refunds | ✅ |
+| WhatsApp ticket bot (Bahasa Indonesia) — buy + email OTP + photo proof in chat, organizer approves own payments, Super Admin approves organizer applications, QR tickets delivered in chat — see [WHATSAPP_BOT.md](./WHATSAPP_BOT.md) | ✅ |
+| WhatsApp ticket delivery after the 24h customer-service window (needs a Meta-approved template) | 🔜 future |
 | Automated payment gateway (Midtrans/Xendit) | 🔜 future — see [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) §5 |
 | Automated gateway-driven refunds | 🔜 future, depends on the above |
 | Ticket transfer/resale between buyers | ❌ not in scope, not modeled |
@@ -85,3 +87,4 @@ These were explicitly decided with the product owner during design and materiall
 - [DATABASE_DESIGN.md](./DATABASE_DESIGN.md) — full relational schema, ERD, and business-rule-to-constraint mapping.
 - [PAYMENT_VERIFICATION.md](./PAYMENT_VERIFICATION.md) — v1 manual bank-transfer flow, states, and the future payment-gateway migration path.
 - [CHECKIN_GATE_SYSTEM.md](./CHECKIN_GATE_SYSTEM.md) — QR ticket lifecycle and gate scanning flow.
+- [WHATSAPP_BOT.md](./WHATSAPP_BOT.md) — the WhatsApp channel: buyer, organizer and Super Admin journeys, recognition by phone, safety rules.

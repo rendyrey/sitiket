@@ -65,6 +65,27 @@ Backend `/var/www/sitiket/backend/.env`:
 - `SMTP_*` — the **platform** sender, used only for platform emails (admin
   application notifications) and as a legacy fallback; buyer-facing emails ride
   each organizer's own SMTP config (see BACKEND.md).
+- `WHATSAPP_VERIFY_TOKEN` / `WHATSAPP_APP_SECRET` / `WHATSAPP_ACCESS_TOKEN` /
+  `WHATSAPP_PHONE_NUMBER_ID` (+ optional `WHATSAPP_BOT_MODEL`, default
+  `gpt-4o-mini`) — the WhatsApp ticket bot (BACKEND.md § _WhatsApp bot_). Its
+  LLM reuses the `EMBEDDINGS_BASE_URL`/`EMBEDDINGS_API_KEY` above, so those
+  must be set too. All live in **backend** `.env` only — the frontend just
+  relays the webhook. Use a System User token for `WHATSAPP_ACCESS_TOKEN`; the
+  API Setup page's token expires after 24h and the bot then fails with 401s.
+
+## WhatsApp bot setup (Meta dashboard)
+
+1. Backend `.env`: set the four `WHATSAPP_*` values, then restart the backend
+   (`--update-env`, PATH exported as below).
+2. Meta app → WhatsApp → Configuration → Webhook: callback URL
+   `https://sitiket.com/api/webhooks/whatsapp`, verify token = `WHATSAPP_VERIFY_TOKEN`;
+   subscribe the **messages** field.
+3. Subscribe the app to the WABA once:
+   `curl -X POST "https://graph.facebook.com/v23.0/<WABA_ID>/subscribed_apps" -H "Authorization: Bearer <token>"`.
+4. Every admin/super_admin who should use the bot needs their WhatsApp number
+   on their account (profile page; super admins can also use
+   `npm run db:promote-super-admin -- <email> <phone>`). The backend logs a
+   warning at boot for each one without a phone.
 
 ## Deploying a change
 

@@ -35,13 +35,15 @@ sequenceDiagram
     alt Approved
         S->>S: order_payments.status = approved, orders.status = paid
         S->>S: Generate one tickets row + QR per purchased unit
-        S->>B: Email confirmation + tickets
+        S->>B: Email confirmation + tickets (and QR images in WhatsApp for bot orders)
     else Rejected
         S->>S: order_payments.status = rejected
         S->>B: Notify rejection with reviewer_notes
         B->>S: Re-submit proof (new order_payments row) or let the order expire
     end
 ```
+
+**WhatsApp channel.** The same flow also runs over the WhatsApp bot ([WHATSAPP_BOT.md](./WHATSAPP_BOT.md)). The buyer orders in chat, types the emailed OTP there, and sends the proof as a **photo**. The event owner can list and approve their own pending proofs from WhatsApp (`setujui <ref>`). On approval, bot orders also receive one QR image per ticket in the chat, on top of the email. Rejections still happen in the dashboard. The Super Admin reviews payments from the dashboard only; in the bot they handle organizer applications.
 
 ## 4. States and transitions
 

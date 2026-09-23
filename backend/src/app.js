@@ -40,12 +40,16 @@ import { ticketTypeRouter } from "./routes/ticket-types.js";
 import { ticketRouter } from "./routes/tickets.js";
 import { uploadsRouter } from "./routes/uploads.js";
 import { userRouter } from "./routes/users.js";
+import { whatsappRouter } from "./routes/whatsapp.js";
 
 export const app = express();
 // Trust exactly one reverse proxy: Nginx
 app.set('trust proxy', 1);
 
 app.use(cors({ origin: env.FRONTEND_URL }));
+
+// Before express.json(): the webhook's signature check needs the raw body.
+app.use("/api/whatsapp", whatsappRouter);
 
 app.use(express.json());
 app.use("/uploads", uploadsRouter);

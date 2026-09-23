@@ -171,6 +171,40 @@ export const updateStatus = (id, status, executor = db) =>
 export const markGuestEmailVerified = (id, executor = db) =>
   executor(TABLE).where({ id }).update({ guest_email_verified_at: new Date(), updated_at: new Date() });
 
+/**
+ * Tags an order as placed through the WhatsApp bot by this WhatsApp account.
+ * @param {string} id
+ * @param {string} waId - Meta's sender id. Example: `"628112003717"`
+ */
+export const setWhatsappWaId = (id, waId) => db(TABLE).where({ id }).update({ whatsapp_wa_id: waId });
+
+/**
+ * Newest still-payable order this WhatsApp account placed through the bot.
+ * @param {string} waId - Example: `"628112003717"`
+ * @returns {Promise<object | undefined>} an `orders` row plus `event_name`
+ */
+export const findLatestOpenByWhatsappWaId = (waId) =>
+  db(TABLE)
+    .join("events", "events.id", `${TABLE}.event_id`)
+    .select(`${TABLE}.*`, "events.name as event_name")
+    .where(`${TABLE}.whatsapp_wa_id`, waId)
+    .whereIn(`${TABLE}.status`, ["pending_payment", "awaiting_verification"])
+    .orderBy(`${TABLE}.created_at`, "desc")
+    .first();
+
+/**
+ * Recent bot orders of one WhatsApp account — answers "status pesanan saya".
+ * @param {string} waId - Example: `"628112003717"`
+ * @param {number} [limit]
+ */
+export const listRecentByWhatsappWaId = (waId, limit = 5) =>
+  db(TABLE)
+    .join("events", "events.id", `${TABLE}.event_id`)
+    .select(`${TABLE}.*`, "events.name as event_name")
+    .where(`${TABLE}.whatsapp_wa_id`, waId)
+    .orderBy(`${TABLE}.created_at`, "desc")
+    .limit(limit);
+
 /** Orders past their payment hold that never got a proof submitted. */
 export const findExpiredPendingOrders = (executor = db) =>
   executor(TABLE).where({ status: "pending_payment" }).andWhere("payment_expires_at", "<", new Date());

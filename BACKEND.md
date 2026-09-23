@@ -23,7 +23,7 @@ Default URL: `http://localhost:4000`. Never commit `.env` or real credentials �
 **Becoming the first Super Admin**: there is no self-serve path to `super_admin` by design (see [docs/business/DATABASE_DESIGN.md](docs/business/DATABASE_DESIGN.md) §4.1). Sign in once via the frontend (or `POST /api/auth/google`) so a `users` row exists, then run:
 
 ```bash
-npm run db:promote-super-admin -- you@example.com
+npm run db:promote-super-admin -- you@example.com 081234567890   # WhatsApp number required (the bot recognises Super Admins by it)
 ```
 
 ## Current structure
@@ -47,6 +47,7 @@ backend/
     ├── routes/          # route declarations, thin
     ├── controllers/     # req/response translation
     ├── services/        # business rules, transactions, authorization
+    ├── mcp/             # local MCP server + tools behind the WhatsApp bot (see § WhatsApp bot)
     ├── repositories/    # knex queries, one module per table (+ a shared taxonomy factory)
     ├── schemas/         # zod request schemas, one per domain
     └── utils/           # http-error, id/ticket-code generation, qr-token (HMAC), slugify, presenters
@@ -81,6 +82,7 @@ All routes are prefixed `/api`. Grouped by resource; `mine`/owner-scoped routes 
 | Shipping | `POST /shipping/quotes` (signed-in; per-seller courier options for a cart, priced seller-origin → buyer district), `GET /shipping/couriers` (the known courier catalog for the seller's enable/disable checkboxes) |
 | Shipping origin (seller) | `GET/PUT /shipping-origin` — one departure address per seller (`villageCode` + street `address` + optional `postalCode` + optional `enabledCouriers` whitelist); **required before creating products**. No DELETE on purpose — removing it would strand live products |
 | Notifications | `GET /notifications` (+ `meta.unreadCount`), `GET /notifications/unread-count`, `POST /notifications/read` (`{ids}` or everything) |
+| WhatsApp webhook | `GET/POST /whatsapp/webhook` — Meta's handshake + signed inbound messages; reached via the Next relay `/api/webhooks/whatsapp` (see § _WhatsApp bot_) |
 | Profile | `PATCH /auth/me` — phone + street address + `villageCode` (the region hierarchy is resolved server-side from the village; merch checkout prerequisite) |
 
 ## API conventions
@@ -119,6 +121,24 @@ All routes are prefixed `/api`. Grouped by resource; `mine`/owner-scoped routes 
 
 - **Excel sales report.** `GET /api/merch-orders/export`, `GET /api/orders/export`, and `GET /api/events/:eventId/orders/export` (all `startDate`/`endDate`, `YYYY-MM-DD`, inclusive) return every matching order — unpaginated, items attached — for the signed-in admin, admin-wide, or scoped to one event respectively. Two frontend Route Handlers turn that JSON into a download, sharing the sheet-building helpers in `src/lib/reports/xlsx.ts`: `GET /api/admin/reports/export` (admin-wide — "Merch Orders" + "Ticket Orders" sheets) and `GET /api/admin/reports/events/:eventId/export` (one event — "Ticket Orders" only, merch isn't event-scoped). The backend routes are the actual `admin`/`super_admin`(+ownership) gate; the Route Handlers just relay the session cookie. UI: `/dashboard/admin/reports` (admin-wide) and the event's Orders tab (`/dashboard/admin/events/:slug/orders`, event-scoped).
 - **Merch packing label.** `/print/merch-orders/:id` (frontend, outside `/dashboard`) renders a print-only buyer/shipping/items label for one merch order, reusing the existing `GET /api/merch-orders/:id`. "Print / Save as PDF" is the browser's own print dialog — no PDF library. Linked from the "Label" action on the seller's merch-orders table.
+
+## WhatsApp bot
+
+A Bahasa-Indonesia customer-service bot ("Mimin SiTIKET") on the SiTIKET WhatsApp Business number that sells tickets end-to-end — the same flow as the web checkout, through the same services. Business rules and user journeys: [docs/business/WHATSAPP_BOT.md](docs/business/WHATSAPP_BOT.md); Meta dashboard + env setup: [DEPLOYMENT.md](DEPLOYMENT.md) § _WhatsApp bot setup_.
+
+- **Path of a message.** Meta → `sitiket.com/api/webhooks/whatsapp` (Next Route Handler, a verbatim relay, since nginx only routes `/uploads/` here) → `routes/whatsapp.js` (mounted before `express.json()`; verifies `X-Hub-Signature-256` over the raw bytes, acks 200 immediately) → `services/whatsapp-bot-service.js`. Text goes to an LLM; a **photo** is always treated as a payment proof and handled without the LLM (downloaded from Meta, compressed + stored under `proofs/tickets/` via `middleware/upload.js` `storeImage`, then `submitProof`).
+- **Local MCP server.** The LLM can only act through `mcp/sitiket-mcp-server.js`, an in-process MCP server (`@modelcontextprotocol/sdk`, in-memory transport) built **per message** with the sender's identity baked in; the bot is its MCP client and bridges its tools to chat-completions function calls. Tools live in `mcp/sitiket-tools.js` and call the existing services — `createOrder` (guest checkout + email OTP), `verifyGuestOtp`, `getPaymentInstructions`, `reviewProof`, `adminApplicationService.approve` — so pricing, stock, OTP, proof and authorization rules are exactly the web's. Events and prices are read live from MySQL on every call (no snapshot/RAG layer to go stale).
+- **Who can do what.** The sender is Meta's `wa_id` from the signed webhook (unspoofable). `resolveSender` matches it against the `phone` on active `super_admin`/`admin` accounts (any common format, normalized by `utils/phone.js`); everyone else is a buyer. The per-message MCP server **only registers the tools that role may use**, so an admin tool doesn't exist for a buyer however the model is prompted:
+  | Role | Tools |
+  | --- | --- |
+  | everyone | list/detail events, `create_order`, `verify_email_code`, `get_payment_instructions`, `get_my_orders` (orders tagged with their own `orders.whatsapp_wa_id`) |
+  | admin (organizer) | + `list_pending_payments` / `approve_payment` — **own events only** (SQL-scoped by `events.owner_id`, and `reviewProof` re-checks) |
+  | super_admin | + `list_pending_admin_applications` / `approve_admin_application` |
+- **Approval guard (prompt-injection defence).** Listings contain text other people typed (buyer names, transfer notes, business descriptions). `approve_*` only run when the reviewer's **own current message** contains the item's 8-char reference *and* an approval word (`setujui`/`acc`/`approve`/`terima`) — `isApprovalTypedByUser`. Injected data can steer the model into calling the tool, but can't make the reviewer type that.
+- **QR tickets on WhatsApp.** `reviewProof` (web dashboard or bot) calls `services/whatsapp-ticket-service.js` for orders with a `whatsapp_wa_id`: a confirmation text plus one QR PNG per ticket (`qrcode`, level M — same `qr_payload` the web ticket page and gate scanner use), uploaded to WhatsApp's media API. Fire-and-log, never blocks the approval; email delivery is unchanged.
+- **LLM.** Chat completions on the OpenAI-compatible endpoint already configured for embeddings (`EMBEDDINGS_BASE_URL`/`EMBEDDINGS_API_KEY`), model `WHATSAPP_BOT_MODEL` (default `gpt-4o-mini` — must be a chat model). ≤6 tool rounds per message, user text capped at 1500 chars, 20 messages / 10 min per sender.
+- **State.** Chat history (last 8 user turns, 30-min idle reset), the per-sender queue, dedupe of Meta's retried message ids, the flood counter and a 5-wrong-OTP cap are in-memory — fine on the single pm2 instance; orders themselves are in MySQL, so a restart only forgets the conversation.
+- **Tests.** `services/whatsapp-bot-service.test.js` covers the approval guard, phone matching, history trimming and signature check.
 
 ## Email delivery
 
@@ -209,9 +229,10 @@ so uploads survive a redeploy, a rebuilt VPS, or a second API instance.
 
 ## Known gaps / follow-ups
 
+- **WhatsApp 24h window.** The bot only sends free-form messages, which WhatsApp accepts within 24h of the buyer's last message. A payment approved later than that still emails the tickets, but the WhatsApp QR send fails (logged as `[whatsapp-tickets]`). Covering that needs an approved utility template with an image header.
 - **JWT role claims don't live-update.** A session JWT embeds `role` at sign-in time. If a Super Admin approves someone's Admin application (or changes anyone's role) mid-session, the affected user must sign in again to get a token reflecting the new role — there is no server-side session/role revalidation per request. Standard stateless-JWT tradeoff; consider shorter token lifetimes or a role-refresh endpoint if this becomes a real friction point.
 - **No email-config management beyond replace.** An organizer can overwrite their email config but not delete it (deliberate — it's a prerequisite), and there's no "send test email" endpoint beyond the verify-on-save handshake. The guest OTP still logs server-side and echoes in the response outside `NODE_ENV=production` when no transport is available, so dev checkout works without SMTP.
-- **No automated tests yet.** Add them alongside the first real feature change per this project's `AGENTS.md`.
+- **Automated tests are unit-level only** (`npm test`, `node --test`): helpers and guards such as `services/whatsapp-bot-service.test.js`; no route/integration suite yet.
 - **Payment gateway** (Midtrans/Xendit) is explicitly deferred — see the migration path in [docs/business/PAYMENT_VERIFICATION.md](docs/business/PAYMENT_VERIFICATION.md) §5.
 
 ## Local commands
@@ -223,5 +244,5 @@ npm run db:up / db:down           # docker compose up/down for local MySQL
 npm run db:migrate / db:rollback  # apply / roll back migrations
 npm run db:migrate:make <name>    # scaffold a new migration
 npm run db:seed                   # re-run seeds (idempotent — insert-or-update by fixed id)
-npm run db:promote-super-admin -- <email>
+npm run db:promote-super-admin -- <email> <whatsapp-phone>
 ```

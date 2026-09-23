@@ -100,6 +100,21 @@ const envSchema = z.object({
   // Direct WhatsApp chat offered to a requester while their admin/organizer
   // application is pending review. Example: "https://wa.me/message/XXXXXXXXXXXXX1"
   ADMIN_SUPPORT_WHATSAPP_URL: z.string().url().default("https://wa.me/message/G7YDAXGHGQ66F1"),
+
+  // Optional: WhatsApp Cloud API bot (routes/whatsapp.js, services/whatsapp-bot-service.js).
+  // VERIFY_TOKEN is any string you choose and also type into the Meta
+  // dashboard; APP_SECRET (App settings → Basic) verifies X-Hub-Signature-256;
+  // ACCESS_TOKEN + PHONE_NUMBER_ID send replies. The bot's LLM calls go to the
+  // OpenAI-compatible endpoint already configured by EMBEDDINGS_BASE_URL /
+  // EMBEDDINGS_API_KEY, using the chat model WHATSAPP_BOT_MODEL. Any of these
+  // unset → the webhook still acks Meta but the bot stays silent.
+  WHATSAPP_VERIFY_TOKEN: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  WHATSAPP_APP_SECRET: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  WHATSAPP_ACCESS_TOKEN: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  WHATSAPP_PHONE_NUMBER_ID: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional()),
+  WHATSAPP_GRAPH_API_VERSION: z.string().default("v23.0"),
+  // Must be a CHAT model (not the embeddings model) — the bot's replies and tool calls run on it.
+  WHATSAPP_BOT_MODEL: z.string().default("gpt-4o-mini"),
 });
 
 const parsed = envSchema.safeParse(process.env);
