@@ -104,7 +104,7 @@ A floating chat button on every page of sitiket.com opens the same assistant: sa
 | Approvals (Admin/Super Admin) | same guarded `setujui <code>` | same guarded `setujui <code>`, when signed in with that role |
 | Cost | per WhatsApp message (from 1 Oct 2026) + LLM | LLM only |
 
-Limits: 15 messages per 10 minutes per chat, and 40 per 10 minutes per network (so guests can't dodge the per-chat limit). The chat's visible history is remembered in the browser (per account). The assistant's own memory follows the same 30-minute rule as WhatsApp.
+Limits: 15 messages per 10 minutes per chat, and 40 per 10 minutes per network (so guests can't dodge the per-chat limit). The chat's visible history is remembered in the browser (per account). The panel also offers the Telegram bot (§10) — a Telegram button in its header and, before the first message, a *Lanjut di Telegram* card — for buyers who'd rather get tickets and order updates in Telegram. The web conversation doesn't carry over; Telegram starts fresh. The assistant's own memory follows the same 30-minute rule as WhatsApp.
 
 ## 10. Telegram bot
 

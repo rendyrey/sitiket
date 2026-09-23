@@ -5,7 +5,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type FormEvent, type KeyboardEvent } from "react";
-import { PiChatCircleDotsFill, PiPaperPlaneRightFill, PiSignInBold, PiXBold } from "react-icons/pi";
+import {
+  PiArrowUpRightBold,
+  PiChatCircleDotsFill,
+  PiPaperPlaneRightFill,
+  PiSignInBold,
+  PiTelegramLogoFill,
+  PiXBold,
+} from "react-icons/pi";
+import { TELEGRAM_BOT_URL } from "@/config/assistant";
 import { useSession } from "@/features/auth/lib/use-session";
 import { toAssetUrl } from "@/lib/public-env";
 import { sendChatMessageAction } from "../lib/actions";
@@ -225,6 +233,18 @@ function ChatAssistant({ historyKey, isSignedIn, pathname }: ChatAssistantProps)
                   Asisten tiket & merch
                 </p>
               </div>
+              {/* Same assistant on Telegram — always one tap away (labelled only where the header has room: the 480–639px phone sheet). */}
+              <a
+                href={TELEGRAM_BOT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Lanjut chat di Telegram"
+                title="Lanjut chat di Telegram"
+                className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 border-2 border-white/20 px-2.5 text-[10px] font-black uppercase tracking-wide transition-colors hover:border-lime hover:text-lime focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime"
+              >
+                <PiTelegramLogoFill aria-hidden className="size-5" />
+                <span className="hidden xs:inline sm:hidden">Telegram</span>
+              </a>
               <button
                 type="button"
                 onClick={close}
@@ -311,6 +331,25 @@ function ChatAssistant({ historyKey, isSignedIn, pathname }: ChatAssistantProps)
                     </button>
                   ))}
                 </div>
+              )}
+
+              {/* First-run invitation to move to Telegram; hidden once the conversation starts so it never nags. */}
+              {showQuickPrompts && (
+                <a
+                  href={TELEGRAM_BOT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-center gap-3 border-2 border-ink bg-ink p-3 text-white transition-colors hover:border-lime focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                >
+                  <PiTelegramLogoFill aria-hidden className="size-8 shrink-0 text-lime" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-black uppercase tracking-wide text-lime">Lanjut di Telegram</span>
+                    <span className="mt-0.5 block text-xs leading-snug text-white/70">
+                      Mimin yang sama — e-tiket & update pesanan langsung masuk ke <span className="whitespace-nowrap">HP-mu.</span>
+                    </span>
+                  </span>
+                  <PiArrowUpRightBold aria-hidden className="size-4 shrink-0 text-lime transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                </a>
               )}
               <div ref={listEndRef} />
             </div>
