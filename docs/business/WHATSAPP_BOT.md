@@ -48,7 +48,7 @@ Orders placed through the bot are marked with the WhatsApp number that placed th
 Same steps as web merch checkout ([SYSTEM_OVERVIEW.md](./SYSTEM_OVERVIEW.md), BACKEND.md § _Merch invariants_):
 
 1. **Browse.** "Merch apa saja?" → the **10 newest products that can actually be bought**: in stock, from a seller with a payment method and a shipping origin. A keyword search works too.
-2. **Look closer.** "Lihat fotonya" → the bot **sends up to 4 product photos into the chat**. Details list only variants that are **in stock**, each with its own price.
+2. **Look closer.** "Lihat fotonya" → the bot **sends 2 product photos into the chat**, and offers the next ones only if the buyer asks (each photo is a paid message from October 2026). Details list only variants that are **in stock**, each with its own price.
 3. **Account.** Merch needs a SiTIKET account with this WhatsApp number saved as the profile phone. If none matches, the bot explains how: sign in with Google on sitiket.com, save the number (and an address) at `/account/profile`, then chat again. Tickets remain available without an account.
 4. **Address check (always).** Before shipping costs are quoted, the bot shows the saved delivery address and asks whether it's right. To change it in chat:
    - The bot walks province → city/regency → district → village (with postal code) using the same region data as the profile page, then asks for the street line.
@@ -79,9 +79,11 @@ Organizers cannot see or approve another organizer's payments. **Rejecting** a p
 - **Role tools don't exist for other roles.** A buyer's session has no approve tools at all, however the model is prompted. An organizer's approve is restricted to their events.
 - **Photos can't jump the queue.** A proof is only accepted for the sender's own open order (tickets: after the email OTP), before the deadline.
 - **Account by phone.** Merch and address changes act only on the account whose profile phone is the sender's number. The profile phone isn't verified, so an account holder must keep their own number correct: a mistyped number would let whoever owns it see and change that account's address.
-- **Flood limit.** At most 20 messages per 10 minutes per sender.
+- **Flood limit.** At most 15 messages per 10 minutes per number (a full merch checkout fits). The 16th gets one "slow down" notice; anything after that in the window is ignored: no reply and no LLM call.
 
 ## 8. Known limits
+
+- **WhatsApp costs from 1 Oct 2026.** Meta starts charging every message the business sends, including replies inside the 24h window, at the market's utility rate, with no volume tiers. Receiving messages stays free, and conversations opened from a Click-to-WhatsApp ad/Page button get a 72h free window. Until then, every reply this bot sends is free. Costs to plan for: 1 per reply, up to 2 per photo request, 1 + one per ticket on approval. OpenAI tokens are billed separately for every inbound text.
 
 - **24-hour window.** WhatsApp only lets the bot send free-form messages within 24h of the buyer's last message. If a payment is approved later than that, the WhatsApp QR message fails. The buyer still gets the tickets by email. Covering this needs a Meta-approved utility template (🔜).
 - **Conversation memory** (last ~8 messages, reset after 30 min idle) is kept in the API process: a backend restart forgets open chats. Orders are unaffected; they're in the database.

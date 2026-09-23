@@ -36,8 +36,8 @@ import { formatJakartaTime, formatRupiah, MERCH_ORDER_STATUS_LABELS, shortRef, t
 const MAX_LISTED_MERCH = 10;
 /** Catalog rows fetched before filtering to purchasable ones (sold-out / unshippable products drop out). */
 const CATALOG_SCAN_SIZE = 40;
-/** Product photos sent into the chat per request. */
-const MAX_SENT_PHOTOS = 4;
+/** Product photos sent into the chat per request — each one is a paid WhatsApp message from Oct 2026. */
+const MAX_SENT_PHOTOS = 2;
 /** Region search results handed to the model per call. */
 const MAX_REGION_RESULTS = 25;
 /** Merch order statuses that still take a payment proof. */
@@ -231,29 +231,43 @@ export const MERCH_TOOLS = [
     name: "send_merch_photos",
     roles: ["buyer", "admin", "super_admin"],
     description:
-      "Send a merch product's photos (max 4) as images straight into this WhatsApp chat. Use whenever the buyer wants to see the product or asks for its photo.",
-    inputSchema: { productId: z.string().uuid().describe("productId from list_merch") },
-    handler: async ({ productId }, context) => {
+      "Send a merch product's photos as images straight into this WhatsApp chat, 2 per call (each photo is a paid WhatsApp message). Use when the buyer wants to see the product; pass page=2, 3… only if they ask for more photos.",
+    inputSchema: {
+      productId: z.string().uuid().describe("productId from list_merch"),
+      page: z.number().int().min(1).max(10).optional().describe("1 = first photos (default), 2 = the next ones, …"),
+    },
+    handler: async ({ productId, page = 1 }, context) => {
       const product = await productsRepository.findById(productId);
       if (!product || !product.is_active) return toolError("PRODUCT_NOT_FOUND", "Product not found or not for sale");
-      const images = (await productImagesRepository.listByProduct(product.id)).slice(0, MAX_SENT_PHOTOS);
-      if (images.length === 0) {
+      const allImages = await productImagesRepository.listByProduct(product.id);
+      if (allImages.length === 0) {
         return toolError("NO_PHOTOS", `This product has no photos yet; its page: ${env.FRONTEND_URL}/merch/${product.slug}`);
       }
+      /** Index of the first photo this page sends. Example: page 2 → 2 */
+      const start = (page - 1) * MAX_SENT_PHOTOS;
+      const images = allImages.slice(start, start + MAX_SENT_PHOTOS);
+      if (images.length === 0) return toolError("NO_MORE_PHOTOS", `All ${allImages.length} photos were already sent`);
 
       let sent = 0;
-      for (const [index, image] of images.entries()) {
+      for (const [offset, image] of images.entries()) {
         // Stored as WebP in R2 (`/uploads/<key>`); WhatsApp image messages take only JPEG/PNG.
         const stored = await getObject(image.image_url.replace(/^\/uploads\//, ""));
         if (!stored.ok) continue;
         const jpeg = await sharp(Buffer.from(await stored.arrayBuffer())).jpeg({ quality: 85 }).toBuffer();
-        const caption = index === 0 ? `${product.name} — ${priceLabel(product)}` : `${product.name} (${index + 1}/${images.length})`;
+        const position = start + offset + 1;
+        const caption = position === 1 ? `${product.name} — ${priceLabel(product)}` : `${product.name} (${position}/${allImages.length})`;
         await sendImage(context.waId, jpeg, "image/jpeg", caption);
         sent += 1;
       }
+      /** Photos not sent yet, offered only if the buyer asks for more. */
+      const remaining = Math.max(allImages.length - (start + images.length), 0);
       return {
         sent,
-        note: "The photos are already in the chat above your reply — don't paste image links; just follow up (e.g. offer variants or ordering).",
+        remaining,
+        note:
+          "The photos are already in the chat above your reply — don't paste image links. " +
+          (remaining > 0 ? `Offer the ${remaining} other photo(s) (page ${page + 1}) and ` : "") +
+          "follow up (e.g. variants or ordering).",
       };
     },
   },

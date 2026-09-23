@@ -5,7 +5,7 @@ import test from "node:test";
 // Set before config/env.js is first imported — env is parsed once at import time.
 process.env.WHATSAPP_APP_SECRET = "test-app-secret";
 
-const { pickProofTarget, trimHistory } = await import("./whatsapp-bot-service.js");
+const { floodDecision, pickProofTarget, trimHistory } = await import("./whatsapp-bot-service.js");
 const { isApprovalTypedByUser } = await import("../mcp/sitiket-tools.js");
 const { isValidSignature } = await import("../routes/whatsapp.js");
 const { toWhatsappId } = await import("../utils/phone.js");
@@ -52,6 +52,14 @@ test("a payment photo goes to the order named in its caption, or the only open o
   assert.equal(pickProofTarget([ticket, merch], "sudah transfer"), null);
   assert.equal(pickProofTarget([ticket, merch], "cccc3333"), null);
   assert.equal(pickProofTarget([], "aaaa1111"), null);
+});
+
+test("a flooding sender is told once, then ignored (each reply is a paid message)", () => {
+  assert.equal(floodDecision(1, false), "answer");
+  assert.equal(floodDecision(15, false), "answer"); // a full merch checkout still fits
+  assert.equal(floodDecision(16, false), "notify");
+  assert.equal(floodDecision(17, true), "ignore");
+  assert.equal(floodDecision(40, true), "ignore");
 });
 
 test("webhook signature must be Meta's HMAC of the exact raw body", () => {

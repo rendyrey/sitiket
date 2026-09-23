@@ -24,8 +24,11 @@ const CONVERSATION_TTL_MS = 30 * 60 * 1000;
 const MAX_TOOL_ROUNDS = 6;
 /** Longest user text passed to the model; the rest is dropped. */
 const MAX_USER_TEXT_LENGTH = 1500;
-/** Per-sender flood guard: at most this many messages … */
-const RATE_LIMIT_MAX_MESSAGES = 20;
+/**
+ * Per-sender flood guard: at most this many messages … Sized for the longest
+ * honest flow — a merch checkout with an in-chat address change is ~12-14 messages.
+ */
+const RATE_LIMIT_MAX_MESSAGES = 15;
 /** … within this window. */
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 /** Webhook message ids already handled (Meta can deliver one twice). */
@@ -80,7 +83,7 @@ Alur pembelian (sama seperti di aplikasi):
 6. Setelah bukti diterima: pembayaran diverifikasi oleh penyelenggara event. Setelah disetujui, QR e-tiket otomatis dikirim ke chat WhatsApp ini dan ke email. Status bisa dicek kapan saja (get_my_orders).
 
 Alur beli merchandise (sama seperti di aplikasi):
-1. "Merch apa saja?": panggil list_merch (maks. 10 merch terbaru yang bisa dibeli) dan tampilkan nama, harga, penjual. Untuk detail/pilihan: get_merch_details — sebutkan HANYA varian yang stoknya masih ada, lengkap dengan harganya. Jangan menawarkan varian atau jumlah melebihi stok. Kalau pengguna minta foto/lihat barangnya, panggil send_merch_photos (fotonya langsung terkirim ke chat) lalu lanjutkan dengan tawaran berikutnya.
+1. "Merch apa saja?": panggil list_merch (maks. 10 merch terbaru yang bisa dibeli) dan tampilkan nama, harga, penjual. Untuk detail/pilihan: get_merch_details — sebutkan HANYA varian yang stoknya masih ada, lengkap dengan harganya. Jangan menawarkan varian atau jumlah melebihi stok. Kalau pengguna minta foto/lihat barangnya, panggil send_merch_photos (2 foto langsung terkirim ke chat); kalau masih ada foto lain, tawarkan "mau lihat foto lainnya?" dan kirim page berikutnya hanya jika pengguna mau. Lalu lanjutkan dengan tawaran berikutnya.
 2. Merch wajib memakai akun SiTIKET yang nomor WhatsApp-nya tersimpan di profil. Panggil get_my_account. Kalau NO_LINKED_ACCOUNT atau DUPLICATE_ACCOUNTS, jelaskan langkahnya dengan ramah (login di website, simpan nomor WhatsApp ini di profil, lalu chat lagi) — tiket event tetap bisa dibeli tanpa akun.
 3. SEBELUM lanjut ke ongkir, SELALU tampilkan alamat pengiriman tersimpan lengkap dan tanyakan "Apakah alamat ini sudah benar?".
    - Kalau belum ada/tidak lengkap atau pengguna mau ganti: tanya provinsi → search_region level "province"; kota/kabupaten → "regency" (parentCode = kode provinsi); kecamatan → "district"; kelurahan/desa → "village" (sekaligus kode pos). Pakai query nama agar hasilnya ringkas; kalau ada beberapa yang mirip, minta pengguna memilih. Lalu minta alamat jalan lengkap (nama jalan, nomor rumah, RT/RW, patokan).
@@ -122,8 +125,11 @@ ${APPROVAL_RULE}`,
 const conversations = new Map();
 /** Serializes each sender's messages so two quick texts can't interleave one history. */
 const senderQueues = new Map();
-/** Recent message timestamps per sender for the flood guard. */
-const recentMessageTimes = new Map();
+/**
+ * Flood-guard state per sender. Example: `Map { "628112003717" => { times: [1790000000000, …], notifiedAt: 0 } }`
+ * ponytail: never pruned — one small entry per number that ever wrote; sweep it if that grows past memory.
+ */
+const floodStateBySender = new Map();
 /** Insertion-ordered set of handled webhook message ids. */
 const handledMessageIds = new Set();
 
@@ -180,15 +186,33 @@ const isDuplicate = (messageId) => {
 };
 
 /**
- * @param {string} waId
- * @returns {boolean} true when the sender is over the flood limit
+ * Flood-guard decision for one inbound message. Over the limit, the sender
+ * gets ONE "slow down" notice per window and is then ignored — every reply
+ * is a paid WhatsApp message from Oct 2026, and ignoring also skips the LLM.
+ *
+ * @param {number} messageCount - this sender's messages in the current window, this one included. Example: `16`
+ * @param {boolean} alreadyNotified - whether the notice already went out this window
+ * @returns {"answer" | "notify" | "ignore"}
  */
-const isRateLimited = (waId) => {
+export const floodDecision = (messageCount, alreadyNotified) => {
+  if (messageCount <= RATE_LIMIT_MAX_MESSAGES) return "answer";
+  return alreadyNotified ? "ignore" : "notify";
+};
+
+/**
+ * Records one inbound message and returns its {@link floodDecision}.
+ * @param {string} waId
+ * @returns {"answer" | "notify" | "ignore"}
+ */
+const checkFlood = (waId) => {
   const now = Date.now();
-  const times = (recentMessageTimes.get(waId) ?? []).filter((time) => now - time < RATE_LIMIT_WINDOW_MS);
-  times.push(now);
-  recentMessageTimes.set(waId, times);
-  return times.length > RATE_LIMIT_MAX_MESSAGES;
+  const state = floodStateBySender.get(waId) ?? { times: [], notifiedAt: 0 };
+  state.times = state.times.filter((time) => now - time < RATE_LIMIT_WINDOW_MS);
+  state.times.push(now);
+  const decision = floodDecision(state.times.length, now - state.notifiedAt < RATE_LIMIT_WINDOW_MS);
+  if (decision === "notify") state.notifiedAt = now;
+  floodStateBySender.set(waId, state);
+  return decision;
 };
 
 /**
@@ -436,12 +460,15 @@ const replyTo = async (message) => {
 };
 
 /**
- * Handles one inbound message end to end and always sends a reply.
+ * Handles one inbound message end to end: replies, except to a sender who
+ * was already told to slow down this window (see {@link floodDecision}).
  * @param {{ from: string }} message
  */
 const handleMessage = async (message) => {
+  const decision = checkFlood(message.from);
+  if (decision === "ignore") return;
   try {
-    await sendText(message.from, isRateLimited(message.from) ? RATE_LIMITED_REPLY : await replyTo(message));
+    await sendText(message.from, decision === "notify" ? RATE_LIMITED_REPLY : await replyTo(message));
   } catch (error) {
     console.error(`[whatsapp-bot] failed to answer ${message.from}:`, error);
     await sendText(message.from, ERROR_REPLY).catch((sendError) =>
