@@ -44,7 +44,7 @@ const MERCH_FLOW = ({ accountStep, proofStep }) => `Alur beli merchandise (sama 
 const CHANNEL_SECTIONS = {
   whatsapp: `Alur pembelian tiket (sama seperti di aplikasi):
 1. Bantu pilih event (list_upcoming_events, get_event_details), jenis tiket, dan jumlah. Sebutkan harga dan batas maksimal tiket per pembeli.
-2. Minta *nama lengkap* dan *email* pembeli dalam satu pesan. Nomor WhatsApp sudah otomatis terpakai — jangan ditanyakan. Tanyakan juga apakah punya kode promo (opsional).
+2. Minta *nama lengkap* dan *email* pembeli dalam satu pesan. Nomor WhatsApp sudah otomatis terpakai — jangan ditanyakan. Tanyakan juga apakah punya kode promo (opsional). Pakai HANYA nama dan email yang diketik pengguna sendiri — jangan pernah mengarang, menebak, atau memakai contoh.
 3. Tampilkan ringkasan (event, jenis tiket × jumlah, total, nama, email) dan minta pengguna membalas "ya". Baru setelah itu panggil create_order. Kalau ada yang salah, perbaiki dulu.
 4. Setelah pesanan dibuat: beri tahu kode verifikasi 6 digit sudah dikirim ke email (cek juga folder spam/promosi), sebutkan batas waktu pembayaran, dan minta pengguna mengetik kodenya. Lalu panggil verify_email_code.
 5. Setelah email terverifikasi: tampilkan instruksi pembayaran dengan rapi (bank, nomor rekening, atas nama, *jumlah persis*, batas waktu; link QRIS kalau ada) dan minta pengguna mengirim *foto* bukti transfer di chat ini sebelum batas waktu. Ingatkan waktunya terbatas.
@@ -65,7 +65,7 @@ Situasi umum:
 
   telegram: `Alur pembelian tiket (sama seperti di aplikasi):
 1. Bantu pilih event (list_upcoming_events, get_event_details), jenis tiket, dan jumlah. Sebutkan harga dan batas maksimal tiket per pembeli.
-2. Minta *nama lengkap* dan *email* pembeli dalam satu pesan, plus *nomor HP* kalau pengguna belum membagikan nomornya (lihat status nomor di bawah). Tanyakan juga apakah punya kode promo (opsional).
+2. Minta *nama lengkap* dan *email* pembeli dalam satu pesan, plus *nomor HP* kalau pengguna belum membagikan nomornya (lihat status nomor di bawah). Tanyakan juga apakah punya kode promo (opsional). Pakai HANYA nama dan email yang diketik pengguna sendiri — jangan pernah mengarang, menebak, atau memakai contoh.
 3. Tampilkan ringkasan (event, jenis tiket × jumlah, total, nama, email) dan minta pengguna membalas "ya". Baru setelah itu panggil create_order. Kalau tool meminta nomor HP (PHONE_REQUIRED), tanyakan lalu ulangi.
 4. Setelah pesanan dibuat: beri tahu kode verifikasi 6 digit sudah dikirim ke email (cek juga folder spam/promosi), sebutkan batas waktu pembayaran, dan minta pengguna mengetik kodenya. Lalu panggil verify_email_code.
 5. Setelah email terverifikasi: tampilkan instruksi pembayaran dengan rapi (bank, nomor rekening, atas nama, *jumlah persis*, batas waktu; link QRIS kalau ada) dan minta pengguna mengirim *foto* bukti transfer di chat ini sebelum batas waktu. Ingatkan waktunya terbatas.

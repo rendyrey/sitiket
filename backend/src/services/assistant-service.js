@@ -200,7 +200,7 @@ const callMcpTool = async (client, call) => {
  *
  * @param {object} input
  * @param {string} input.chatKey - history key, unique per channel + user. Example: `"wa:628112003717"`, `"web:7f3c…"`
- * @param {Omit<import("../mcp/sitiket-tools.js").ToolContext, "userText" | "attachments">} input.context - who is chatting
+ * @param {Omit<import("../mcp/sitiket-tools.js").ToolContext, "userText" | "userTypedText" | "attachments">} input.context - who is chatting
  * @param {string} input.text - the user's message. Example: `"event apa aja bulan ini?"`
  * @returns {Promise<{ reply: string, attachments: Array<{ type: "image", url: string, caption: string }> }>}
  *   `attachments` are images tools produced for channels that render them (web chat).
@@ -209,12 +209,15 @@ export const runAssistantTurn = async ({ chatKey, context, text }) => {
   const userText = text.slice(0, MAX_USER_TEXT_LENGTH);
   /** Filled by tools that produce media for the channel (e.g. send_merch_photos on web). */
   const attachments = [];
-  const { client, close } = await connectSitiketMcp({ ...context, userText, attachments });
+  const pastMessages = loadHistory(chatKey);
+  /** Everything the user typed in this chat's kept history, read by the guest-checkout email guard. */
+  const userTypedText = [...pastMessages.filter((message) => message.role === "user").map((message) => message.content), userText].join("\n");
+  const { client, close } = await connectSitiketMcp({ ...context, userText, userTypedText, attachments });
   try {
     const { tools } = await client.listTools();
     const chatTools = toChatTools(tools);
     const systemMessage = { role: "system", content: buildSystemPrompt(context, formatJakartaTime(new Date())) };
-    const history = [...loadHistory(chatKey), { role: "user", content: userText }];
+    const history = [...pastMessages, { role: "user", content: userText }];
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
       const message = await requestChatCompletion([systemMessage, ...history], chatTools);

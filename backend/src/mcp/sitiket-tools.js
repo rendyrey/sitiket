@@ -45,6 +45,8 @@ import { HttpError } from "../utils/http-error.js";
  * @property {Array<{ type: "image", url: string, caption: string }>} attachments - media a tool produced for
  *   channels that render it inline (web chat); filled by the tool, returned with the reply
  * @property {string} userText - the sender's current message, read by the approval guard. Example: `"setujui a1b2c3d4"`
+ * @property {string} [userTypedText] - every user message in the chat's kept history, newline-joined; read by the
+ *   guest-checkout guard so the model can't invent a buyer email. Example: `"nobar mob\nDina, dina@gmail.com"`
  */
 
 /**
@@ -288,6 +290,10 @@ export const SITIKET_TOOLS = [
       buyerPhone: createOrderSchema.shape.buyerPhone.optional().describe("Only when the tool asked for it (PHONE_REQUIRED)"),
     },
     handler: async ({ buyerPhone, ...input }, context) => {
+      // The model has filled in made-up buyer details before; only an email the user typed themself is accepted.
+      if (!context.userTypedText?.toLowerCase().includes(input.buyerEmail.toLowerCase())) {
+        return toolError("EMAIL_NOT_GIVEN", "The buyer never typed this email. Ask for their full name and email, show the summary, wait for \"ya\", then call again");
+      }
       // The channel-verified number always wins over typed input (WhatsApp sender, Telegram shared contact).
       const phone = context.verifiedPhone ? `+${context.verifiedPhone}` : buyerPhone;
       if (!phone) return toolError("PHONE_REQUIRED", "Ask the buyer for their phone number (or to tap the share-number button) and pass buyerPhone");
