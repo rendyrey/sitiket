@@ -71,7 +71,7 @@ Organizers cannot see or approve another organizer's payments. **Rejecting** a p
 ## 6. Super Admin journey
 
 1. "Ada pengajuan penyelenggara?" → pending organizer applications (business name and description, contact phone, applicant name and email, 8-character reference).
-2. Approve with **`setujui <reference>`**. The applicant becomes an Admin and is emailed; they must sign in again to see the admin dashboard (see BACKEND.md § _Known gaps_ on JWT role claims). Rejecting is still done in the dashboard.
+2. Approve with **`setujui <reference>`**. The applicant becomes an Admin and is emailed; the admin dashboard works for them immediately, no re-login needed (see BACKEND.md § _Known gaps_ on JWT role claims). Rejecting is still done in the dashboard.
 
 ## 7. Safety rules
 
