@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
+import * as usersRepository from "../repositories/users-repository.js";
 import { forbidden, unauthorized } from "../utils/http-error.js";
 
 /**
@@ -40,14 +41,24 @@ export const requireAuth = (request, response, next) => {
 
 /**
  * Requires `requireAuth` to have run first, then restricts to the given roles.
+ * The role is re-read from the DB, not trusted from the JWT: the token's
+ * `role` claim is frozen at sign-in, so a freshly promoted admin (or a
+ * demoted one) would otherwise be judged by their old role until re-login.
+ * `request.user.role` is refreshed so downstream ownership checks agree.
  * @param {...("user" | "admin" | "super_admin")} roles
  */
 export const requireRole =
   (...roles) =>
-  (request, response, next) => {
-    if (!request.user || !roles.includes(request.user.role)) {
-      next(forbidden("FORBIDDEN", `Requires one of roles: ${roles.join(", ")}`));
-      return;
+  async (request, response, next) => {
+    try {
+      const user = request.user && (await usersRepository.findById(request.user.sub));
+      if (!user || !roles.includes(user.role)) {
+        next(forbidden("FORBIDDEN", `Requires one of roles: ${roles.join(", ")}`));
+        return;
+      }
+      request.user.role = user.role;
+      next();
+    } catch (error) {
+      next(error);
     }
-    next();
   };
