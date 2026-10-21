@@ -14,6 +14,17 @@ type RowDraft = { options: string[]; price: string; stock: string; isActive: boo
 
 const comboKey = (options: string[]) => options.join(" / ");
 
+/** Names of the first two groups whose option lists are identical (case-insensitive), or `null`. */
+const findDuplicateGroups = (groups: GroupDraft[]): [string, string] | null => {
+  const signature = (group: GroupDraft) => group.options.map((option) => option.toLowerCase()).sort().join("\u0000");
+  for (let i = 0; i < groups.length; i += 1) {
+    for (let j = i + 1; j < groups.length; j += 1) {
+      if (groups[i].options.length > 1 && signature(groups[i]) === signature(groups[j])) return [groups[i].name, groups[j].name];
+    }
+  }
+  return null;
+};
+
 /** Cartesian product of every group's options → one row per combination. */
 const buildCombinations = (groups: GroupDraft[]): string[][] =>
   groups.reduce<string[][]>((combos, group) => combos.flatMap((combo) => group.options.map((option) => [...combo, option])), [[]]);
@@ -62,6 +73,8 @@ export default function VariantBuilder({ product }: { product: ProductDetail }) 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const duplicateGroups = findDuplicateGroups(groups);
 
   const applyGroups = (nextGroups: GroupDraft[]) => {
     setGroups(nextGroups);
@@ -174,8 +187,10 @@ export default function VariantBuilder({ product }: { product: ProductDetail }) 
         )}
       </div>
       <p className="mt-3 text-xs text-black/45">
-        Add option groups like Color or Size — every combination gets its own price and stock, Tokopedia/Shopee style.
-        Without variants, the base price ({formatPrice(product.price)}) and base stock apply.
+        Each option group is one choice the buyer makes, and every combination gets its own price and stock. Example:
+        group <strong>Edition</strong> → Player, Goalkeeper and group <strong>Size</strong> → S, M, L give 6 variants
+        (Player · S, Player · M, … Goalkeeper · L). Put the sizes in ONE Size group — don&apos;t repeat them in a group per
+        edition. Without variants, the base price ({formatPrice(product.price)}) and base stock apply.
       </p>
 
       {/* Groups */}
@@ -244,13 +259,26 @@ export default function VariantBuilder({ product }: { product: ProductDetail }) 
         )}
       </div>
 
+      {duplicateGroups && (
+        <p className="mt-4 border-2 border-amber-500 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+          &quot;{duplicateGroups[0]}&quot; and &quot;{duplicateGroups[1]}&quot; have the same options, so buyers must pick a value
+          from each (e.g. S and S). If these are editions/types of the product, use one group for the types (e.g.
+          Edition → {duplicateGroups[0]}, {duplicateGroups[1]}) and one Size group. Keep both only if the buyer really
+          chooses two separate sizes (e.g. shirt size and shorts size).
+        </p>
+      )}
+
       {/* Matrix */}
       {rows.length > 0 && (
         <div className="mt-6 overflow-x-auto border-2 border-ink">
-          <table className="w-full min-w-[520px] text-sm">
+          <table className="w-full min-w-[480px] text-sm">
             <thead className="border-b-2 border-ink bg-paper text-left text-[10px] font-black uppercase tracking-widest text-black/50">
               <tr>
-                <th className="p-3">Variant</th>
+                {groups.map((group) => (
+                  <th key={group.name} className="p-3">
+                    {group.name}
+                  </th>
+                ))}
                 <th className="p-3">Price (Rp)</th>
                 <th className="p-3">Stock</th>
                 <th className="p-3 text-right">Selling</th>
@@ -259,7 +287,11 @@ export default function VariantBuilder({ product }: { product: ProductDetail }) 
             <tbody>
               {rows.map((row, rowIndex) => (
                 <tr key={comboKey(row.options)} className="border-b border-black/10 last:border-b-0">
-                  <td className="p-3 font-black uppercase">{comboKey(row.options)}</td>
+                  {row.options.map((option, optionIndex) => (
+                    <td key={groups[optionIndex]?.name ?? optionIndex} className="p-3 font-black uppercase">
+                      {option}
+                    </td>
+                  ))}
                   <td className="p-3">
                     <input
                       type="number"
