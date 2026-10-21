@@ -25,6 +25,21 @@ const PAGE_SIZE = 100;
 /** Hard stop for the page loop, well above the largest real list (~80 villages/district). */
 const MAX_PAGES = 30;
 
+/** An Indonesian postal code: exactly 5 digits. Example: `"99111"` */
+const POSTAL_CODE_PATTERN = /^\d{5}$/;
+
+/**
+ * Drops anything that isn't a real postal code from a village row. Our
+ * api.co.id plan now answers "postal_code available only on premium" in place
+ * of real codes; left in, that text was offered as the postal code and every
+ * profile save failed validation (postalCode max 20).
+ * @param {{ postal_codes?: unknown }} village
+ */
+const keepRealPostalCodes = (village) => ({
+  ...village,
+  postal_codes: (Array.isArray(village.postal_codes) ? village.postal_codes : []).filter((code) => POSTAL_CODE_PATTERN.test(code)),
+});
+
 /** Whether the api.co.id integration is configured at all. */
 export const isShippingConfigured = () => Boolean(env.API_CO_ID_KEY);
 
@@ -125,8 +140,10 @@ export const listDistricts = (regencyCode) =>
  * hierarchy (province/regency/district names + codes) and `postal_codes`.
  * @param {string} districtCode - 6-digit district code
  */
-export const listVillages = (districtCode) =>
-  getListCached(`villages:${districtCode}`, `/districts/${districtCode}/villages`);
+export const listVillages = async (districtCode) => {
+  const villages = await getListCached(`villages:${districtCode}`, `/districts/${districtCode}/villages`);
+  return villages.map(keepRealPostalCodes);
+};
 
 /**
  * Resolves a 10-digit village code to its full region hierarchy, via the
@@ -173,3 +190,5 @@ export const buildAddressFields = async (villageCode, postalCode) => {
     postalCode: postalCode ?? validPostalCodes[0] ?? null,
   };
 };
+
+export const __testables = { keepRealPostalCodes };
