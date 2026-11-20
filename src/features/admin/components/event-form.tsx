@@ -81,12 +81,16 @@ export default function EventForm({ bankAccounts, categories, event, qrisConfig 
     contactPersonEmail: event?.contactPersonEmail ?? "",
     contactPersonPhone: event?.contactPersonPhone ?? "",
     bankAccountId: event?.bankAccountId ?? "",
-    qrisEnabled: event?.qrisEnabled ?? false,
+    // A new event accepts QRIS by default when the organizer already has one
+    // offered on ticket checkout — uploading a QRIS reads as "I accept QRIS".
+    qrisEnabled: event?.qrisEnabled ?? Boolean(qrisConfig?.showOnTicketCheckout),
     maxTicketsPerUser: event?.maxTicketsPerUser ?? 10,
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  /** Whether buyers will actually see this organizer's QRIS on this event's checkout. Example: `true` */
+  const acceptsQris: boolean = values.qrisEnabled && Boolean(qrisConfig?.showOnTicketCheckout);
 
   const set = <K extends keyof typeof values>(key: K, value: (typeof values)[K]) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -313,11 +317,6 @@ export default function EventForm({ bankAccounts, categories, event, qrisConfig 
               ...bankAccounts.map((account) => ({ value: account.id, label: `${account.bankName} · ${account.accountNumber}` })),
             ]}
           />
-          {bankAccounts.length === 0 && (
-            <span className="mt-2 block text-xs font-semibold text-red-600">
-              You have no bank accounts yet — add one under Bank accounts before buyers can pay you.
-            </span>
-          )}
         </label>
         <div className="sm:col-span-2">
           <label className="flex items-center gap-2 text-sm font-semibold">
@@ -339,7 +338,31 @@ export default function EventForm({ bankAccounts, categories, event, qrisConfig 
               first to enable this.
             </span>
           )}
+          {values.qrisEnabled && qrisConfig && !qrisConfig.showOnTicketCheckout && (
+            <span className="mt-2 block text-xs font-semibold text-black/50">
+              Your QRIS is switched off for ticket checkout — turn it on under{" "}
+              <Link href="/dashboard/admin/qris" className="underline">
+                QRIS
+              </Link>{" "}
+              so buyers can see it.
+            </span>
+          )}
         </div>
+        {/* Either method alone is enough to sell tickets (backend: resolvePaymentOptionsForEvent). */}
+        {bankAccounts.length === 0 && !acceptsQris && (
+          <p className="text-xs font-semibold text-red-600 sm:col-span-2">
+            Buyers can&apos;t pay yet — tick Accept QRIS above, or add an account under{" "}
+            <Link href="/dashboard/admin/bank-accounts" className="underline">
+              Bank accounts
+            </Link>
+            .
+          </p>
+        )}
+        {bankAccounts.length === 0 && acceptsQris && (
+          <p className="text-xs font-semibold text-black/50 sm:col-span-2">
+            No bank account yet, so buyers pay by QRIS only.
+          </p>
+        )}
       </Section>
 
       {error && <p className="border-2 border-red-500/60 bg-red-500/5 p-4 text-sm font-semibold text-red-700">{error}</p>}
