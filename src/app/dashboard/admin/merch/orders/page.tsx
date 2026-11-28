@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import MerchExportPanel from "@/features/admin/components/merch-export-panel";
 import MerchOrdersManager from "@/features/admin/components/merch-orders-manager";
 
 export const metadata: Metadata = { title: "Merch orders" };
@@ -11,6 +12,9 @@ export default function AdminMerchOrdersPage() {
         Who&apos;s buying your merch, where to ship it, and the payment proofs waiting for your review. You also get an
         email whenever an order lands or a buyer confirms a payment.
       </p>
+      <div className="mt-8">
+        <MerchExportPanel />
+      </div>
       <div className="mt-8">
         <MerchOrdersManager />
       </div>

@@ -14,7 +14,7 @@ import { MerchOrderStatusBadge } from "@/features/merch/components";
 import type { MerchOrder, MerchOrderPayment, MerchOrderStatus } from "@/lib/api/types";
 import { toAssetUrl } from "@/lib/public-env";
 
-const STATUS_OPTIONS: Array<{ value: MerchOrderStatus | "all"; label: string }> = [
+export const MERCH_ORDER_STATUS_OPTIONS: Array<{ value: MerchOrderStatus | "all"; label: string }> = [
   { value: "all", label: "All statuses" },
   { value: "pending_payment", label: "Awaiting transfer" },
   { value: "awaiting_verification", label: "Verifying payment" },
@@ -133,7 +133,7 @@ export default function MerchOrdersManager() {
               setStatus(value as MerchOrderStatus | "all");
               setPage(1);
             }}
-            options={STATUS_OPTIONS}
+            options={MERCH_ORDER_STATUS_OPTIONS}
           />
         </label>
       </div>
