@@ -1,6 +1,6 @@
 import * as usersRepository from "../repositories/users-repository.js";
 import { HttpError, notImplemented } from "../utils/http-error.js";
-import { checkFlood, isAssistantConfigured, runAssistantTurn, runExclusive } from "./assistant-service.js";
+import { activeFloodLimit, checkFlood, isAssistantConfigured, RATE_LIMIT_REPLIES, runAssistantTurn, runExclusive } from "./assistant-service.js";
 
 // Website channel of the SiTIKET assistant (the in-app chat widget). Same
 // engine and MCP tools as the WhatsApp bot; identity comes from the site's
@@ -30,7 +30,8 @@ export const sendMessage = async (requester, { chatId, text }) => {
   const chatKey = account ? `web:${account.id}` : `web-guest:${chatId}`;
 
   if (checkFlood(chatKey) !== "answer") {
-    throw new HttpError(429, "CHAT_RATE_LIMITED", "Pesannya banyak sekali dalam waktu singkat, Kak. Tunggu beberapa menit lalu coba lagi, ya 🙏");
+    // Every refused request gets a 429 with its notice (no paid reply on the web), "ignore" included.
+    throw new HttpError(429, "CHAT_RATE_LIMITED", RATE_LIMIT_REPLIES[activeFloodLimit(chatKey)]);
   }
 
   const context = { channel: "web", role, staff: role === "buyer" ? undefined : account, account };

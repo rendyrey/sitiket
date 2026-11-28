@@ -1,7 +1,14 @@
 import { env } from "../config/env.js";
 import * as telegramContactsRepository from "../repositories/telegram-contacts-repository.js";
 import { toWhatsappId } from "../utils/phone.js";
-import { appendExchange, checkFlood, isAssistantConfigured, runAssistantTurn, runExclusive } from "./assistant-service.js";
+import {
+  appendExchange,
+  checkFlood,
+  isAssistantConfigured,
+  RATE_LIMIT_REPLIES,
+  runAssistantTurn,
+  runExclusive,
+} from "./assistant-service.js";
 import { resolveSender } from "./chat-identity-service.js";
 import { attachPaymentProof } from "./chat-proof-service.js";
 import { downloadTelegramFile, getTelegramUpdates, isTelegramConfigured, sendTelegramText } from "./telegram-client.js";
@@ -46,8 +53,6 @@ Untuk merch dan cek akun, tekan *📱 Bagikan nomor HP* di bawah (nomornya harus
 const ERROR_REPLY = "Maaf Kak, sistem kami sedang ada gangguan 🙏 Silakan coba lagi beberapa saat lagi, ya.";
 const UNSUPPORTED_REPLY =
   "Maaf Kak, Mimin hanya bisa membaca pesan teks dan *foto* bukti pembayaran. Silakan ketik pertanyaannya atau kirim foto bukti transfer, ya.";
-const RATE_LIMITED_REPLY = "Pesannya banyak sekali dalam waktu singkat, Kak. Tunggu beberapa menit lalu coba lagi, ya 🙏";
-
 /** Whether the poll loop is already running (one per process). */
 let isPolling = false;
 
@@ -160,7 +165,7 @@ const handleMessage = async (message) => {
   const decision = checkFlood(chatKeyOf(userId));
   if (decision === "ignore") return;
   try {
-    const { text, keyboard } = decision === "notify" ? { text: RATE_LIMITED_REPLY } : await replyTo(message, userId);
+    const { text, keyboard } = decision === "answer" ? await replyTo(message, userId) : { text: RATE_LIMIT_REPLIES[decision] };
     await sendTelegramText(message.chat.id, text, keyboard);
   } catch (error) {
     console.error(`[telegram-bot] failed to answer ${userId}:`, error);

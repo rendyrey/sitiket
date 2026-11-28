@@ -80,6 +80,7 @@ Organizers cannot see or approve another organizer's payments. **Rejecting** a p
 - **Photos can't jump the queue.** A proof is only accepted for the sender's own open order (tickets: after the email OTP), before the deadline.
 - **Account by phone.** Merch and address changes act only on the account whose profile phone is the sender's number. The profile phone isn't verified, so an account holder must keep their own number correct: a mistyped number would let whoever owns it see and change that account's address.
 - **Flood limit.** At most 15 messages per 10 minutes per number (a full merch checkout fits). The 16th gets one "slow down" notice; anything after that in the window is ignored: no reply and no LLM call.
+- **Daily cap.** At most 60 answered messages per number in any 24 hours. Past that, one "come back tomorrow" notice, then silence until the 24h rolls over. Both limits are set in `backend/.env` (`WHATSAPP_BOT_RATE_LIMIT_MESSAGES`, `WHATSAPP_BOT_RATE_LIMIT_WINDOW_MINUTES`, `WHATSAPP_BOT_DAILY_MESSAGE_LIMIT`) and apply to Telegram and the website chat too.
 
 ## 8. Known limits
 

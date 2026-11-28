@@ -125,6 +125,17 @@ const envSchema = z.object({
     z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]).optional(),
   ),
 
+  // Per-sender abuse guard on every assistant channel (assistant-service.js
+  // `checkFlood`). Burst: more than RATE_LIMIT_MESSAGES messages within
+  // RATE_LIMIT_WINDOW_MINUTES → one "slow down" notice, then silence. Daily:
+  // after DAILY_MESSAGE_LIMIT answered messages in a rolling 24h → one "come
+  // back tomorrow" notice, then silence. Silence = no LLM call, no paid reply.
+  // The burst limit must fit an honest checkout (~6 messages for tickets,
+  // ~12-14 for merch with an address change).
+  WHATSAPP_BOT_RATE_LIMIT_MESSAGES: z.coerce.number().int().positive().default(15),
+  WHATSAPP_BOT_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(10),
+  WHATSAPP_BOT_DAILY_MESSAGE_LIMIT: z.coerce.number().int().positive().default(60),
+
   // Optional: Telegram bot token from BotFather (services/telegram-bot-service.js).
   // Set → the API long-polls Telegram for messages (no webhook needed); unset
   // → the Telegram bot stays off. Uses the same assistant LLM settings.

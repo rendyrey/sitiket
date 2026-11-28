@@ -18,12 +18,26 @@ const MAX_TOOL_ROUNDS = 6;
 /** Longest user text passed to the model; the rest is dropped. */
 export const MAX_USER_TEXT_LENGTH = 1500;
 /**
- * Per-chat flood guard: at most this many messages … Sized for the longest
+ * Per-chat burst guard: at most this many messages … Sized for the longest
  * honest flow — a merch checkout with an in-chat address change is ~12-14 messages.
  */
-const RATE_LIMIT_MAX_MESSAGES = 15;
+const RATE_LIMIT_MAX_MESSAGES = env.WHATSAPP_BOT_RATE_LIMIT_MESSAGES;
 /** … within this window. */
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_WINDOW_MS = env.WHATSAPP_BOT_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000;
+/**
+ * Per-chat daily cap on ANSWERED messages (rolling 24h) — stops a sender who
+ * stays just under the burst limit from running up ~2,000 LLM/paid replies a day.
+ */
+const DAILY_MAX_ANSWERED = env.WHATSAPP_BOT_DAILY_MESSAGE_LIMIT;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** How often stale flood-guard entries are swept from memory. */
+const FLOOD_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+
+/** What a flood-limited chat is told — once per window — on every channel. */
+export const RATE_LIMIT_REPLIES = {
+  notify: "Pesannya banyak sekali dalam waktu singkat, Kak. Tunggu beberapa menit lalu coba lagi, ya 🙏",
+  notify_daily: "Mimin sudah menjawab banyak sekali pesan dari Kakak hari ini 🙏 Lanjut lagi besok, ya. Untuk status pesanan, cek juga di sitiket.com.",
+};
 
 export const FALLBACK_REPLY =
   "Maaf Kak, Mimin belum bisa memproses permintaan itu 🙏 Boleh ditulis ulang dengan lebih singkat? Misalnya: *event apa saja minggu ini?*";
@@ -37,10 +51,14 @@ const conversations = new Map();
 /** Serializes each chat's turns so two quick messages can't interleave one history. */
 const chatQueues = new Map();
 /**
- * Flood-guard state per chat key. Example: `Map { "wa:628112003717" => { times: [1790000000000, …], notifiedAt: 0 } }`
- * ponytail: never pruned — one small entry per chat that ever wrote; sweep it if that grows past memory.
+ * Flood-guard state per chat key. `recent` = every inbound message in the burst
+ * window, `answered` = answered messages in the last 24h; both keep only the
+ * newest timestamps the decision needs, so a sender firing thousands of
+ * messages can't grow them. Stale entries are swept hourly.
+ * Example: `Map { "wa:628112003717" => { recent: [1790000000000], answered: [1790000000000], notifiedAt: 0, dailyNotifiedAt: 0 } }`
  */
 const floodStateByChat = new Map();
+let lastFloodSweepAt = 0;
 
 /** @returns {boolean} true when the LLM endpoint (the OpenAI-compatible embeddings config) is set. */
 export const isAssistantConfigured = () => Boolean(env.EMBEDDINGS_BASE_URL && env.EMBEDDINGS_API_KEY);
@@ -95,33 +113,74 @@ export const appendExchange = (chatKey, userContent, reply) =>
   ]);
 
 /**
- * Flood-guard decision for one inbound message. Over the limit, the chat gets
- * ONE "slow down" notice per window and is then ignored — every WhatsApp reply
- * is a paid message from Oct 2026, and ignoring also skips the LLM.
+ * Flood-guard decision for one inbound message. Over a limit, the chat gets
+ * ONE notice per window and is then ignored — every WhatsApp reply is a paid
+ * message from Oct 2026, and ignoring also skips the LLM. The daily cap wins
+ * over the burst limit (its notice says when to come back).
  *
- * @param {number} messageCount - this chat's messages in the current window, this one included. Example: `16`
- * @param {boolean} alreadyNotified - whether the notice already went out this window
- * @returns {"answer" | "notify" | "ignore"}
+ * @param {object} counts
+ * @param {number} counts.recentCount - this chat's messages in the burst window, this one included. Example: `16`
+ * @param {number} counts.answeredToday - messages already answered in the last 24h, this one excluded. Example: `60`
+ * @param {boolean} counts.notifiedRecently - whether the burst notice already went out this burst window
+ * @param {boolean} counts.notifiedToday - whether the daily notice already went out in the last 24h
+ * @returns {"answer" | "notify" | "notify_daily" | "ignore"}
  */
-export const floodDecision = (messageCount, alreadyNotified) => {
-  if (messageCount <= RATE_LIMIT_MAX_MESSAGES) return "answer";
-  return alreadyNotified ? "ignore" : "notify";
+export const floodDecision = ({ recentCount, answeredToday, notifiedRecently, notifiedToday }) => {
+  if (answeredToday >= DAILY_MAX_ANSWERED) return notifiedToday ? "ignore" : "notify_daily";
+  if (recentCount > RATE_LIMIT_MAX_MESSAGES) return notifiedRecently ? "ignore" : "notify";
+  return "answer";
+};
+
+/** Drops chats with no message, answer or notice in the last 24h. */
+const sweepFloodState = (now) => {
+  for (const [chatKey, state] of floodStateByChat) {
+    const lastSeenAt = Math.max(state.recent.at(-1) ?? 0, state.answered.at(-1) ?? 0, state.notifiedAt, state.dailyNotifiedAt);
+    if (now - lastSeenAt >= DAY_MS) floodStateByChat.delete(chatKey);
+  }
 };
 
 /**
- * Records one inbound message and returns its {@link floodDecision}.
+ * Records one inbound message and returns its {@link floodDecision}. An
+ * "answer" counts toward the daily cap right away.
  * @param {string} chatKey
- * @returns {"answer" | "notify" | "ignore"}
+ * @returns {"answer" | "notify" | "notify_daily" | "ignore"}
  */
 export const checkFlood = (chatKey) => {
   const now = Date.now();
-  const state = floodStateByChat.get(chatKey) ?? { times: [], notifiedAt: 0 };
-  state.times = state.times.filter((time) => now - time < RATE_LIMIT_WINDOW_MS);
-  state.times.push(now);
-  const decision = floodDecision(state.times.length, now - state.notifiedAt < RATE_LIMIT_WINDOW_MS);
+  if (now - lastFloodSweepAt >= FLOOD_SWEEP_INTERVAL_MS) {
+    sweepFloodState(now);
+    lastFloodSweepAt = now;
+  }
+
+  const state = floodStateByChat.get(chatKey) ?? { recent: [], answered: [], notifiedAt: 0, dailyNotifiedAt: 0 };
+  // Only "is the count over the limit?" matters, so limit+1 timestamps suffice.
+  state.recent = [...state.recent.filter((time) => now - time < RATE_LIMIT_WINDOW_MS), now].slice(-(RATE_LIMIT_MAX_MESSAGES + 1));
+  state.answered = state.answered.filter((time) => now - time < DAY_MS);
+
+  const decision = floodDecision({
+    recentCount: state.recent.length,
+    answeredToday: state.answered.length,
+    notifiedRecently: now - state.notifiedAt < RATE_LIMIT_WINDOW_MS,
+    notifiedToday: now - state.dailyNotifiedAt < DAY_MS,
+  });
+  if (decision === "answer") state.answered = [...state.answered, now].slice(-DAILY_MAX_ANSWERED);
   if (decision === "notify") state.notifiedAt = now;
+  if (decision === "notify_daily") state.dailyNotifiedAt = now;
   floodStateByChat.set(chatKey, state);
   return decision;
+};
+
+/**
+ * Which limit a chat that {@link checkFlood} just refused is under — lets a
+ * channel that answers every refused request (the website's 429) pick the
+ * right notice even for an "ignore".
+ * @param {string} chatKey
+ * @returns {"notify" | "notify_daily"}
+ */
+export const activeFloodLimit = (chatKey) => {
+  const answered = floodStateByChat.get(chatKey)?.answered ?? [];
+  const now = Date.now();
+  return answered.filter((time) => now - time < DAY_MS).length >= DAILY_MAX_ANSWERED ? "notify_daily" : "notify";
 };
 
 /**

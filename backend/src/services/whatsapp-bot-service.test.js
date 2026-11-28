@@ -6,7 +6,7 @@ import test from "node:test";
 process.env.WHATSAPP_APP_SECRET = "test-app-secret";
 
 const { pickProofTarget } = await import("./chat-proof-service.js");
-const { floodDecision, trimHistory } = await import("./assistant-service.js");
+const { activeFloodLimit, checkFlood, floodDecision, trimHistory } = await import("./assistant-service.js");
 const { buildSystemPrompt } = await import("./assistant-prompts.js");
 const { toTelegramHtml } = await import("./telegram-client.js");
 const { isApprovalTypedByUser } = await import("../mcp/sitiket-tools.js");
@@ -58,11 +58,30 @@ test("a payment photo goes to the order named in its caption, or the only open o
 });
 
 test("a flooding sender is told once, then ignored (each reply is a paid message)", () => {
-  assert.equal(floodDecision(1, false), "answer");
-  assert.equal(floodDecision(15, false), "answer"); // a full merch checkout still fits
-  assert.equal(floodDecision(16, false), "notify");
-  assert.equal(floodDecision(17, true), "ignore");
-  assert.equal(floodDecision(40, true), "ignore");
+  const quiet = { answeredToday: 0, notifiedRecently: false, notifiedToday: false };
+  assert.equal(floodDecision({ ...quiet, recentCount: 1 }), "answer");
+  assert.equal(floodDecision({ ...quiet, recentCount: 15 }), "answer"); // a full merch checkout still fits
+  assert.equal(floodDecision({ ...quiet, recentCount: 16 }), "notify");
+  assert.equal(floodDecision({ ...quiet, recentCount: 17, notifiedRecently: true }), "ignore");
+  assert.equal(floodDecision({ ...quiet, recentCount: 40, notifiedRecently: true }), "ignore");
+});
+
+test("a sender past the daily cap is told once, then ignored for the rest of the 24h", () => {
+  const calm = { recentCount: 1, notifiedRecently: false, notifiedToday: false };
+  assert.equal(floodDecision({ ...calm, answeredToday: 59 }), "answer");
+  assert.equal(floodDecision({ ...calm, answeredToday: 60 }), "notify_daily");
+  assert.equal(floodDecision({ ...calm, answeredToday: 60, notifiedToday: true }), "ignore");
+  // The daily cap wins over the burst limit.
+  assert.equal(floodDecision({ ...calm, recentCount: 30, answeredToday: 60 }), "notify_daily");
+});
+
+test("checkFlood: thousands of messages from one sender cost one notice and at most the limits' worth of answers", () => {
+  const chatKey = `wa:test-${Date.now()}`;
+  const decisions = Array.from({ length: 5000 }, () => checkFlood(chatKey));
+  assert.equal(decisions.filter((decision) => decision === "answer").length, 15);
+  assert.equal(decisions.filter((decision) => decision === "notify").length, 1);
+  assert.equal(decisions.filter((decision) => decision === "ignore").length, 4984);
+  assert.equal(activeFloodLimit(chatKey), "notify");
 });
 
 test("each channel gets its own flow in the shared prompt", () => {

@@ -1,7 +1,14 @@
 import { env } from "../config/env.js";
 import * as usersRepository from "../repositories/users-repository.js";
 import { toWhatsappId } from "../utils/phone.js";
-import { appendExchange, checkFlood, isAssistantConfigured, runAssistantTurn, runExclusive } from "./assistant-service.js";
+import {
+  appendExchange,
+  checkFlood,
+  isAssistantConfigured,
+  RATE_LIMIT_REPLIES,
+  runAssistantTurn,
+  runExclusive,
+} from "./assistant-service.js";
 import { resolveSender } from "./chat-identity-service.js";
 import { attachPaymentProof } from "./chat-proof-service.js";
 import { downloadMedia, sendText } from "./whatsapp-client.js";
@@ -17,8 +24,6 @@ const MAX_REMEMBERED_MESSAGE_IDS = 1000;
 const ERROR_REPLY = "Maaf Kak, sistem kami sedang ada gangguan 🙏 Silakan coba lagi beberapa saat lagi, ya.";
 const UNSUPPORTED_REPLY =
   "Maaf Kak, Mimin hanya bisa membaca pesan teks dan *foto* bukti pembayaran. Silakan ketik pertanyaannya atau kirim foto bukti transfer, ya.";
-const RATE_LIMITED_REPLY = "Pesannya banyak sekali dalam waktu singkat, Kak. Tunggu beberapa menit lalu coba lagi, ya 🙏";
-
 /** Insertion-ordered set of handled webhook message ids. */
 const handledMessageIds = new Set();
 
@@ -117,7 +122,7 @@ const handleMessage = async (message) => {
   const decision = checkFlood(chatKeyOf(message.from));
   if (decision === "ignore") return;
   try {
-    await sendText(message.from, decision === "notify" ? RATE_LIMITED_REPLY : await replyTo(message));
+    await sendText(message.from, decision === "answer" ? await replyTo(message) : RATE_LIMIT_REPLIES[decision]);
   } catch (error) {
     console.error(`[whatsapp-bot] failed to answer ${message.from}:`, error);
     await sendText(message.from, ERROR_REPLY).catch((sendError) =>
